@@ -1,0 +1,48 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/dlms-core",
+    "crates/dlms-axdr",
+    "crates/dlms-asn1",
+    "crates/dlms-hdlc",
+    "crates/dlms-obis",
+    "crates/dlms-apdu",
+    "crates/dlms-security",
+    "crates/dlms-cosem",
+    "crates/dlms-meter-app",
+    "crates/dlms-rtos",
+    "crates/dlms-hal",
+    "crates/dlms-host",
+]
+
+[workspace.dependencies]
+dlms-core = { path = "crates/dlms-core" }
+dlms-axdr = { path = "crates/dlms-axdr" }
+dlms-asn1 = { path = "crates/dlms-asn1" }
+dlms-hdlc = { path = "crates/dlms-hdlc" }
+dlms-obis = { path = "crates/dlms-obis" }
+dlms-apdu = { path = "crates/dlms-apdu" }
+dlms-security = { path = "crates/dlms-security" }
+dlms-cosem = { path = "crates/dlms-cosem" }
+dlms-meter-app = { path = "crates/dlms-meter-app" }
+dlms-rtos = { path = "crates/dlms-rtos" }
+dlms-hal = { path = "crates/dlms-hal" }
+dlms-host = { path = "crates/dlms-host" }
+
+[workspace.package]
+name = "femeter"
+version = "0.1.0"
+edition = "2021"
+description = "DLMS/COSEM smart meter system - complete protocol stack and meter application"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/user/femeter"
+keywords = ["dlms", "cosem", "smart-meter", "embedded", "rtos", "hdlc", "obis"]
+categories = ["embedded", "no-std"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[profile.dev]
+opt-level = 1

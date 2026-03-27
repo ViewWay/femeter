@@ -1,0 +1,14 @@
+[package]
+name = "dlms-core"
+version.workspace = true
+edition.workspace = true
+description = "Core data types and error definitions for DLMS/COSEM"
+
+[dependencies]
+heapless = "0.8"
+defmt = { version = "0.3", optional = true }
+
+[features]
+default = []
+std = []
+defmt-log = ["defmt"]
