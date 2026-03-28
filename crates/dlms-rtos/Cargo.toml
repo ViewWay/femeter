@@ -1,0 +1,16 @@
+[package]
+name = "dlms-rtos"
+version.workspace = true
+edition.workspace = true
+description = "RTOS abstraction layer for DLMS/COSEM embedded targets"
+
+[dependencies]
+dlms-core = { workspace = true }
+defmt = { version = "0.3", optional = true }
+
+[features]
+default = []
+std = ["dlms-core/std"]
+defmt-log = ["defmt", "dlms-core/defmt-log"]
+
+[dev-dependencies]

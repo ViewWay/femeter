@@ -25,6 +25,7 @@ impl ObisCode {
     /// Parse from "A.B.C.D.E.F" string
     #[cfg(feature = "std")]
     pub fn parse(s: &str) -> Option<Self> {
+        use alloc::vec::Vec;
         let parts: Vec<u8> = s.split('.')
             .map(|p| p.parse::<u8>().ok())
             .collect::<Option<Vec<_>>>()?;
@@ -164,7 +165,9 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(feature = "std")]
     fn test_obis_display() {
+        use alloc::string::ToString;
         assert_eq!(TOTAL_ACTIVE_ENERGY_IMPORT.to_string(), "1.0.1.8.0.255");
         assert_eq!(CLOCK.to_string(), "0.0.1.0.0.255");
     }

@@ -1,0 +1,15 @@
+[package]
+name = "dlms-cosem"
+version.workspace = true
+edition.workspace = true
+description = "COSEM interface classes (105 ICs per Blue Book Part 2)"
+
+[dependencies]
+dlms-core = { workspace = true }
+dlms-axdr = { workspace = true }
+defmt = { version = "0.3", optional = true }
+
+[features]
+default = []
+std = ["dlms-core/std"]
+defmt-log = ["defmt", "dlms-core/defmt-log"]

@@ -1,0 +1,16 @@
+[package]
+name = "dlms-host"
+version.workspace = true
+edition.workspace = true
+description = "Host-side CLI, simulator, and protocol sniffer (std only)"
+
+[dependencies]
+dlms-core = { workspace = true, features = ["std"] }
+dlms-cosem = { workspace = true, features = ["std"] }
+clap = { version = "4", features = ["derive"] }
+defmt = { version = "0.3", optional = true }
+
+[features]
+default = ["std"]
+std = ["dlms-core/std"]
+defmt-log = ["defmt", "dlms-core/defmt-log"]

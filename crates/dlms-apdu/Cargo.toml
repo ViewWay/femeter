@@ -1,0 +1,16 @@
+[package]
+name = "dlms-apdu"
+version.workspace = true
+edition.workspace = true
+description = "DLMS/COSEM APDU encoder/decoder"
+
+[dependencies]
+dlms-core = { workspace = true }
+dlms-axdr = { workspace = true }
+dlms-asn1 = { workspace = true }
+defmt = { version = "0.3", optional = true }
+
+[features]
+default = []
+std = ["dlms-core/std"]
+defmt-log = ["defmt", "dlms-core/defmt-log"]

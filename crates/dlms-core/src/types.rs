@@ -318,6 +318,7 @@ impl fmt::Display for DlmsType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
 
     #[test]
     fn test_tag_mapping() {

@@ -1,0 +1,19 @@
+[package]
+name = "dlms-cosem"
+version.workspace = true
+edition.workspace = true
+description = "COSEM interface class with 105 ICose (8 functional domains)"
+
+repository = "https://github.com/user/femeter"
+
+license = "MIT OR Apache-2.0"
+keywords = ["dlms", "cosem", "smart-meter", "embedded", "rtos"]
+categories = ["embedded"]
+]
+
+[features]
+default = ["ln-reference"]
+std = []
+
+[dependencies]
+dlms-core = { workspace = true }

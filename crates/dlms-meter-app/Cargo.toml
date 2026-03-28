@@ -1,0 +1,16 @@
+[package]
+name = "dlms-meter-app"
+version.workspace = true
+edition.workspace = true
+description = "Smart meter application layer"
+
+[dependencies]
+dlms-core = { workspace = true }
+dlms-cosem = { workspace = true }
+dlms-rtos = { workspace = true }
+defmt = { version = "0.3", optional = true }
+
+[features]
+default = []
+std = ["dlms-core/std"]
+defmt-log = ["defmt", "dlms-core/defmt-log"]

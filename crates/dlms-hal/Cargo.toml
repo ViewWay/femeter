@@ -1,0 +1,18 @@
+[package]
+name = "dlms-hal"
+version.workspace = true
+edition.workspace = true
+description = "Hardware abstraction layer for DLMS/COSEM (ADC, GPIO, UART, Flash, etc.)"
+
+[dependencies]
+dlms-core = { workspace = true }
+embedded-hal = { version = "1.0", default-features = false }
+defmt = { version = "0.3", optional = true }
+
+[features]
+default = []
+std = ["dlms-core/std"]
+defmt-log = ["defmt", "dlms-core/defmt-log"]
+stm32f4 = []
+
+[dev-dependencies]

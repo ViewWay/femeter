@@ -1,0 +1,16 @@
+error: failed to load manifest for workspace member `/Users/yimiliya/.openclaw/workspace/femeter/crates/dlms-axdr`
+referenced by workspace at `/Users/yimiliya/.openclaw/workspace/femeter/Cargo.toml`
+
+Caused by:
+error: failed to load manifest for workspace member `/Users/yimiliya/.openclaw/workspace/femeter/crates/dlms-axdr`
+referenced by workspace at `/Users/yimiliya/.openclaw/workspace/femeter/Cargo.toml`
+
+Caused by:
+  failed to read `/Users/yimiliya/.openclaw/workspace/femeter/crates/dlms-axdr/Cargo.toml`
+
+Caused by:
+  No such file or directory (os error 2)
+  failed to read `/Users/yimiliya/.openclaw/workspace/femeter/crates/dlms-axdr/Cargo.toml`
+
+Caused by:
+  No such file or directory (os error 2)

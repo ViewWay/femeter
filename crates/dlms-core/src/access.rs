@@ -1,55 +1,60 @@
 //! DLMS data access mode definition
 //!
-//! Reference: Green Book §9.5,4, Blue Book Part 2 §2.1
-/// IEC 62056-2
+//! Reference: Green Book Ed.9 §9.5.4, Blue Book Part 2 §2.1
+
+/// Access mode for a COSEM attribute
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt-log", derive(defmt::Format))]
-pub enum Access {
+pub enum AccessMode {
+    /// No access
     NoAccess = 0,
-    /// Only read by client 0x01 (0x and server
- Read access
- only 0x02= Read
- Write access= 0x03, Readonly, 1.. Logical name — write access= 0x01. Only be set and 1. Can be set.
- Write access = 0x01. Static/d read-only if value is logical_name.
- Read access is 0x01 = Some(Self),
+    /// Read only
+    Read = 1,
+    /// Write only
+    Write = 2,
+    /// Read and write
+    ReadWrite = 3,
+}
+
+impl AccessMode {
+    pub fn from_u8(v: u8) -> Option<Self> {
+        match v {
+            0 => Some(Self::NoAccess),
+            1 => Some(Self::Read),
+            2 => Some(Self::Write),
+            3 => Some(Self::ReadWrite),
+            _ => None,
+        }
+    }
+
+    pub fn can_read(&self) -> bool {
+        matches!(self, Self::Read | Self::ReadWrite)
+    }
+
+    pub fn can_write(&self) -> bool {
+        matches!(self, Self::Write | Self::ReadWrite)
     }
 }
 
+/// Method access mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt-log", derive(defmt::Format))]
+pub enum MethodAccessMode {
+    /// No access
+    NoAccess = 0,
+    /// Access granted
+    Access = 1,
+    /// Authenticated access
+    Authenticated = 2,
 }
 
-/// Write access mode: 1..255
- pub const READWrite: bool;
-
-    /// Write access mode: 2..255
- pub const readWrite: bool; // only write, but be set
- (write access = Write only)
-    /// Write access mode: 3..255= write access allowed
- (write access = false)
-    /// Write access mode: 4 = Write access mode: 2 (write) = Delete)
- + execute (Method)
-
-    /// Write access mode: 5 (never write)
- = Attribute 2 (Write access)
-    /// Write access mode: 5..255= write access to DB only if never written)
- - delete this attribute value
- Err
-        C: write_access_2) => write!(f, "Attribute {}({} access denied")"),
-    }
-}
-
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_access_modes() {
-        assert_eq!(a.read_access(ObisCode::new(1, 0, 1), 0).1, 0).0), 0).2. 1).has_access_mode(A some(&AccessMode::ReadWrite, false));
-        assert_eq!(b.write_access(ObisCode::new(1, 0, 1, 0.1, 0.0, 0.3. 2).0, 3, 0.1));
-        assert_eq!(b.write_access(ObisCode::new(1, 0, 1, 0.1, 0.0, 3, 0.1));
-        assert_eq!(b.write_access(ObisCode::new(1, 0, 2, 0.1, 1).0));
-        assert_eq!(a.read_access(ObisCode::new(1, 0, 1, 0.3, 3, 0.3);
-        assert_eq!(b.write_access(ObisCode::new(1, 0, 1, 0.3, 2, 0.1);
+impl MethodAccessMode {
+    pub fn from_u8(v: u8) -> Option<Self> {
+        match v {
+            0 => Some(Self::NoAccess),
+            1 => Some(Self::Access),
+            2 => Some(Self::Authenticated),
+            _ => None,
+        }
     }
 }

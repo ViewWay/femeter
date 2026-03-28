@@ -1,0 +1,16 @@
+[package]
+name = "dlms-obis"
+version.workspace = true
+edition.workspace = true
+description = "OBIS code definitions and lookup utilities (Blue Book Part 1)"
+
+[dependencies]
+dlms-core = { workspace = true }
+defmt = { version = "0.3", optional = true }
+
+[features]
+default = []
+std = ["dlms-core/std"]
+defmt-log = ["defmt", "dlms-core/defmt-log"]
+
+[dev-dependencies]
