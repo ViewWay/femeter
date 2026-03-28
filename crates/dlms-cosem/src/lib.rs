@@ -63,6 +63,15 @@ pub mod mbus;
 // Group 7: Internet (9 ICs)
 pub mod internet;
 
+// Group 8a: PLC (23 ICs)
+pub mod plc;
+
+// Group 8b: Wireless (17 ICs)
+pub mod wireless;
+
+// Group 8c: LLC (3 ICs)
+pub mod llc;
+
 /// Helper function to create an octet-string from ObisCode
 pub fn obis_to_octet_string(obis: &ObisCode) -> DlmsType {
     DlmsType::OctetString(obis.to_bytes().to_vec())

@@ -3,7 +3,6 @@
 //! Reference: Green Book Ed.9 §8.4.4
 
 use alloc::vec::Vec;
-use alloc::vec;
 use crate::frame::HdlcFrame;
 use crate::address::HdlcAddress;
 use crate::control::{ControlField, FrameType};
@@ -130,6 +129,7 @@ impl HdlcConnection {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
 
     #[test]
     fn test_connect_disconnect() {
