@@ -4,15 +4,13 @@
 //! all subsystems into a cohesive application with state management,
 //! configuration, and workflow orchestration.
 
-#![no_std]
-
 extern crate alloc;
 
 use alloc::vec::Vec;
 use alloc::string::String;
 use dlms_core::{errors::CosemError, types::CosemDateTime, obis::ObisCode};
 
-use crate::common::{DemandConfig, BillingPeriod, BillingStatus};
+use crate::common::{DemandConfig, BillingStatus};
 use crate::measurement::MeasurementEngine;
 use crate::tariff::TariffManager;
 use crate::profile::ProfileManager;
@@ -201,7 +199,7 @@ impl MeterApp {
     pub fn with_config(config: MeterConfig) -> Self {
         let mut meter = Self {
             state: MeterAppState::Init,
-            measurement: MeasurementEngine::with_config(config.demand_config.clone()),
+            measurement: MeasurementEngine::with_config(config.demand_config),
             tariff: TariffManager::new(),
             profile: ProfileManager::new(config.profile_size, config.profile_period_s),
             alarm: AlarmManager::new(),
@@ -335,7 +333,7 @@ impl MeterApp {
                 let tariff = (self.tariff.current_tariff().saturating_sub(1)) as usize;
                 self.measurement.process_power(scaled_value, tariff, 1);
             }
-            1 | 2 | 3 => {
+            1..=3 => {
                 // Voltage/current per phase
                 let phase = (channel - 1) as usize;
                 if phase < 3 {

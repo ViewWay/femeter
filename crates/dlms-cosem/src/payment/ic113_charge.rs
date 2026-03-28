@@ -102,7 +102,7 @@ impl CosemClass for Charge {
 
     fn set_attribute(&mut self, id: u8, value: DlmsType) -> Result<(), CosemError> {
         match id {
-            1 | 2 | 3 => Err(CosemError::ReadOnly),
+            1..=3 => Err(CosemError::ReadOnly),
             4 => {
                 if let DlmsType::UInt8(p) = value {
                     self.priority = p;

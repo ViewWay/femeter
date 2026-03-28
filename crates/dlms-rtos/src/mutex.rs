@@ -16,6 +16,7 @@ pub trait MutexGuard<'a, T>: Deref<Target = T> + DerefMut {}
 /// Mutex-related errors
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt-log", derive(defmt::Format))]
+#[allow(dead_code)]
 pub enum MutexError {
     /// Mutex is locked and operation would block
     WouldBlock,
@@ -86,10 +87,10 @@ pub trait RtosMutex: Sized {
 /// to use their own representation (e.g., wrapper around native mutex type).
 pub trait MutexPtr<T>: Send + Sync {
     /// Lock the mutex (implementation detail)
-    fn lock<'a>(&'a self) -> impl Deref<Target = T>;
+    fn lock(&self) -> impl Deref<Target = T>;
 
     /// Try to lock without blocking (implementation detail)
-    fn try_lock<'a>(&'a self) -> Option<impl Deref<Target = T>>;
+    fn try_lock(&self) -> Option<impl Deref<Target = T>>;
 }
 
 #[cfg(test)]

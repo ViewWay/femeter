@@ -6,8 +6,6 @@
 //! - Relay status monitoring
 //! - Emergency disconnect handling
 
-#![no_std]
-
 extern crate alloc;
 
 use dlms_core::{errors::CosemError, types::DlmsType};

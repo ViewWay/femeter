@@ -81,7 +81,7 @@ impl<'a> AxdrDecoder<'a> {
             }
             TAG_BIT_STRING => {
                 let num_bits = self.decode_length()?;
-                let num_bytes = (num_bits + 7) / 8;
+                let num_bytes = num_bits.div_ceil(8);
                 let data = self.read_bytes(num_bytes)?.to_vec();
                 Ok(DlmsType::BitString(data))
             }

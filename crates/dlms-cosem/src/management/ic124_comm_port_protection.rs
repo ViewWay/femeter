@@ -4,7 +4,7 @@
 //! Reference: Blue Book Part 2 §6.124
 //!
 //! Communication Port Protection protects communication ports from
-/// unauthorized access.
+//! unauthorized access.
 
 use dlms_core::{
     errors::CosemError,

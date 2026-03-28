@@ -21,6 +21,7 @@ pub trait SemaphoreHandle: Send + Sync {
 /// Semaphore-related errors
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt-log", derive(defmt::Format))]
+#[allow(dead_code)]
 pub enum SemaphoreError {
     /// Semaphore was deleted
     Deleted,

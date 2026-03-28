@@ -6,15 +6,12 @@
 //! - Seasonal tariff handling
 //! - Billing period management
 
-#![no_std]
-
 extern crate alloc;
 
 use alloc::vec::Vec;
 use dlms_core::{errors::CosemError, types::CosemDateTime};
 
-use crate::common::{BillingStatus, TariffSchedule};
-use crate::common::BillingPeriod; // Import for use in tests
+use crate::common::{BillingPeriod, BillingStatus, TariffSchedule};
 
 /// Maximum number of tariff schedules
 const MAX_SCHEDULES: usize = 32;
@@ -69,7 +66,7 @@ impl TariffManager {
     pub fn update_tariff_for_time(&mut self, datetime: &CosemDateTime) -> u8 {
         let hour = datetime.time.hour;
         let minute = datetime.time.minute;
-        let day_of_week = ((datetime.date.day_of_week.wrapping_sub(1)) % 7) as u8;
+        let day_of_week = (datetime.date.day_of_week.wrapping_sub(1)) % 7;
 
         // Find matching schedule - collect IDs first to avoid borrow issues
         let mut matched_tariff = None;
@@ -159,6 +156,7 @@ impl TariffManager {
     }
 
     /// Check if datetime falls within billing period
+    #[allow(dead_code)]
     fn is_datetime_in_period(&self, _dt: &CosemDateTime, _period: &BillingPeriod) -> bool {
         // Simplified check - in real implementation would compare date ranges
         // For now, just check if period is marked active

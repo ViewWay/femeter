@@ -8,7 +8,7 @@ use core::fmt;
 extern crate std;
 
 /// Unique task identifier
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "defmt-log", derive(defmt::Format))]
 pub struct TaskId(pub u32);
 
@@ -24,17 +24,11 @@ impl TaskId {
     }
 }
 
-impl Default for TaskId {
-    fn default() -> Self {
-        Self(0)
-    }
-}
-
 /// Task priority levels
 ///
 /// Higher values indicate higher priority. Real RTOS may map these to
 /// native priority values (e.g., FreeRTOS uses 0-24 where 24 is highest).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 #[cfg_attr(feature = "defmt-log", derive(defmt::Format))]
 pub enum Priority {
     /// Idle priority - lowest, for background tasks
@@ -42,17 +36,12 @@ pub enum Priority {
     /// Low priority - below normal
     Low = 1,
     /// Normal priority - default for most tasks
+    #[default]
     Normal = 2,
     /// High priority - for time-sensitive tasks
     High = 3,
     /// Realtime priority - highest, for critical operations
     Realtime = 4,
-}
-
-impl Default for Priority {
-    fn default() -> Self {
-        Self::Normal
-    }
 }
 
 impl Priority {

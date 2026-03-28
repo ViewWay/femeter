@@ -416,7 +416,7 @@ impl GetResponseError {
         let mut enc = ApduEncoder::new();
         enc.write_tag(TAG_GET_RESPONSE, TAG_SUBTYPE_DATA_ACCESS_ERROR);
         enc.write_invoke_id(self.invoke_id);
-        enc.write_byte(self.error.clone() as u8);
+        enc.write_byte(self.error as u8);
         enc.into_bytes()
     }
 
@@ -454,11 +454,11 @@ impl GetResponse {
         }
     }
 
-    pub fn encode(&self) -> Vec<u8> {
+    pub fn encode(&self) -> Result<Vec<u8>, ApduError> {
         match self {
-            Self::Data(r) => r.encode().unwrap(),
-            Self::Block(r) => r.encode(),
-            Self::DataAccessError(r) => r.encode(),
+            Self::Data(r) => r.encode(),
+            Self::Block(r) => Ok(r.encode()),
+            Self::DataAccessError(r) => Ok(r.encode()),
         }
     }
 

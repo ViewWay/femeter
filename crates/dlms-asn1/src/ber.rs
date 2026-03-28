@@ -191,9 +191,7 @@ impl BerEncoder {
     }
 
     fn encode_integer_bytes(v: i64) -> Vec<u8> {
-        if v >= 0 && v <= 127 {
-            vec![v as u8]
-        } else if v < 0 && v >= -128 {
+        if (0..=127).contains(&v) || (-128..0).contains(&v) {
             vec![v as u8]
         } else {
             // Find minimum bytes needed
@@ -205,11 +203,10 @@ impl BerEncoder {
             }
             // Remove trailing bytes that are just sign extension
             while bytes.len() > 1 {
-                let last = *bytes.last().unwrap();
+                // Safety: bytes.len() > 1 ensures both last() and indexing are valid
+                let last = *bytes.last().expect("bytes has at least 2 elements");
                 let prev = bytes[bytes.len() - 2];
-                if last == 0xFF && (prev & 0x80) != 0 {
-                    bytes.pop();
-                } else if last == 0x00 && (prev & 0x80) == 0 {
+                if (last == 0xFF && (prev & 0x80) != 0) || (last == 0x00 && (prev & 0x80) == 0) {
                     bytes.pop();
                 } else {
                     break;

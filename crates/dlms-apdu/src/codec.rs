@@ -3,8 +3,6 @@
 //! Provides encoding and decoding for APDU messages using the DLMS/COSEM
 //! Application Layer protocol.
 
-#![no_std]
-
 #[cfg(feature = "std")]
 extern crate std;
 

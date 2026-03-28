@@ -3,11 +3,8 @@
 //! This module provides shared data structures used across
 //! multiple meter application modules.
 
-#![no_std]
-
 extern crate alloc;
 
-use alloc::vec::Vec;
 use dlms_core::obis::ObisCode;
 
 /// Tariff schedule for time-of-use billing

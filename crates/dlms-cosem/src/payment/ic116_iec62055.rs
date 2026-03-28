@@ -69,7 +69,7 @@ impl CosemClass for Iec62055Attributes {
         }
     }
 
-    fn set_attribute(&mut self, id: u8, value: DlmsType) -> Result<(), CosemError> {
+    fn set_attribute(&mut self, id: u8, _value: DlmsType) -> Result<(), CosemError> {
         match id {
             1 => Err(CosemError::ReadOnly),
             2 => Err(CosemError::ReadOnly),

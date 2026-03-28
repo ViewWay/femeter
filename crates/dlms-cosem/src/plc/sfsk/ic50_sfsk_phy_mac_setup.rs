@@ -53,6 +53,7 @@ impl SfskPhyMacSetup {
     }
 
     /// Create a new SfskPhyMacSetup instance with specific values
+    #[allow(clippy::too_many_arguments)]
     pub fn with_params(
         logical_name: ObisCode,
         mac_clock_presc: u8,

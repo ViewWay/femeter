@@ -6,11 +6,10 @@
 //! - Connection status monitoring
 //! - Communication event handling
 
-#![no_std]
-
 extern crate alloc;
 
 use alloc::vec::Vec;
+#[allow(unused_imports)]
 use alloc::vec;
 use dlms_core::{errors::CosemError, obis::ObisCode};
 

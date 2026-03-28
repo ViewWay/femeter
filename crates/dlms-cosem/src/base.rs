@@ -12,19 +12,26 @@ use dlms_core::{
 
 /// Common attribute IDs for COSEM objects
 pub mod attr {
+    #[allow(dead_code)]
     pub const LOGICAL_NAME: u8 = 1;
+    #[allow(dead_code)]
     pub const VALUE: u8 = 2;
+    #[allow(dead_code)]
     pub const SCALER_UNIT: u8 = 3;
+    #[allow(dead_code)]
     pub const STATUS: u8 = 4;
+    #[allow(dead_code)]
     pub const CAPTURE_TIME: u8 = 5;
 }
 
 /// Create standard attribute 1 (logical_name) response
+#[allow(dead_code)]
 pub fn get_logical_name(obj: &ObisCode) -> Result<DlmsType, CosemError> {
     Ok(DlmsType::OctetString(obj.to_bytes().to_vec()))
 }
 
 /// Validate attribute ID exists
+#[allow(dead_code)]
 pub fn validate_attr(id: u8, count: u8) -> Result<(), CosemError> {
     if id == 0 || id > count {
         Err(CosemError::NoSuchAttribute(id))
@@ -34,6 +41,7 @@ pub fn validate_attr(id: u8, count: u8) -> Result<(), CosemError> {
 }
 
 /// Validate method ID exists
+#[allow(dead_code)]
 pub fn validate_method(id: u8, count: u8) -> Result<(), CosemError> {
     if id == 0 || id > count {
         Err(CosemError::NoSuchMethod(id))
@@ -43,28 +51,33 @@ pub fn validate_method(id: u8, count: u8) -> Result<(), CosemError> {
 }
 
 /// Get read-only attribute error
+#[allow(dead_code)]
 pub fn read_only() -> Result<DlmsType, CosemError> {
     Err(CosemError::ReadOnly)
 }
 
 /// Set read-only attribute error
+#[allow(dead_code)]
 pub fn set_read_only(_value: DlmsType) -> Result<(), CosemError> {
     Err(CosemError::ReadOnly)
 }
 
 /// Default get_attribute implementation for unimplemented attributes
+#[allow(dead_code)]
 pub fn default_get_attribute(id: u8, count: u8) -> Result<DlmsType, CosemError> {
     validate_attr(id, count)?;
     Err(CosemError::NotImplemented)
 }
 
 /// Default set_attribute implementation for unimplemented attributes
+#[allow(dead_code)]
 pub fn default_set_attribute(id: u8, _value: DlmsType, count: u8) -> Result<(), CosemError> {
     validate_attr(id, count)?;
     Err(CosemError::NotImplemented)
 }
 
 /// Default execute_method implementation for unimplemented methods
+#[allow(dead_code)]
 pub fn default_execute_method(id: u8, _params: DlmsType, count: u8) -> Result<DlmsType, CosemError> {
     validate_method(id, count)?;
     Err(CosemError::NotImplemented)

@@ -6,12 +6,9 @@
 //! - Alarm callback registration
 //! - Multiple alarm types (high, low, rate-of-change)
 
-#![no_std]
-
 extern crate alloc;
 
 use alloc::vec::Vec;
-use alloc::collections::BTreeMap;
 use dlms_core::{errors::CosemError, obis::ObisCode};
 
 use crate::common::{AlarmThreshold, AlarmType};
@@ -120,7 +117,7 @@ impl AlarmManager {
         }
 
         let index = self.thresholds.len() as u8;
-        self.thresholds.push(threshold.clone());
+        self.thresholds.push(threshold);
 
         // Create corresponding alarm record
         let record = AlarmRecord::new(
@@ -244,6 +241,7 @@ impl AlarmManager {
     }
 
     /// Notify all registered callbacks
+    #[allow(dead_code)]
     fn notify_callbacks(&self, _alarm: &AlarmRecord) {
         for callback in &self.callbacks {
             // Call the callback - in real implementation would pass alarm reference

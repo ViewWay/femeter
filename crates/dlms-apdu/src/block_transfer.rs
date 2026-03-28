@@ -8,6 +8,7 @@ extern crate std;
 extern crate alloc;
 
 use alloc::vec::Vec;
+#[allow(unused_imports)]
 use alloc::vec;
 use crate::types::{ApduError, InvokeId, TAG_GENERAL_BLOCK_TRANSFER};
 use crate::types::{

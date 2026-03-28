@@ -77,7 +77,7 @@ impl CosemClass for Schedule {
 
     fn execute_method(&mut self, id: u8, _params: DlmsType) -> Result<DlmsType, CosemError> {
         match id {
-            1 | 2 | 3 => Ok(DlmsType::Null),
+            1..=3 => Ok(DlmsType::Null),
             _ => Err(CosemError::NoSuchMethod(id)),
         }
     }

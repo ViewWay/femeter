@@ -38,7 +38,9 @@ impl DateTime {
     }
 
     /// Create a default DateTime (2024-01-01 00:00:00)
-    pub fn default() -> Self {
+    ///
+    /// This creates a DateTime at midnight on January 1, 2024.
+    pub fn midnight_2024() -> Self {
         Self {
             year: 2024,
             month: 1,
@@ -47,6 +49,12 @@ impl DateTime {
             minute: 0,
             second: 0,
         }
+    }
+}
+
+impl Default for DateTime {
+    fn default() -> Self {
+        Self::midnight_2024()
     }
 }
 

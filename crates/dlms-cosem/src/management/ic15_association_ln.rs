@@ -126,7 +126,7 @@ impl CosemClass for AssociationLn {
 
     fn set_attribute(&mut self, id: u8, value: DlmsType) -> Result<(), CosemError> {
         match id {
-            1 | 2 | 3 | 4 | 5 | 6 => Err(CosemError::ReadOnly),
+            1..=6 => Err(CosemError::ReadOnly),
             7 => {
                 self.lls_secret = value;
                 Ok(())

@@ -52,6 +52,7 @@ pub fn compute_auth_value(
 ///
 /// # Returns
 /// Ok(()) if authentication succeeds, Err otherwise
+#[allow(dead_code)]
 pub fn verify_auth_value(
     ctx: &crate::SecurityContext,
     challenge: &[u8],
@@ -81,6 +82,7 @@ pub fn verify_auth_value(
 /// In a real system, this would use a cryptographically secure RNG.
 /// This is a deterministic placeholder for testing.
 #[cfg(feature = "std")]
+#[allow(dead_code)]
 pub fn generate_challenge() -> [u8; 8] {
     // Simple deterministic challenge - in production use proper RNG
     [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]
@@ -124,9 +126,9 @@ fn compute_hmac_sha256_placeholder(
     hash = hash.wrapping_mul(31).wrapping_add(ctx.frame_counter());
 
     // Expand to 16 bytes
-    for i in 0..HLS_AUTH_VALUE_SIZE {
+    for (i, byte) in result.iter_mut().enumerate() {
         let mixed = hash.wrapping_mul((i as u32).wrapping_add(1)).wrapping_add(0x9E3779B9);
-        result[i] = ((mixed >> (i % 4 * 8)) & 0xFF) as u8;
+        *byte = ((mixed >> (i % 4 * 8)) & 0xFF) as u8;
     }
 
     Ok(result)
@@ -140,6 +142,7 @@ fn compute_hmac_sha256_placeholder(
 /// # Returns
 /// The challenge that should be sent to the meter
 #[cfg(feature = "std")]
+#[allow(dead_code)]
 pub fn prepare_authentication(_ctx: &crate::SecurityContext) -> [u8; 8] {
     // The client typically generates a random challenge
     generate_challenge()

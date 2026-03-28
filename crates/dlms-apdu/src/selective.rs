@@ -8,6 +8,7 @@ extern crate std;
 extern crate alloc;
 
 use alloc::vec::Vec;
+#[allow(unused_imports)]
 use alloc::vec;
 use dlms_core::DlmsType;
 use crate::types::{ApduError, SELECTIVE_ACCESS_BY_RANGE, SELECTIVE_ACCESS_BY_ENTRY};

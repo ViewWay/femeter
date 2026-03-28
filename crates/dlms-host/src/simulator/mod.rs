@@ -48,6 +48,7 @@ impl CosemObjectMap {
         &self.objects
     }
 
+    #[allow(dead_code)]
     pub fn contains(&self, obis: &ObisCode) -> bool {
         self.objects.contains(obis)
     }

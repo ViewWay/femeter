@@ -111,6 +111,8 @@ pub fn dlms_to_scaler_unit(value: &DlmsType) -> Result<(i8, dlms_core::units::Un
                 expected: 18, // long-unsigned (uint16)
                 got: items[1].tag(),
             })?;
+            // Safety: unwrap_or is safe here - if the unit code is unknown,
+            // we default to Unit::None which is a valid fallback
             let unit = dlms_core::units::Unit::from_code(unit_code)
                 .unwrap_or(dlms_core::units::Unit::None);
             Ok((scaler, unit))

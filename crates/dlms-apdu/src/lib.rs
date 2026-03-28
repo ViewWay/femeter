@@ -120,11 +120,11 @@ impl Apdu {
     pub fn encode(&self) -> Result<Vec<u8>, ApduError> {
         match self {
             Self::GetRequest(r) => r.encode(),
-            Self::GetResponse(r) => Ok(r.encode()),
+            Self::GetResponse(r) => r.encode(),
             Self::SetRequest(r) => r.encode(),
-            Self::SetResponse(r) => Ok(r.encode()),
+            Self::SetResponse(r) => r.encode(),
             Self::ActionRequest(r) => r.encode(),
-            Self::ActionResponse(r) => Ok(r.encode()),
+            Self::ActionResponse(r) => r.encode(),
             Self::EventNotification(r) => r.encode(),
             Self::GeneralBlockTransfer(r) => Ok(r.encode()),
             Self::ExceptionResponse(r) => Ok(r.encode()),

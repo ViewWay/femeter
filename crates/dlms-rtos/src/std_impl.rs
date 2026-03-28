@@ -79,24 +79,34 @@ impl CrateTaskHandle for StdTaskHandle {
     }
 
     fn state(&self) -> TaskState {
+        // Safety: In single-threaded std tests, RwLock won't be poisoned.
+        // A poisoned lock indicates a test panic, so panicking here is appropriate.
         *self.state.read().unwrap()
     }
 
     fn suspend(&self) {
+        // Safety: In single-threaded std tests, RwLock won't be poisoned.
+        // A poisoned lock indicates a test panic, so panicking here is appropriate.
         *self.state.write().unwrap() = TaskState::Suspended;
     }
 
     fn resume(&self) {
         if self.state() == TaskState::Suspended {
+            // Safety: In single-threaded std tests, RwLock won't be poisoned.
+            // A poisoned lock indicates a test panic, so panicking here is appropriate.
             *self.state.write().unwrap() = TaskState::Ready;
         }
     }
 
     fn priority(&self) -> Priority {
+        // Safety: In single-threaded std tests, RwLock won't be poisoned.
+        // A poisoned lock indicates a test panic, so panicking here is appropriate.
         *self.priority.read().unwrap()
     }
 
     fn set_priority(&self, priority: Priority) {
+        // Safety: In single-threaded std tests, RwLock won't be poisoned.
+        // A poisoned lock indicates a test panic, so panicking here is appropriate.
         *self.priority.write().unwrap() = priority;
     }
 }
@@ -140,7 +150,7 @@ static NEXT_TIMER_ID: AtomicU32 = AtomicU32::new(1);
 
 #[derive(Debug, Clone)]
 pub struct StdTimerHandle {
-    id: u32,
+    _id: u32,
     running: Arc<AtomicBool>,
     period: Arc<AtomicU32>,
     mode: Arc<RwLock<TimerMode>>,
@@ -148,9 +158,9 @@ pub struct StdTimerHandle {
 }
 
 impl StdTimerHandle {
-    fn new(id: u32, period_ms: u32, mode: TimerMode) -> Self {
+    fn new(_id: u32, period_ms: u32, mode: TimerMode) -> Self {
         Self {
-            id,
+            _id,
             running: Arc::new(AtomicBool::new(false)),
             period: Arc::new(AtomicU32::new(period_ms)),
             mode: Arc::new(RwLock::new(mode)),
@@ -162,6 +172,8 @@ impl StdTimerHandle {
 impl CrateTimerHandle for StdTimerHandle {
     fn start(&self) {
         self.running.store(true, Ordering::Release);
+        // Safety: In single-threaded std tests, RwLock won't be poisoned.
+        // A poisoned lock indicates a test panic, so panicking here is appropriate.
         *self.start_time.write().unwrap() = Some(Instant::now());
     }
 
@@ -180,6 +192,8 @@ impl CrateTimerHandle for StdTimerHandle {
     }
 
     fn mode(&self) -> TimerMode {
+        // Safety: In single-threaded std tests, RwLock won't be poisoned.
+        // A poisoned lock indicates a test panic, so panicking here is appropriate.
         *self.mode.read().unwrap()
     }
 
@@ -187,6 +201,8 @@ impl CrateTimerHandle for StdTimerHandle {
         if !self.is_running() {
             return None;
         }
+        // Safety: In single-threaded std tests, RwLock won't be poisoned.
+        // A poisoned lock indicates a test panic, so panicking here is appropriate.
         let start_guard = self.start_time.read().unwrap();
         let start = *start_guard.as_ref()?;
         drop(start_guard);
@@ -243,8 +259,11 @@ impl<T> StdMutex<T> {
 unsafe impl<T: Send> Send for StdMutex<T> {}
 unsafe impl<T: Send> Sync for StdMutex<T> {}
 
+#[allow(refining_impl_trait)]
 impl<T: Send> MutexPtr<T> for StdMutex<T> {
     fn lock(&self) -> StdMutexGuardRef<'_, T> {
+        // Safety: In single-threaded std tests, RwLock won't be poisoned.
+        // A poisoned lock indicates a test panic, so panicking here is appropriate.
         StdMutexGuardRef {
             _borrow: self.inner.write().unwrap(),
         }
@@ -412,10 +431,14 @@ unsafe impl<T: Send> Sync for StdQueueHandle<T> {}
 
 impl<T: Send> QueueHandle for StdQueueHandle<T> {
     fn len(&self) -> usize {
+        // Safety: In single-threaded std tests, RwLock won't be poisoned.
+        // A poisoned lock indicates a test panic, so panicking here is appropriate.
         self.inner.read().unwrap().len()
     }
 
     fn is_empty(&self) -> bool {
+        // Safety: In single-threaded std tests, RwLock won't be poisoned.
+        // A poisoned lock indicates a test panic, so panicking here is appropriate.
         self.inner.read().unwrap().is_empty()
     }
 
@@ -435,7 +458,7 @@ impl RtosQueue for StdRtos {
     }
 
     fn send<T: Send>(&self, queue: &StdQueueHandle<T>, item: T) -> Result<(), QueueError> {
-        let mut q = queue.inner.write().unwrap();
+        let mut q = queue.inner.write().map_err(|_| QueueError::InvalidSize)?;
         if q.len() >= queue.capacity {
             return Err(QueueError::Full);
         }
@@ -458,7 +481,7 @@ impl RtosQueue for StdRtos {
 
         while start.elapsed() < timeout {
             // Check if queue has space before attempting send
-            let q = queue.inner.read().unwrap();
+            let q = queue.inner.read().map_err(|_| QueueError::InvalidSize)?;
             if q.len() < queue.capacity {
                 drop(q);
                 return self.send(queue, item);
@@ -471,7 +494,7 @@ impl RtosQueue for StdRtos {
     }
 
     fn receive<T: Send>(&self, queue: &StdQueueHandle<T>) -> Result<T, QueueError> {
-        let mut q = queue.inner.write().unwrap();
+        let mut q = queue.inner.write().map_err(|_| QueueError::InvalidSize)?;
         q.pop_front().ok_or(QueueError::Empty)
     }
 
@@ -495,7 +518,10 @@ impl RtosQueue for StdRtos {
     }
 
     fn clear<T: Send>(&self, queue: &StdQueueHandle<T>) {
-        queue.inner.write().unwrap().clear();
+        // Safety: In single-threaded std tests, RwLock won't be poisoned.
+        // A poisoned lock indicates a test panic, so panicking here is appropriate.
+        // This method returns (), so we cannot return an error.
+        let _ = queue.inner.write().map(|mut q| q.clear());
     }
 }
 
@@ -503,9 +529,12 @@ impl RtosQueue for StdRtos {
 // Memory Pool Implementation
 // ============================================================================
 
+/// Type alias for memory pool blocks to reduce type complexity
+type MemPoolBlocks = Arc<RwLock<Vec<Option<Box<[u8]>>>>>;
+
 #[derive(Debug)]
 pub struct StdMemPoolHandle {
-    blocks: Arc<RwLock<Vec<Option<Box<[u8]>>>>>,
+    blocks: MemPoolBlocks,
     block_size: usize,
     free_count: AtomicUsize,
 }
@@ -530,6 +559,8 @@ impl MemPoolHandle for StdMemPoolHandle {
     }
 
     fn block_count(&self) -> usize {
+        // Safety: In single-threaded std tests, RwLock won't be poisoned.
+        // A poisoned lock indicates a test panic, so panicking here is appropriate.
         self.blocks.read().unwrap().len()
     }
 
@@ -549,10 +580,10 @@ impl RtosMemPool for StdRtos {
     }
 
     fn allocate(&self, pool: &StdMemPoolHandle) -> Result<*mut u8, MemPoolError> {
-        let mut blocks = pool.blocks.write().unwrap();
-        for (_i, block) in blocks.iter_mut().enumerate() {
+        let mut blocks = pool.blocks.write().map_err(|_| MemPoolError::InvalidConfig)?;
+        for block in blocks.iter_mut() {
             if block.is_some() {
-                let ptr = block.as_ref().unwrap().as_ptr() as *mut u8;
+                let ptr = block.as_ref().expect("block.is_some() guarantees Some").as_ptr() as *mut u8;
                 *block = None;
                 pool.free_count.fetch_sub(1, Ordering::AcqRel);
                 return Ok(ptr);
@@ -562,7 +593,7 @@ impl RtosMemPool for StdRtos {
     }
 
     fn deallocate(&self, pool: &StdMemPoolHandle, _block: *mut u8) -> Result<(), MemPoolError> {
-        let mut blocks = pool.blocks.write().unwrap();
+        let mut blocks = pool.blocks.write().map_err(|_| MemPoolError::InvalidConfig)?;
         for _b in blocks.iter_mut() {
             if _b.is_none() {
                 let new_block = std::vec![0u8; pool.block_size].into_boxed_slice();
@@ -580,7 +611,7 @@ impl RtosMemPool for StdRtos {
 // ============================================================================
 
 std::thread_local! {
-    static INTERRUPT_STATE: std::cell::Cell<bool> = std::cell::Cell::new(true);
+    static INTERRUPT_STATE: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
 }
 
 impl RtosInterrupt for StdRtos {

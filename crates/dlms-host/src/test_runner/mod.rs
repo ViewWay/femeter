@@ -239,6 +239,7 @@ mod tests {
         TestResult::Passed
     }
 
+    #[allow(dead_code)]
     fn failing_test() -> TestResult {
         TestResult::Failed
     }

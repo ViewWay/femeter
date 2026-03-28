@@ -37,7 +37,7 @@ fn main() -> ExitCode {
 
 /// Run the simulator subcommand
 fn run_simulate(
-    verbose: bool,
+    _verbose: bool,
     _objects: Vec<String>,
     listen: bool,
     port: u16,

@@ -75,7 +75,7 @@ impl ControlField {
     /// Actually in DLMS HDLC, I-frame control is 1 byte: N(S)<<1 | 0 | N(R)<<5 | P/F
     /// Wait, HDLC control field:
     /// - I-frame: bit0=0, N(S) bits 1-3, P/F bit 4, N(R) bits 5-7 → but only 3-bit seq for modulo 8
-    /// Actually standard HDLC:
+    ///   Actually standard HDLC:
     /// - I: 0 | N(S)(3) | P/F | N(R)(3) — bit0 = 0
     /// - S: 1 | 0 | S1 S2 | P/F | N(R)(3) — bits 0-1 = 01
     /// - U: 1 | 1 | M1 M2 | P/F | M3 M4 M5 — bits 0-1 = 11
@@ -145,7 +145,7 @@ impl ControlField {
             Self { frame_type, send_seq: 0, recv_seq, poll_final: pf }
         } else {
             // U-frame: bit0=1, bit1=1
-            let m_bits = ((byte >> 2) & 0x03) | ((byte >> 3) & 0x1C);
+            let _m_bits = ((byte >> 2) & 0x03) | ((byte >> 3) & 0x1C);
             let frame_type = match byte & 0xEF { // mask out P/F bit
                 0x83 => FrameType::SNRM,
                 0x63 => FrameType::UA,

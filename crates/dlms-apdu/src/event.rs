@@ -8,10 +8,9 @@ extern crate std;
 extern crate alloc;
 
 use alloc::vec::Vec;
+#[allow(unused_imports)]
 use alloc::vec;
-use alloc::string::String;
-use alloc::string::ToString;
-use dlms_core::{DlmsType, ObisCode};
+use dlms_core::DlmsType;
 use crate::types::{ApduError, TAG_EVENT_NOTIFICATION, PRIORITY_NORMAL, PRIORITY_HIGH};
 use crate::codec::{ApduEncoder, ApduDecoder};
 

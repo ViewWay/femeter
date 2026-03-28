@@ -7,12 +7,14 @@ use alloc::vec::Vec;
 use dlms_core::errors::SecurityError;
 
 /// Maximum password length
+#[allow(dead_code)]
 pub const MAX_PASSWORD_SIZE: usize = 64;
 
 /// Hash a password for storage/comparison
 ///
 /// This is a simple hash implementation. In production, use proper
 /// password hashing algorithms like Argon2 or scrypt.
+#[allow(dead_code)]
 pub fn hash_password(password: &[u8]) -> Vec<u8> {
     if password.is_empty() {
         return Vec::new();
@@ -62,6 +64,7 @@ pub fn verify_password(password: &[u8], stored_hash: &[u8]) -> Result<(), Securi
 }
 
 /// Validate password length
+#[allow(dead_code)]
 pub fn validate_password(password: &[u8]) -> Result<(), SecurityError> {
     if password.len() > MAX_PASSWORD_SIZE {
         Err(SecurityError::InvalidKey)

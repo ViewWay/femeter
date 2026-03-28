@@ -11,7 +11,6 @@ extern crate std;
 extern crate alloc;
 
 use alloc::vec::Vec;
-use dlms_core::DlmsType;
 use crate::types::{ApduError, InvokeId};
 use crate::codec::{ApduEncoder, ApduDecoder};
 

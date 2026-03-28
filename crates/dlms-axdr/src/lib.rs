@@ -18,8 +18,6 @@ pub use encoder::AxdrEncoder;
 pub use decoder::AxdrDecoder;
 pub use compact::CompactArrayCodec;
 
-use dlms_core::DlmsType;
-
 /// A-XDR encode/decode error
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AxdrError {

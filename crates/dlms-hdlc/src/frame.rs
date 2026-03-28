@@ -7,7 +7,7 @@ use alloc::vec;
 use dlms_core::errors::HdlcError;
 use crate::address::{HdlcAddress, decode_address};
 use crate::control::{ControlField, FrameType};
-use crate::crc::{crc16, verify_crc};
+use crate::crc::crc16;
 
 /// HDLC flag byte
 pub const HDLC_FLAG: u8 = 0x7E;

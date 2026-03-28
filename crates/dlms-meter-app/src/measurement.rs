@@ -6,11 +6,10 @@
 //! - Instantaneous power and quality measurements
 //! - Phase-specific measurements for 3-phase systems
 
-#![no_std]
-
 extern crate alloc;
 
 use alloc::vec::Vec;
+#[allow(unused_imports)]
 use alloc::vec;
 use dlms_core::{errors::CosemError, types::DlmsType};
 

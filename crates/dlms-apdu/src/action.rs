@@ -12,7 +12,7 @@ use dlms_core::{DlmsType, DataAccessError};
 use crate::types::{
     ApduError, InvokeId, MethodDescriptor, TAG_ACTION_REQUEST, TAG_ACTION_RESPONSE,
     TAG_SUBTYPE_NORMAL, TAG_SUBTYPE_WITH_LIST, TAG_SUBTYPE_NEXT,
-    TAG_SUBTYPE_BLOCK, TAG_SUBTYPE_DATA_ACCESS_ERROR,
+    TAG_SUBTYPE_BLOCK,
 };
 use crate::codec::{ApduEncoder, ApduDecoder};
 
@@ -501,11 +501,11 @@ impl ActionResponse {
         }
     }
 
-    pub fn encode(&self) -> Vec<u8> {
+    pub fn encode(&self) -> Result<Vec<u8>, ApduError> {
         match self {
-            Self::Normal(r) => r.encode().unwrap(),
-            Self::WithList(r) => r.encode().unwrap(),
-            Self::Block(r) => r.encode(),
+            Self::Normal(r) => r.encode(),
+            Self::WithList(r) => r.encode(),
+            Self::Block(r) => Ok(r.encode()),
         }
     }
 

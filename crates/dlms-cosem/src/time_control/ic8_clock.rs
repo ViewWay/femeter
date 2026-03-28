@@ -192,7 +192,7 @@ impl CosemClass for Clock {
 
     fn execute_method(&mut self, id: u8, _params: DlmsType) -> Result<DlmsType, CosemError> {
         match id {
-            1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 => Ok(DlmsType::Null),
+            1..=8 => Ok(DlmsType::Null),
             _ => Err(CosemError::NoSuchMethod(id)),
         }
     }

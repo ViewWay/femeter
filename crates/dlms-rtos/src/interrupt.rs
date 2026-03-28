@@ -33,6 +33,7 @@ impl InterruptState {
 /// Interrupt-related errors
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt-log", derive(defmt::Format))]
+#[allow(dead_code)]
 pub enum InterruptError {
     /// Invalid interrupt state
     InvalidState,

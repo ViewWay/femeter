@@ -6,11 +6,8 @@
 //! - Daylight Saving Time (DST) support
 //! - Time synchronization from network
 
-#![no_std]
-
 extern crate alloc;
 
-use alloc::vec::Vec;
 use dlms_core::{errors::CosemError, types::CosemDateTime, types::clock_status};
 
 /// DST (Daylight Saving Time) mode

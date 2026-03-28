@@ -178,6 +178,7 @@ pub type SecurityControlInfo = SecurityControl;
 /// Parse a security control byte
 ///
 /// This is a convenience function for SecurityControl::from_byte
+#[allow(dead_code)]
 pub fn parse_security_control(byte: u8) -> SecurityControlInfo {
     SecurityControl::from_byte(byte)
 }

@@ -38,26 +38,20 @@ impl HdlcConfig {
 
     /// Encode SNRM negotiation payload
     /// Format: [tag][length][value] pairs
+    #[allow(clippy::vec_init_then_push)]
     pub fn encode_snrm_payload(&self) -> alloc::vec::Vec<u8> {
         let mut payload = alloc::vec::Vec::new();
-
-        // Window size (tag=0x05, value=1 byte)
         payload.push(0x05);
         payload.push(0x01);
         payload.push(self.window_size);
-
-        // Max transmit info (tag=0x06, value=2 bytes)
         payload.push(0x06);
         payload.push(0x02);
         payload.push((self.max_info_tx >> 8) as u8);
         payload.push((self.max_info_tx & 0xFF) as u8);
-
-        // Max receive info (tag=0x07, value=2 bytes)
         payload.push(0x07);
         payload.push(0x02);
         payload.push((self.max_info_rx >> 8) as u8);
         payload.push((self.max_info_rx & 0xFF) as u8);
-
         payload
     }
 

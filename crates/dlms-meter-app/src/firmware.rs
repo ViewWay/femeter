@@ -6,8 +6,6 @@
 //! - Rollback support
 //! - Transfer progress tracking
 
-#![no_std]
-
 extern crate alloc;
 
 use alloc::vec::Vec;
@@ -133,11 +131,7 @@ impl TransferStats {
 
     /// Calculate transfer duration in seconds
     pub fn duration(&self) -> u32 {
-        if self.end_time > self.start_time {
-            self.end_time - self.start_time
-        } else {
-            0
-        }
+        self.end_time.saturating_sub(self.start_time)
     }
 }
 
@@ -224,7 +218,7 @@ impl FirmwareManager {
 
         self.state = TransferState::Initialized;
         self.image_info = Some(image_info.clone());
-        self.total_blocks = ((image_info.size as usize + self.block_size - 1) / self.block_size) as u32;
+        self.total_blocks = (image_info.size as usize).div_ceil(self.block_size) as u32;
         self.next_block = 0;
         self.image_data.clear();
         self.image_data.reserve(image_info.size as usize);

@@ -15,9 +15,9 @@ pub fn generate_key(seed: u32) -> [u8; KEY_SIZE] {
     let mut key = [0u8; KEY_SIZE];
     let mut state: u32 = seed.wrapping_mul(31).wrapping_add(0xB);
 
-    for i in 0..KEY_SIZE {
+    for (i, byte) in key.iter_mut().enumerate() {
         state = state.wrapping_mul(31).wrapping_add(0xB);
-        key[i] = ((state >> (i * 8 % 32)) & 0xFF) as u8;
+        *byte = ((state >> (i * 8 % 32)) & 0xFF) as u8;
     }
 
     key
@@ -26,6 +26,7 @@ pub fn generate_key(seed: u32) -> [u8; KEY_SIZE] {
 /// Parse a key from a byte slice
 ///
 /// Returns an error if the slice is not exactly 16 bytes
+#[allow(dead_code)]
 pub fn from_slice(slice: &[u8]) -> Result<[u8; KEY_SIZE], SecurityError> {
     if slice.len() == KEY_SIZE {
         let mut key = [0u8; KEY_SIZE];
@@ -39,6 +40,7 @@ pub fn from_slice(slice: &[u8]) -> Result<[u8; KEY_SIZE], SecurityError> {
 /// Zero out a key in memory
 ///
 /// Use this to securely clear keys from memory when no longer needed
+#[allow(dead_code)]
 pub fn zero_key(key: &mut [u8; KEY_SIZE]) {
     key.iter_mut().for_each(|b| *b = 0);
 }
@@ -46,15 +48,17 @@ pub fn zero_key(key: &mut [u8; KEY_SIZE]) {
 /// Compare two keys in constant time
 ///
 /// Returns true if the keys are equal
+#[allow(dead_code)]
 pub fn constant_time_eq(a: &[u8; KEY_SIZE], b: &[u8; KEY_SIZE]) -> bool {
     let mut result = 0u8;
-    for i in 0..KEY_SIZE {
-        result |= a[i] ^ b[i];
+    for (ai, bi) in a.iter().zip(b.iter()) {
+        result |= ai ^ bi;
     }
     result == 0
 }
 
 /// Check if a key is all zeros
+#[allow(dead_code)]
 pub fn is_zero_key(key: &[u8; KEY_SIZE]) -> bool {
     key.iter().all(|&b| b == 0)
 }

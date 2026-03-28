@@ -6,8 +6,6 @@
 //! - Historical data management
 //! - Profile object capture time handling
 
-#![no_std]
-
 extern crate alloc;
 
 use alloc::vec::Vec;

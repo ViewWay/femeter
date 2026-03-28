@@ -3,11 +3,12 @@
 //! Reference: Blue Book Part 2 §10, Green Book Ed.9 Annex A
 
 /// COSEM physical unit codes (subset of standard units)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u16)]
 #[cfg_attr(feature = "defmt-log", derive(defmt::Format))]
 pub enum Unit {
     /// 0 = No unit / dimensionless
+    #[default]
     None = 0,
     /// 1 = Year
     Year = 1,
@@ -101,11 +102,5 @@ impl Unit {
     /// Get the numeric code
     pub fn code(&self) -> u16 {
         *self as u16
-    }
-}
-
-impl Default for Unit {
-    fn default() -> Self {
-        Self::None
     }
 }

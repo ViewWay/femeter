@@ -2,8 +2,6 @@
 //!
 //! Reference: IEC 62056-53 (DLMS/COSEM Application Layer)
 
-#![no_std]
-
 #[cfg(feature = "std")]
 extern crate std;
 
@@ -282,7 +280,7 @@ mod tests {
 
     #[test]
     fn test_attribute_descriptor_size() {
-        let desc = AttributeDescriptor::new(
+        let _desc = AttributeDescriptor::new(
             3,
             ObisCode::new(1, 0, 1, 8, 0, 255),
             2,
@@ -292,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_method_descriptor_size() {
-        let desc = MethodDescriptor::new(
+        let _desc = MethodDescriptor::new(
             70,
             ObisCode::new(0, 0, 96, 3, 10, 255),
             1,

@@ -57,7 +57,6 @@ pub fn obis_description(code: &ObisCode) -> Option<&'static str> {
         (1, 0, 14, 7, 0, 255) => Some("Frequency (Hz)"),
         (1, 0, 13, 7, 0, 255) => Some("Total power factor"),
         (1, 0, 15, 7, 0, 255) => Some("Active power L1 (W)"),
-        (1, 0, 31, 7, 0, 255) => Some("Current L1 (A)"),
         (1, 0, 1, 6, 0, 255) => Some("Current demand (A)"),
         (1, 0, 15, 6, 0, 255) => Some("Active power demand (W)"),
 
