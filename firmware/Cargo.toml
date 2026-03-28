@@ -2,6 +2,7 @@
 name = "femeter-firmware"
 version = "0.1.0"
 edition = "2021"
+description = "FeMeter smart meter firmware for FM33LG0xx (Fudan Microelectronics)"
 
 [workspace]
 
@@ -12,6 +13,7 @@ test = false
 bench = false
 
 [dependencies]
+# DLMS/COSEM protocol stack
 dlms-core = { path = "../crates/dlms-core" }
 dlms-hdlc = { path = "../crates/dlms-hdlc" }
 dlms-axdr = { path = "../crates/dlms-axdr" }
@@ -20,6 +22,7 @@ dlms-security = { path = "../crates/dlms-security" }
 dlms-cosem = { path = "../crates/dlms-cosem" }
 dlms-obis = { path = "../crates/dlms-obis" }
 
+# Embedded runtime
 cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7"
 panic-halt = "1.0"
@@ -28,7 +31,7 @@ defmt-rtt = "0.4"
 critical-section = "1.2"
 
 [profile.release]
-opt-level = 3
+opt-level = "z"
 lto = false
 codegen-units = 1
 debug = 2
