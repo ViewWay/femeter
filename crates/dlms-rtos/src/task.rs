@@ -4,6 +4,9 @@
 
 use core::fmt;
 
+#[cfg(feature = "std")]
+extern crate std;
+
 /// Unique task identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "defmt-log", derive(defmt::Format))]
@@ -202,12 +205,6 @@ pub trait RtosTask: Sized {
 
     /// Get the number of active tasks
     fn task_count(&self) -> usize;
-
-    /// Default implementation for system tick (can be overridden)
-    #[doc(hidden)]
-    fn system_tick_default() -> u64 {
-        0
-    }
 }
 
 /// Task-related errors

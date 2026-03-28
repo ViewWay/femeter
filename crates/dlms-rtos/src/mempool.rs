@@ -4,6 +4,9 @@
 
 use core::fmt;
 
+#[cfg(feature = "std")]
+extern crate std;
+
 /// Memory pool configuration
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "defmt-log", derive(defmt::Format))]

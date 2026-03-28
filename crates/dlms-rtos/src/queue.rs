@@ -4,6 +4,9 @@
 
 use core::fmt;
 
+#[cfg(feature = "std")]
+extern crate std;
+
 /// Queue handle for managing queue state
 ///
 /// This handle provides operations on a queue instance.
@@ -76,7 +79,7 @@ impl std::error::Error for QueueError {}
 /// ```
 pub trait RtosQueue: Sized {
     /// Queue handle type
-    type Handle<T>: QueueHandle where T: Send;
+    type Handle<T: Send>: QueueHandle;
 
     /// Create a new queue
     ///
@@ -85,66 +88,45 @@ pub trait RtosQueue: Sized {
     ///
     /// # Panics
     /// Panics if capacity is 0
-    fn create_queue<T>(&self, capacity: usize) -> Result<Self::Handle<T>, QueueError>
-    where
-        T: Send;
+    fn create_queue<T: Send>(&self, capacity: usize) -> Result<Self::Handle<T>, QueueError>;
 
     /// Send an item (blocking until space available)
-    fn send<T>(&self, queue: &Self::Handle<T>, item: T) -> Result<(), QueueError>
-    where
-        T: Send;
+    fn send<T: Send>(&self, queue: &Self::Handle<T>, item: T) -> Result<(), QueueError>;
 
     /// Try to send without blocking
     ///
     /// Returns error if queue is full.
-    fn try_send<T>(&self, queue: &Self::Handle<T>, item: T) -> Result<(), QueueError>
-    where
-        T: Send;
+    fn try_send<T: Send>(&self, queue: &Self::Handle<T>, item: T) -> Result<(), QueueError>;
 
     /// Send with timeout
     ///
     /// Returns error if timeout expires before space is available.
-    fn try_send_timeout<T>(
+    fn try_send_timeout<T: Send>(
         &self,
         queue: &Self::Handle<T>,
         item: T,
         millis: u32,
-    ) -> Result<(), QueueError>
-    where
-        T: Send;
+    ) -> Result<(), QueueError>;
 
     /// Receive an item (blocking until available)
-    fn receive<T>(&self, queue: &Self::Handle<T>) -> Result<T, QueueError>
-    where
-        T: Send;
+    fn receive<T: Send>(&self, queue: &Self::Handle<T>) -> Result<T, QueueError>;
 
     /// Try to receive without blocking
     ///
     /// Returns error if queue is empty.
-    fn try_receive<T>(&self, queue: &Self::Handle<T>) -> Result<T, QueueError>
-    where
-        T: Send;
+    fn try_receive<T: Send>(&self, queue: &Self::Handle<T>) -> Result<T, QueueError>;
 
     /// Receive with timeout
     ///
     /// Returns error if timeout expires before item is available.
-    fn try_receive_timeout<T>(
+    fn try_receive_timeout<T: Send>(
         &self,
         queue: &Self::Handle<T>,
         millis: u32,
-    ) -> Result<T, QueueError>
-    where
-        T: Send;
-
-    /// Peek at the front item without removing it
-    fn peek<T>(&self, queue: &Self::Handle<T>) -> Result<&T, QueueError>
-    where
-        T: Send;
+    ) -> Result<T, QueueError>;
 
     /// Clear all items from the queue
-    fn clear<T>(&self, queue: &Self::Handle<T>)
-    where
-        T: Send;
+    fn clear<T: Send>(&self, queue: &Self::Handle<T>);
 }
 
 #[cfg(test)]

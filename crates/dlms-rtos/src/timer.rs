@@ -4,6 +4,9 @@
 
 use core::fmt;
 
+#[cfg(feature = "std")]
+extern crate std;
+
 /// Timer mode - one-shot or periodic
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt-log", derive(defmt::Format))]

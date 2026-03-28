@@ -5,13 +5,13 @@
 use core::fmt;
 use core::ops::{Deref, DerefMut};
 
+#[cfg(feature = "std")]
+extern crate std;
+
 /// Mutex guard providing RAII-style locking
 ///
 /// The guard automatically releases the mutex when dropped.
-pub trait MutexGuard<'a, T>: Send + Deref<Target = T> + DerefMut {}
-
-/// Blanket implementation for all types that meet the requirements
-impl<'a, T, G> MutexGuard<'a, T> for G where G: Send + Deref<Target = T> + DerefMut {}
+pub trait MutexGuard<'a, T>: Deref<Target = T> + DerefMut {}
 
 /// Mutex-related errors
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,26 +55,29 @@ impl std::error::Error for MutexError {}
 /// // Guard dropped here, releases lock
 /// ```
 pub trait RtosMutex: Sized {
+    /// Mutex pointer type for storage
+    type MutexPtr<T: Send>: MutexPtr<T>;
+
     /// Guard type returned by lock operations
-    type Guard<'a, T>: MutexGuard<'a, T> where T: 'a, Self: 'a;
+    type Guard<'a, T: Send>: MutexGuard<'a, T> where T: 'a, Self: 'a;
 
     /// Create a new mutex
     ///
     /// The mutex is initially unlocked.
-    fn create_mutex<T>(&self) -> impl MutexPtr<T>;
+    fn create_mutex<T: Default + Send>(&self) -> Self::MutexPtr<T>;
 
     /// Create a new mutex with an initial value
-    fn create_mutex_with<T>(&self, value: T) -> impl MutexPtr<T>;
+    fn create_mutex_with<T: Send>(&self, value: T) -> Self::MutexPtr<T>;
 
     /// Lock the mutex, blocking until acquired
     ///
     /// Returns a guard that automatically releases the mutex when dropped.
-    fn lock<T>(&self, mutex: &impl MutexPtr<T>) -> impl Deref<Target = T>;
+    fn lock<'a, T: Send>(&self, mutex: &'a Self::MutexPtr<T>) -> Self::Guard<'a, T>;
 
     /// Try to lock the mutex without blocking
     ///
     /// Returns None if the mutex is already locked.
-    fn try_lock<T>(&self, mutex: &impl MutexPtr<T>) -> Option<impl Deref<Target = T>>;
+    fn try_lock<'a, T: Send>(&self, mutex: &'a Self::MutexPtr<T>) -> Option<Self::Guard<'a, T>>;
 }
 
 /// Pointer type for mutex storage

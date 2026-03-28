@@ -4,6 +4,9 @@
 
 use core::fmt;
 
+#[cfg(feature = "std")]
+extern crate std;
+
 /// Interrupt state restoration token
 ///
 /// When interrupts are disabled, this token can be used to restore

@@ -65,17 +65,6 @@ pub trait Rtos: RtosTask + RtosTimer + RtosMutex + RtosSemaphore + RtosQueue + R
     fn system_tick(&self) -> Tick;
 }
 
-/// Blanket implementation for all types that implement the sub-traits
-impl<T> Rtos for T
-where
-    T: RtosTask + RtosTimer + RtosMutex + RtosSemaphore + RtosQueue + RtosMemPool + RtosInterrupt,
-{
-    fn system_tick(&self) -> Tick {
-        // Default: use a simple counter (real RTOS would use actual tick)
-        Self::system_tick_default()
-    }
-}
-
 // Include sub-modules
 mod task;
 mod timer;

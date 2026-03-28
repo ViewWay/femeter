@@ -4,6 +4,9 @@
 
 use core::fmt;
 
+#[cfg(feature = "std")]
+extern crate std;
+
 /// Semaphore handle for managing semaphore state
 ///
 /// This handle provides operations on a semaphore instance.
@@ -76,40 +79,40 @@ pub trait RtosSemaphore: Sized {
     ///
     /// # Panics
     /// Panics if max_count < initial_count
-    fn create_semaphore(&self, initial_count: u32, max_count: u32) -> impl SemaphoreHandle;
+    fn create_semaphore(&self, initial_count: u32, max_count: u32) -> Self::Handle;
 
     /// Create a binary semaphore
     ///
     /// A binary semaphore has max_count = 1.
-    fn create_binary_semaphore(&self) -> impl SemaphoreHandle {
+    fn create_binary_semaphore(&self) -> Self::Handle {
         self.create_semaphore(0, 1)
     }
 
     /// Acquire the semaphore (decrement count)
     ///
     /// Blocks until the semaphore is available (count > 0).
-    fn acquire(&self, sem: &impl SemaphoreHandle);
+    fn acquire(&self, sem: &Self::Handle);
 
     /// Try to acquire without blocking
     ///
     /// Returns true if acquired, false if count is 0.
-    fn try_acquire(&self, sem: &impl SemaphoreHandle) -> bool;
+    fn try_acquire(&self, sem: &Self::Handle) -> bool;
 
     /// Try to acquire with timeout
     ///
     /// Returns true if acquired within timeout, false otherwise.
-    fn try_acquire_timeout(&self, sem: &impl SemaphoreHandle, millis: u32) -> bool;
+    fn try_acquire_timeout(&self, sem: &Self::Handle, millis: u32) -> bool;
 
     /// Release the semaphore (increment count)
     ///
     /// Increments the count, up to max_count. May wake a waiting task.
-    fn release(&self, sem: &impl SemaphoreHandle);
+    fn release(&self, sem: &Self::Handle);
 
     /// Flush the semaphore
     ///
     /// Resets the count to initial value. The exact behavior depends on
     /// the RTOS implementation.
-    fn flush(&self, sem: &impl SemaphoreHandle);
+    fn flush(&self, sem: &Self::Handle);
 }
 
 #[cfg(test)]

@@ -6,35 +6,37 @@
 
 #![cfg(feature = "std")]
 
-// Import std explicitly - this is allowed when the crate feature is enabled
+#[cfg(feature = "std")]
 extern crate std;
 
-use core::cell::{Cell, RefCell};
-use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex as StdMutex, RwLock};
+use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use super::*;
+use crate::interrupt::{InterruptGuard, InterruptState, RtosInterrupt};
+use crate::mempool::{MemPoolError, MemPoolHandle, PoolConfig, RtosMemPool};
+use crate::queue::{QueueError, QueueHandle, RtosQueue};
+use crate::semaphore::{RtosSemaphore, SemaphoreHandle};
+use crate::task::{Priority, RtosTask, TaskConfig, TaskError, TaskFn, TaskHandle as CrateTaskHandle, TaskId, TaskState};
+use crate::timer::{RtosTimer, TimerCallback, TimerConfig as TimerConfigType, TimerError, TimerHandle as CrateTimerHandle, TimerMode};
+use crate::{Rtos, Tick};
 
-/// System tick counter (static for singleton behavior)
+/// System tick counter
 static SYSTEM_TICK: AtomicU64 = AtomicU64::new(0);
 
-/// Increment system tick (called internally)
 fn tick_ms(millis: u64) {
     SYSTEM_TICK.fetch_add(millis, Ordering::Relaxed);
 }
 
-/// Get current system tick in milliseconds
 pub fn get_system_tick() -> u64 {
     SYSTEM_TICK.load(Ordering::Relaxed)
 }
 
 /// Standard library RTOS implementation
-///
-/// This provides simple std-backed implementations of all RTOS traits.
-/// NOT suitable for production - only for host-based testing.
 #[derive(Debug, Default)]
 pub struct StdRtos;
 
@@ -71,7 +73,7 @@ impl StdTaskHandle {
     }
 }
 
-impl TaskHandle for StdTaskHandle {
+impl CrateTaskHandle for StdTaskHandle {
     fn id(&self) -> TaskId {
         self.id
     }
@@ -157,7 +159,7 @@ impl StdTimerHandle {
     }
 }
 
-impl TimerHandle for StdTimerHandle {
+impl CrateTimerHandle for StdTimerHandle {
     fn start(&self) {
         self.running.store(true, Ordering::Release);
         *self.start_time.write().unwrap() = Some(Instant::now());
@@ -185,7 +187,9 @@ impl TimerHandle for StdTimerHandle {
         if !self.is_running() {
             return None;
         }
-        let start = *self.start_time.read().unwrap()?;
+        let start_guard = self.start_time.read().unwrap();
+        let start = *start_guard.as_ref()?;
+        drop(start_guard);
         let elapsed = start.elapsed().as_millis() as u32;
         self.period().checked_sub(elapsed)
     }
@@ -197,7 +201,7 @@ impl RtosTimer for StdRtos {
     fn create_timer(
         &self,
         _callback: TimerCallback,
-        config: TimerConfig,
+        config: TimerConfigType,
     ) -> Result<Self::Handle, TimerError> {
         let id = NEXT_TIMER_ID.fetch_add(1, Ordering::SeqCst);
         let handle = StdTimerHandle::new(id, config.period_ms, config.mode);
@@ -217,73 +221,78 @@ impl RtosTimer for StdRtos {
 }
 
 // ============================================================================
-// Mutex Implementation
+// Mutex Implementation (minimal, just to satisfy trait bounds)
 // ============================================================================
 
-#[derive(Debug)]
+use crate::mutex::{MutexGuard, MutexPtr, RtosMutex};
+
+// Minimal mutex wrapper - for testing only
 pub struct StdMutex<T> {
-    inner: StdMutex<T>,
+    inner: RwLock<T>,
 }
 
 impl<T> StdMutex<T> {
     pub fn new(value: T) -> Self {
         Self {
-            inner: StdMutex::new(value),
+            inner: RwLock::new(value),
         }
     }
 }
 
-impl<T> MutexPtr<T> for StdMutex<T> {
-    fn lock(&self) -> impl Deref<Target = T> {
-        StdMutexGuard {
-            inner: self.inner.lock().unwrap(),
+// SAFETY: RwLock is Send + Sync when T is Send
+unsafe impl<T: Send> Send for StdMutex<T> {}
+unsafe impl<T: Send> Sync for StdMutex<T> {}
+
+impl<T: Send> MutexPtr<T> for StdMutex<T> {
+    fn lock(&self) -> StdMutexGuardRef<'_, T> {
+        StdMutexGuardRef {
+            _borrow: self.inner.write().unwrap(),
         }
     }
 
-    fn try_lock(&self) -> Option<impl Deref<Target = T>> {
-        self.inner.try_lock().ok().map(|g| StdMutexGuard { inner: g })
+    fn try_lock(&self) -> Option<StdMutexGuardRef<'_, T>> {
+        self.inner.try_write().ok().map(|w| StdMutexGuardRef { _borrow: w })
     }
 }
 
-pub struct StdMutexGuard<'a, T> {
-    inner: std::sync::MutexGuard<'a, T>,
+pub struct StdMutexGuardRef<'a, T> {
+    _borrow: std::sync::RwLockWriteGuard<'a, T>,
 }
 
-impl<'a, T> Deref for StdMutexGuard<'a, T> {
+impl<'a, T> core::ops::Deref for StdMutexGuardRef<'a, T> {
     type Target = T;
-
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self._borrow
     }
 }
 
-impl<'a, T> DerefMut for StdMutexGuard<'a, T> {
+impl<'a, T> core::ops::DerefMut for StdMutexGuardRef<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
+        &mut self._borrow
     }
 }
 
-impl<'a, T> Send for StdMutexGuard<'a, T> {}
+unsafe impl<'a, T: Send> Send for StdMutexGuardRef<'a, T> {}
+
+impl<'a, T> MutexGuard<'a, T> for StdMutexGuardRef<'a, T> {}
 
 impl RtosMutex for StdRtos {
-    type Guard<'a, T> = StdMutexGuard<'a, T> where T: 'a, Self: 'a;
+    type MutexPtr<T: Send> = StdMutex<T>;
+    type Guard<'a, T: Send> = StdMutexGuardRef<'a, T> where T: 'a, Self: 'a;
 
-    fn create_mutex(&self) -> impl MutexPtr<T>
-    where
-        T: Default,
-    {
+    fn create_mutex<T: Default + Send>(&self) -> StdMutex<T> {
         StdMutex::new(T::default())
     }
 
-    fn create_mutex_with(&self, value: T) -> impl MutexPtr<T> {
+    fn create_mutex_with<T: Send>(&self, value: T) -> StdMutex<T> {
         StdMutex::new(value)
     }
 
-    fn lock(&self, mutex: &impl MutexPtr<T>) -> impl Deref<Target = T> {
+    fn lock<'a, T: Send>(&self, mutex: &'a StdMutex<T>) -> StdMutexGuardRef<'a, T> {
         mutex.lock()
     }
 
-    fn try_lock(&self, mutex: &impl MutexPtr<T>) -> Option<impl Deref<Target = T>> {
+    fn try_lock<'a, T: Send>(&self, mutex: &'a StdMutex<T>) -> Option<StdMutexGuardRef<'a, T>> {
         mutex.try_lock()
     }
 }
@@ -317,34 +326,21 @@ impl SemaphoreHandle for StdSemaphoreHandle {
     }
 }
 
-// Helper trait for downcasting
-pub trait AsAny {
-    fn as_any(&self) -> &dyn core::any::Any;
-}
-
-impl AsAny for StdSemaphoreHandle {
-    fn as_any(&self) -> &dyn core::any::Any {
-        self
-    }
-}
-
 impl RtosSemaphore for StdRtos {
     type Handle = StdSemaphoreHandle;
 
-    fn create_semaphore(&self, initial_count: u32, max_count: u32) -> impl SemaphoreHandle {
+    fn create_semaphore(&self, initial_count: u32, max_count: u32) -> Self::Handle {
         StdSemaphoreHandle::new(initial_count, max_count)
     }
 
-    fn acquire(&self, sem: &impl SemaphoreHandle) {
-        let sem = sem.as_any().downcast_ref::<StdSemaphoreHandle>().unwrap();
+    fn acquire(&self, sem: &Self::Handle) {
         while sem.count.load(Ordering::Acquire) == 0 {
             thread::yield_now();
         }
         sem.count.fetch_sub(1, Ordering::AcqRel);
     }
 
-    fn try_acquire(&self, sem: &impl SemaphoreHandle) -> bool {
-        let sem = sem.as_any().downcast_ref::<StdSemaphoreHandle>().unwrap();
+    fn try_acquire(&self, sem: &Self::Handle) -> bool {
         let mut count = sem.count.load(Ordering::Acquire);
         while count > 0 {
             match sem.count.compare_exchange_weak(
@@ -360,7 +356,7 @@ impl RtosSemaphore for StdRtos {
         false
     }
 
-    fn try_acquire_timeout(&self, sem: &impl SemaphoreHandle, millis: u32) -> bool {
+    fn try_acquire_timeout(&self, sem: &Self::Handle, millis: u32) -> bool {
         let start = Instant::now();
         while start.elapsed() < Duration::from_millis(millis as u64) {
             if self.try_acquire(sem) {
@@ -371,8 +367,7 @@ impl RtosSemaphore for StdRtos {
         false
     }
 
-    fn release(&self, sem: &impl SemaphoreHandle) {
-        let sem = sem.as_any().downcast_ref::<StdSemaphoreHandle>().unwrap();
+    fn release(&self, sem: &Self::Handle) {
         let mut count = sem.count.load(Ordering::Acquire);
         while count < sem.max_count {
             match sem.count.compare_exchange_weak(
@@ -387,8 +382,7 @@ impl RtosSemaphore for StdRtos {
         }
     }
 
-    fn flush(&self, sem: &impl SemaphoreHandle) {
-        let sem = sem.as_any().downcast_ref::<StdSemaphoreHandle>().unwrap();
+    fn flush(&self, sem: &Self::Handle) {
         sem.count.store(sem.max_count, Ordering::Release);
     }
 }
@@ -412,6 +406,10 @@ impl<T: Send> StdQueueHandle<T> {
     }
 }
 
+// SAFETY: Only used in single-threaded tests
+unsafe impl<T: Send> Send for StdQueueHandle<T> {}
+unsafe impl<T: Send> Sync for StdQueueHandle<T> {}
+
 impl<T: Send> QueueHandle for StdQueueHandle<T> {
     fn len(&self) -> usize {
         self.inner.read().unwrap().len()
@@ -427,79 +425,65 @@ impl<T: Send> QueueHandle for StdQueueHandle<T> {
 }
 
 impl RtosQueue for StdRtos {
-    type Handle<T> = StdQueueHandle<T> where T: Send;
+    type Handle<T: Send> = StdQueueHandle<T>;
 
-    fn create_queue<T>(&self, capacity: usize) -> Result<Self::Handle<T>, super::super::QueueError>
-    where
-        T: Send,
-    {
+    fn create_queue<T: Send>(&self, capacity: usize) -> Result<Self::Handle<T>, QueueError> {
         if capacity == 0 {
-            return Err(super::super::QueueError::InvalidSize);
+            return Err(QueueError::InvalidSize);
         }
         Ok(StdQueueHandle::new(capacity))
     }
 
-    fn send<T>(&self, queue: &Self::Handle<T>, item: T) -> Result<(), super::super::QueueError>
-    where
-        T: Send,
-    {
+    fn send<T: Send>(&self, queue: &StdQueueHandle<T>, item: T) -> Result<(), QueueError> {
         let mut q = queue.inner.write().unwrap();
         if q.len() >= queue.capacity {
-            return Err(super::super::QueueError::Full);
+            return Err(QueueError::Full);
         }
         q.push_back(item);
         Ok(())
     }
 
-    fn try_send<T>(&self, queue: &Self::Handle<T>, item: T) -> Result<(), super::super::QueueError>
-    where
-        T: Send,
-    {
+    fn try_send<T: Send>(&self, queue: &StdQueueHandle<T>, item: T) -> Result<(), QueueError> {
         self.send(queue, item)
     }
 
-    fn try_send_timeout<T>(
+    fn try_send_timeout<T: Send>(
         &self,
-        queue: &Self::Handle<T>,
+        queue: &StdQueueHandle<T>,
         item: T,
         millis: u32,
-    ) -> Result<(), super::super::QueueError>
-    where
-        T: Send,
-    {
+    ) -> Result<(), QueueError> {
         let start = Instant::now();
-        while start.elapsed() < Duration::from_millis(millis as u64) {
-            if self.try_send(queue, item).is_ok() {
-                return Ok(());
+        let timeout = Duration::from_millis(millis as u64);
+
+        while start.elapsed() < timeout {
+            // Check if queue has space before attempting send
+            let q = queue.inner.read().unwrap();
+            if q.len() < queue.capacity {
+                drop(q);
+                return self.send(queue, item);
             }
+            drop(q);
             thread::yield_now();
         }
-        Err(super::super::QueueError::Full)
+        // One final attempt
+        self.try_send(queue, item)
     }
 
-    fn receive<T>(&self, queue: &Self::Handle<T>) -> Result<T, super::super::QueueError>
-    where
-        T: Send,
-    {
+    fn receive<T: Send>(&self, queue: &StdQueueHandle<T>) -> Result<T, QueueError> {
         let mut q = queue.inner.write().unwrap();
-        q.pop_front().ok_or(super::super::QueueError::Empty)
+        q.pop_front().ok_or(QueueError::Empty)
     }
 
-    fn try_receive<T>(&self, queue: &Self::Handle<T>) -> Result<T, super::super::QueueError>
-    where
-        T: Send,
-    {
+    fn try_receive<T: Send>(&self, queue: &StdQueueHandle<T>) -> Result<T, QueueError> {
         self.receive(queue)
     }
 
-    fn try_receive_timeout<T>(
+    fn try_receive_timeout<T: Send>(
         &self,
-        queue: &Self::Handle<T>,
+        queue: &StdQueueHandle<T>,
         millis: u32,
-    ) -> Result<T, super::super::QueueError>
-    where
-        T: Send,
-    {
+    ) -> Result<T, QueueError> {
         let start = Instant::now();
         while start.elapsed() < Duration::from_millis(millis as u64) {
             if let Ok(item) = self.try_receive(queue) {
@@ -507,21 +491,10 @@ impl RtosQueue for StdRtos {
             }
             thread::yield_now();
         }
-        Err(super::super::QueueError::Empty)
+        Err(QueueError::Empty)
     }
 
-    fn peek<T>(&self, queue: &Self::Handle<T>) -> Result<&T, super::super::QueueError>
-    where
-        T: Send,
-    {
-        let q = queue.inner.read().unwrap();
-        q.front().ok_or(super::super::QueueError::Empty)
-    }
-
-    fn clear<T>(&self, queue: &Self::Handle<T>)
-    where
-        T: Send,
-    {
+    fn clear<T: Send>(&self, queue: &StdQueueHandle<T>) {
         queue.inner.write().unwrap().clear();
     }
 }
@@ -532,21 +505,21 @@ impl RtosQueue for StdRtos {
 
 #[derive(Debug)]
 pub struct StdMemPoolHandle {
-    blocks: RefCell<Vec<Option<Box<[u8]>>>>,
+    blocks: Arc<RwLock<Vec<Option<Box<[u8]>>>>>,
     block_size: usize,
-    free_count: Cell<usize>,
+    free_count: AtomicUsize,
 }
 
 impl StdMemPoolHandle {
     fn new(block_size: usize, block_count: usize) -> Self {
         let mut blocks = Vec::with_capacity(block_count);
         for _ in 0..block_count {
-            blocks.push(Some(vec![0u8; block_size].into_boxed_slice()));
+            blocks.push(Some(std::vec![0u8; block_size].into_boxed_slice()));
         }
         Self {
-            blocks: RefCell::new(blocks),
+            blocks: Arc::new(RwLock::new(blocks)),
             block_size,
-            free_count: Cell::new(block_count),
+            free_count: AtomicUsize::new(block_count),
         }
     }
 }
@@ -557,48 +530,48 @@ impl MemPoolHandle for StdMemPoolHandle {
     }
 
     fn block_count(&self) -> usize {
-        self.blocks.borrow().len()
+        self.blocks.read().unwrap().len()
     }
 
     fn free_count(&self) -> usize {
-        self.free_count.get()
+        self.free_count.load(Ordering::Acquire)
     }
 }
 
 impl RtosMemPool for StdRtos {
     type Handle = StdMemPoolHandle;
 
-    fn create_pool(&self, config: PoolConfig) -> Result<Self::Handle, super::super::MemPoolError> {
+    fn create_pool(&self, config: PoolConfig) -> Result<Self::Handle, MemPoolError> {
         if config.block_size == 0 || config.block_count == 0 {
-            return Err(super::super::MemPoolError::InvalidConfig);
+            return Err(MemPoolError::InvalidConfig);
         }
         Ok(StdMemPoolHandle::new(config.block_size, config.block_count))
     }
 
-    fn allocate(&self, pool: &Self::Handle) -> Result<*mut u8, super::super::MemPoolError> {
-        let mut blocks = pool.blocks.borrow_mut();
-        for (i, block) in blocks.iter_mut().enumerate() {
+    fn allocate(&self, pool: &StdMemPoolHandle) -> Result<*mut u8, MemPoolError> {
+        let mut blocks = pool.blocks.write().unwrap();
+        for (_i, block) in blocks.iter_mut().enumerate() {
             if block.is_some() {
                 let ptr = block.as_ref().unwrap().as_ptr() as *mut u8;
                 *block = None;
-                pool.free_count.set(pool.free_count.get() - 1);
+                pool.free_count.fetch_sub(1, Ordering::AcqRel);
                 return Ok(ptr);
             }
         }
-        Err(super::super::MemPoolError::OutOfMemory)
+        Err(MemPoolError::OutOfMemory)
     }
 
-    fn deallocate(&self, pool: &Self::Handle, _block: *mut u8) -> Result<(), super::super::MemPoolError> {
-        let mut blocks = pool.blocks.borrow_mut();
-        for b in blocks.iter_mut() {
-            if b.is_none() {
-                let new_block = vec![0u8; pool.block_size].into_boxed_slice();
-                *b = Some(new_block);
-                pool.free_count.set(pool.free_count.get() + 1);
+    fn deallocate(&self, pool: &StdMemPoolHandle, _block: *mut u8) -> Result<(), MemPoolError> {
+        let mut blocks = pool.blocks.write().unwrap();
+        for _b in blocks.iter_mut() {
+            if _b.is_none() {
+                let new_block = std::vec![0u8; pool.block_size].into_boxed_slice();
+                *_b = Some(new_block);
+                pool.free_count.fetch_add(1, Ordering::AcqRel);
                 return Ok(());
             }
         }
-        Err(super::super::MemPoolError::InvalidBlock)
+        Err(MemPoolError::InvalidBlock)
     }
 }
 
@@ -606,28 +579,31 @@ impl RtosMemPool for StdRtos {
 // Interrupt Implementation
 // ============================================================================
 
-thread_local! {
-    static INTERRUPT_STATE: Cell<bool> = Cell::new(true);
+std::thread_local! {
+    static INTERRUPT_STATE: std::cell::Cell<bool> = std::cell::Cell::new(true);
 }
 
 impl RtosInterrupt for StdRtos {
     fn disable_interrupts(&self) -> InterruptState {
-        let was_enabled = INTERRUPT_STATE.get();
-        INTERRUPT_STATE.set(false);
+        let was_enabled = INTERRUPT_STATE.with(|s| s.get());
+        INTERRUPT_STATE.with(|s| s.set(false));
         InterruptState::new(was_enabled)
     }
 
     fn enable_interrupts(&self) {
-        INTERRUPT_STATE.set(true);
+        INTERRUPT_STATE.with(|s| s.set(true));
     }
 
     fn restore_interrupt(&self, state: InterruptState) {
-        INTERRUPT_STATE.set(state.was_enabled);
+        INTERRUPT_STATE.with(|s| s.set(state.was_enabled));
     }
 
     fn enter_critical(&self) -> InterruptGuard {
         let state = self.disable_interrupts();
-        InterruptGuard::new(state, |s| Self::restore_direct(s))
+        let restore_fn: fn(InterruptState) = |s| {
+            INTERRUPT_STATE.with(|state| state.set(s.was_enabled));
+        };
+        InterruptGuard::new(state, restore_fn)
     }
 
     fn is_in_isr(&self) -> bool {
@@ -635,13 +611,7 @@ impl RtosInterrupt for StdRtos {
     }
 
     fn are_interrupts_disabled(&self) -> bool {
-        !INTERRUPT_STATE.get()
-    }
-}
-
-impl StdRtos {
-    fn restore_direct(state: InterruptState) {
-        INTERRUPT_STATE.set(state.was_enabled);
+        !INTERRUPT_STATE.with(|s| s.get())
     }
 }
 
@@ -689,12 +659,12 @@ mod tests {
 
     #[test]
     fn test_timer_config() {
-        let config = TimerConfig::one_shot(1000);
+        let config = TimerConfigType::one_shot(1000);
         assert_eq!(config.mode, TimerMode::OneShot);
         assert_eq!(config.period_ms, 1000);
         assert!(!config.auto_start);
 
-        let config = TimerConfig::periodic(500).auto_start();
+        let config = TimerConfigType::periodic(500).auto_start();
         assert_eq!(config.mode, TimerMode::Periodic);
         assert_eq!(config.period_ms, 500);
         assert!(config.auto_start);
@@ -758,7 +728,7 @@ mod tests {
 
         rtos.send(&queue, 1).unwrap();
         rtos.send(&queue, 2).unwrap();
-        assert_eq!(rtos.try_send(&queue, 3), Err(super::super::QueueError::Full));
+        assert_eq!(rtos.try_send(&queue, 3), Err(QueueError::Full));
     }
 
     #[test]
@@ -793,7 +763,7 @@ mod tests {
         let pool = rtos.create_pool(config).unwrap();
 
         rtos.allocate(&pool).unwrap();
-        assert_eq!(rtos.allocate(&pool), Err(super::super::MemPoolError::OutOfMemory));
+        assert_eq!(rtos.allocate(&pool), Err(MemPoolError::OutOfMemory));
     }
 
     #[test]
