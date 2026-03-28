@@ -1,0 +1,288 @@
+//! DLMS/COSEM APDU (Application Protocol Data Unit) codec
+//!
+//! This crate provides encoding and decoding for DLMS/COSEM Application Layer
+//! PDUs as specified in IEC 62056-53.
+//!
+//! # Supported APDUs
+//!
+//! - **Get-Request/Get-Response**: Read attribute values
+//! - **Set-Request/Set-Response**: Write attribute values
+//! - **Action-Request/Action-Response**: Execute methods
+//! - **Event-Notification**: Push events from meter to client
+//! - **General-Block-Transfer**: Transfer large data blocks
+//! - **Exception-Response**: Report service errors
+//! - **Initiate-Request/Initiate-Response**: Protocol parameter negotiation
+//!
+//! # Example
+//!
+//! ```rust
+//! use dlms_apdu::{GetRequest, InvokeId};
+//! use dlms_core::ObisCode;
+//! use dlms_apdu::types::AttributeDescriptor;
+//!
+//! // Create a Get-Request
+//! let desc = AttributeDescriptor::new(3, ObisCode::new(1, 0, 1, 8, 0, 255), 2);
+//! let request = GetRequest::Normal(dlms_apdu::get::GetRequestNormal::new(
+//!     InvokeId::new(1),
+//!     desc,
+//! ));
+//!
+//! // Encode to bytes
+//! let _encoded = request.encode().unwrap();
+//! ```
+
+#![no_std]
+
+#[cfg(feature = "std")]
+extern crate std;
+
+extern crate alloc;
+
+use alloc::vec::Vec;
+
+// Public modules
+pub mod types;
+pub mod codec;
+pub mod get;
+pub mod set;
+pub mod action;
+pub mod event;
+pub mod block_transfer;
+pub mod exception;
+pub mod initiate;
+pub mod selective;
+
+// Core re-exports
+pub use types::*;
+pub use codec::{ApduEncoder, ApduDecoder};
+pub use get::{
+    GetRequest, GetResponse,
+    GetRequestNormal, GetRequestNext, GetRequestWithList,
+    GetResponseNormal, GetResponseBlock, GetResponseError,
+};
+pub use set::{
+    SetRequest, SetResponse,
+    SetRequestNormal, SetRequestWithList,
+    SetResponseNormal, SetResponseBlock, SetResponseError,
+    SetRequestItem,
+};
+pub use action::{
+    ActionRequest, ActionResponse,
+    ActionRequestNormal, ActionRequestWithList, ActionRequestNext,
+    ActionResponseNormal, ActionResponseWithList, ActionResponseBlock,
+    ActionRequestListItem, ActionResponseListItem,
+};
+pub use event::{EventNotification, EventCode, Priority};
+pub use block_transfer::{GeneralBlockTransfer, BlockTransferCommand};
+pub use exception::{ExceptionResponse};
+pub use initiate::{InitiateRequest, InitiateResponse, conformance};
+pub use selective::{SelectiveAccess, apply_selective_access};
+
+// ============================================================
+// Top-level APDU encoding/decoding
+// ============================================================
+
+/// Encoded APDU enum that can represent any APDU type
+#[derive(Debug, Clone, PartialEq)]
+pub enum Apdu {
+    GetRequest(GetRequest),
+    GetResponse(GetResponse),
+    SetRequest(SetRequest),
+    SetResponse(SetResponse),
+    ActionRequest(ActionRequest),
+    ActionResponse(ActionResponse),
+    EventNotification(EventNotification),
+    GeneralBlockTransfer(GeneralBlockTransfer),
+    ExceptionResponse(ExceptionResponse),
+    InitiateRequest(InitiateRequest),
+    InitiateResponse(InitiateResponse),
+}
+
+impl Apdu {
+    /// Get the invoke ID if this APDU has one
+    pub fn invoke_id(&self) -> Option<InvokeId> {
+        match self {
+            Self::GetRequest(r) => Some(r.invoke_id()),
+            Self::GetResponse(r) => Some(r.invoke_id()),
+            Self::SetRequest(r) => Some(r.invoke_id()),
+            Self::SetResponse(r) => Some(r.invoke_id()),
+            Self::ActionRequest(r) => Some(r.invoke_id()),
+            Self::ActionResponse(r) => Some(r.invoke_id()),
+            Self::GeneralBlockTransfer(r) => Some(r.invoke_id),
+            Self::InitiateRequest(r) => Some(r.invoke_id),
+            Self::InitiateResponse(r) => Some(r.invoke_id),
+            Self::EventNotification(_) => None,
+            Self::ExceptionResponse(r) => Some(r.invoke_id),
+        }
+    }
+
+    /// Encode the APDU to bytes
+    pub fn encode(&self) -> Result<Vec<u8>, ApduError> {
+        match self {
+            Self::GetRequest(r) => r.encode(),
+            Self::GetResponse(r) => Ok(r.encode()),
+            Self::SetRequest(r) => r.encode(),
+            Self::SetResponse(r) => Ok(r.encode()),
+            Self::ActionRequest(r) => r.encode(),
+            Self::ActionResponse(r) => Ok(r.encode()),
+            Self::EventNotification(r) => r.encode(),
+            Self::GeneralBlockTransfer(r) => Ok(r.encode()),
+            Self::ExceptionResponse(r) => Ok(r.encode()),
+            Self::InitiateRequest(r) => Ok(r.encode()),
+            Self::InitiateResponse(r) => Ok(r.encode()),
+        }
+    }
+
+    /// Decode an APDU from bytes
+    pub fn decode(data: &[u8]) -> Result<Self, ApduError> {
+        if data.len() < 2 {
+            return Err(ApduError::TooShort);
+        }
+
+        let tag_type = data[0];
+
+        match tag_type {
+            TAG_GET_REQUEST => Ok(Self::GetRequest(GetRequest::decode(data)?)),
+            TAG_GET_RESPONSE => Ok(Self::GetResponse(GetResponse::decode(data)?)),
+            TAG_SET_REQUEST => Ok(Self::SetRequest(SetRequest::decode(data)?)),
+            TAG_SET_RESPONSE => Ok(Self::SetResponse(SetResponse::decode(data)?)),
+            TAG_ACTION_REQUEST => Ok(Self::ActionRequest(ActionRequest::decode(data)?)),
+            TAG_ACTION_RESPONSE => Ok(Self::ActionResponse(ActionResponse::decode(data)?)),
+            TAG_EVENT_NOTIFICATION => Ok(Self::EventNotification(EventNotification::decode(data)?)),
+            TAG_GENERAL_BLOCK_TRANSFER => Ok(Self::GeneralBlockTransfer(GeneralBlockTransfer::decode(data)?)),
+            TAG_EXCEPTION_RESPONSE => Ok(Self::ExceptionResponse(ExceptionResponse::decode(data)?)),
+            0xFF => {
+                // Initiate Request/Response have tag 0xFF
+                if data.len() >= 2 && data[1] == 0x01 {
+                    Ok(Self::InitiateRequest(InitiateRequest::decode(data)?))
+                } else {
+                    Ok(Self::InitiateResponse(InitiateResponse::decode(data)?))
+                }
+            }
+            _ => Err(ApduError::InvalidTag(tag_type)),
+        }
+    }
+}
+
+/// Encode any APDU to bytes
+pub fn encode_apdu(apdu: &Apdu) -> Result<Vec<u8>, ApduError> {
+    apdu.encode()
+}
+
+/// Decode an APDU from bytes
+pub fn decode_apdu(data: &[u8]) -> Result<Apdu, ApduError> {
+    Apdu::decode(data)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::vec::Vec;
+    use dlms_core::{ObisCode, DataAccessError, DlmsType};
+
+    #[test]
+    fn test_apdu_get_request_roundtrip() {
+        let desc = AttributeDescriptor::new(3, ObisCode::new(1, 0, 1, 8, 0, 255), 2);
+        let req = GetRequest::Normal(GetRequestNormal::new(InvokeId::new(1), desc));
+        let apdu = Apdu::GetRequest(req.clone());
+        let encoded = apdu.encode().unwrap();
+        let decoded = Apdu::decode(&encoded).unwrap();
+
+        assert_eq!(decoded.invoke_id(), apdu.invoke_id());
+        match decoded {
+            Apdu::GetRequest(GetRequest::Normal(r)) => {
+                assert_eq!(r.invoke_id.get(), 1);
+            }
+            _ => panic!("Wrong APDU type"),
+        }
+    }
+
+    #[test]
+    fn test_apdu_get_response_roundtrip() {
+        let resp = GetResponse::Data(GetResponseNormal::success(
+            InvokeId::new(1),
+            DlmsType::from_u32(100),
+        ));
+        let apdu = Apdu::GetResponse(resp);
+        let encoded = apdu.encode().unwrap();
+        let decoded = Apdu::decode(&encoded).unwrap();
+
+        match decoded {
+            Apdu::GetResponse(GetResponse::Data(r)) => {
+                assert_eq!(r.invoke_id.get(), 1);
+            }
+            _ => panic!("Wrong APDU type"),
+        }
+    }
+
+    #[test]
+    fn test_apdu_set_request_roundtrip() {
+        let desc = AttributeDescriptor::new(3, ObisCode::new(1, 0, 1, 8, 0, 255), 2);
+        let req = SetRequest::Normal(SetRequestNormal::new(
+            InvokeId::new(1),
+            desc,
+            DlmsType::from_u32(100),
+        ));
+        let apdu = Apdu::SetRequest(req);
+        let encoded = apdu.encode().unwrap();
+        let decoded = Apdu::decode(&encoded).unwrap();
+
+        match decoded {
+            Apdu::SetRequest(SetRequest::Normal(r)) => {
+                assert_eq!(r.invoke_id.get(), 1);
+            }
+            _ => panic!("Wrong APDU type"),
+        }
+    }
+
+    #[test]
+    fn test_apdu_action_request_roundtrip() {
+        let method = MethodDescriptor::new(70, ObisCode::new(0, 0, 96, 3, 10, 255), 1);
+        let req = ActionRequest::Normal(ActionRequestNormal::new(InvokeId::new(1), method));
+        let apdu = Apdu::ActionRequest(req);
+        let encoded = apdu.encode().unwrap();
+        let decoded = Apdu::decode(&encoded).unwrap();
+
+        match decoded {
+            Apdu::ActionRequest(ActionRequest::Normal(r)) => {
+                assert_eq!(r.invoke_id.get(), 1);
+            }
+            _ => panic!("Wrong APDU type"),
+        }
+    }
+
+    #[test]
+    fn test_apdu_exception_response_roundtrip() {
+        let resp = ExceptionResponse::operation_not_possible(InvokeId::new(1));
+        let apdu = Apdu::ExceptionResponse(resp);
+        let encoded = apdu.encode().unwrap();
+        let decoded = Apdu::decode(&encoded).unwrap();
+
+        match decoded {
+            Apdu::ExceptionResponse(r) => {
+                assert_eq!(r.invoke_id.get(), 1);
+            }
+            _ => panic!("Wrong APDU type"),
+        }
+    }
+
+    #[test]
+    fn test_apdu_initiate_request_roundtrip() {
+        let req = InitiateRequest::new(
+            InvokeId::new(1),
+            conformance::standard_meter(),
+            2048,
+            2048,
+        );
+        let apdu = Apdu::InitiateRequest(req);
+        let encoded = apdu.encode().unwrap();
+        let decoded = Apdu::decode(&encoded).unwrap();
+
+        match decoded {
+            Apdu::InitiateRequest(r) => {
+                assert_eq!(r.invoke_id.get(), 1);
+            }
+            _ => panic!("Wrong APDU type"),
+        }
+    }
+}
