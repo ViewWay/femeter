@@ -1,6 +1,6 @@
 //! 计量芯片驱动 — ATT7022 / BL6523 / BL0937
 //!
-//! 通过 SPI0 与计量芯片通信，读取电压、电流、功率、电能等数据
+//! 通过 SPI1 与计量芯片通信，读取电压、电流、功率、电能等数据
 //!
 //! ATT7022: 三相高精度计量芯片, SPI, 24-bit ADC
 //! BL6523: 单相防窃电计量芯片, SPI, 24-bit ADC
@@ -118,12 +118,12 @@ impl MeteringDriver {
 
     /// SPI 读取计量芯片寄存器 (24-bit)
     fn spi_read(&self, reg: u8) -> u32 {
-        // FM33LG0xx SPI0 操作:
+        // FM33LG0xx SPI1 操作:
         // 1. CS 低
         // 2. 写入: 0x80 | (reg & 0x3F) (读命令)
         // 3. 读取 3 字节 (MSB first)
         // 4. CS 高
-        let spi = crate::fm33lg0::spi0();
+        let spi = crate::fm33lg0::spi1();
         // 实际实现需要 GPIO CS 控制
         let _ = spi;
         0 // placeholder

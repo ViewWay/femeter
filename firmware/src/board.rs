@@ -4,7 +4,7 @@
 //! 256KB Flash, 32KB RAM (24K main + 8K battery-backed)
 //!
 //! 硬件连接:
-//!   SPI0  → 计量芯片 (ATT7022/BL6523)
+//!   SPI1  → 计量芯片 (ATT7022/BL6523)
 //!   UART0 → RS-485 (HDLC/DLMS, 9600-115200 bps)
 //!   UART1 → 红外 (IEC 62056-21, 300-9600 bps)
 //!   UART2 → 模块通信 (38400 bps)
@@ -113,7 +113,7 @@ impl Board {
         // 2. GPIO 初始化
         Self::init_gpio();
         // 3. UART 初始化 (RS-485, 红外, 模块)
-        // 4. SPI0 初始化 (计量芯片)
+        // 4. SPI1 初始化 (计量芯片)
         // 5. LCD 控制器初始化
         // 6. RTC 初始化
         // 7. IWDT 启动
@@ -175,7 +175,7 @@ impl Board {
         //   IR_TX_EN → PA10 (Output)
         //   IR_RX_EN → PA11 (Output)
         //
-        // SPI0 CS (计量芯片):
+        // SPI1 CS (计量芯片):
         //   CS → PA4 (Output, Push-Pull, 默认高)
         //
         // 按键:
