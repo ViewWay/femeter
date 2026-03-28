@@ -55,6 +55,7 @@ mod tests {
     use super::*;
     use crate::HalError;
     use std::vec;
+    use std::vec::Vec;
 
     const DISPLAY_ROWS: u8 = 4;
     const DISPLAY_COLS: u8 = 20;
@@ -72,10 +73,7 @@ mod tests {
         fn new() -> Self {
             Self {
                 initialized: false,
-                buffer: std::vec::from_elem(
-                    std::vec::from_elem(' ', DISPLAY_COLS as usize),
-                    DISPLAY_ROWS as usize,
-                ),
+                buffer: vec![vec![' '; DISPLAY_COLS as usize]; DISPLAY_ROWS as usize],
                 cursor_row: 0,
                 cursor_col: 0,
                 backlight: 100,
@@ -184,7 +182,7 @@ mod tests {
         display.init().unwrap();
         display.write_string("123.45 kWh").unwrap();
         assert_eq!(
-            display.get_buffer().chars().take(11).collect::<std::string::String>(),
+            display.get_buffer().chars().take(10).collect::<std::string::String>(),
             "123.45 kWh"
         );
     }

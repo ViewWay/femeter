@@ -53,6 +53,7 @@ mod tests {
     use super::*;
     use crate::HalError;
     use std::collections::HashMap;
+    use std::vec;
     use std::vec::Vec;
 
     struct MockI2cDevice {

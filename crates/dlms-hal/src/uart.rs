@@ -68,6 +68,8 @@ mod tests {
     use super::*;
     use crate::HalError;
     use std::collections::VecDeque;
+    use std::vec;
+    use std::vec::Vec;
 
     struct MockUart {
         rx_buffer: VecDeque<u8>,

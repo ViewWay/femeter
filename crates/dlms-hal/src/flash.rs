@@ -55,20 +55,21 @@ mod tests {
     use super::*;
     use crate::HalError;
     use std::vec;
+    use std::vec::Vec;
 
     const FLASH_SIZE: usize = 64 * 1024; // 64KB mock flash
     const SECTOR_SIZE: u32 = 4 * 1024; // 4KB sectors
     const PAGE_SIZE: u32 = 256; // 256 byte pages
 
     struct MockFlash {
-        data: std::vec::Vec<u8>,
+        data: Vec<u8>,
         initialized: bool,
     }
 
     impl MockFlash {
         fn new() -> Self {
             Self {
-                data: std::vec![0xFF; FLASH_SIZE],
+                data: vec![0xFF; FLASH_SIZE],
                 initialized: true,
             }
         }
@@ -101,7 +102,7 @@ mod tests {
             self.check_bounds(address, data.len())?;
 
             let start = address as usize;
-            let end = start + data.len();
+            let _end = start + data.len();
 
             // Simulate flash write (can only change 1->0)
             for (i, &byte) in data.iter().enumerate() {
