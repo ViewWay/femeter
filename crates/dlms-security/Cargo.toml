@@ -6,7 +6,7 @@ description = "DLMS/COSEM security: LLS/HLS authentication, AES-GCM-128 encrypti
 
 [dependencies]
 dlms-core = { workspace = true }
-aes-gcm = { version = "0.10", default-features = false, features = ["aes"] }
+aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc"] }
 defmt = { version = "0.3", optional = true }
 
 [features]
