@@ -13,6 +13,7 @@ members = [
     "crates/dlms-rtos",
     "crates/dlms-hal",
     "crates/dlms-host",
+    "crates/virtual-meter",
 ]
 
 [workspace.dependencies]
