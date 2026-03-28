@@ -79,7 +79,7 @@ impl CosemClass for RegisterTable {
 
     fn set_attribute(&mut self, id: u8, value: DlmsType) -> Result<(), CosemError> {
         match id {
-            1 | 2 | 3 => Err(CosemError::ReadOnly),
+            1..=3 => Err(CosemError::ReadOnly),
             4 => {
                 self.table_content = value;
                 Ok(())

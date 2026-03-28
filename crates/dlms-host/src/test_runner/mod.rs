@@ -4,7 +4,6 @@
 //! against a real or simulated meter.
 
 use std::time::Duration;
-use std::io;
 use std::net::TcpListener;
 use std::thread;
 use std::path::Path;

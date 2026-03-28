@@ -4,9 +4,14 @@ version.workspace = true
 edition.workspace = true
 description = "Host-side CLI, simulator, and protocol sniffer (std only)"
 
+[[bin]]
+name = "dlms-host"
+path = "src/bin/main.rs"
+
 [dependencies]
 dlms-core = { workspace = true, features = ["std"] }
 dlms-cosem = { workspace = true, features = ["std"] }
+dlms-meter-app = { workspace = true, features = ["std"] }
 clap = { version = "4", features = ["derive"] }
 defmt = { version = "0.3", optional = true }
 
