@@ -5,8 +5,6 @@
 //! These are APDU-level initiate messages (different from the AARQ/AARE
 //! association messages which are at the ACSE level).
 
-#![no_std]
-
 #[cfg(feature = "std")]
 extern crate std;
 

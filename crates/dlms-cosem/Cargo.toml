@@ -11,5 +11,7 @@ defmt = { version = "0.3", optional = true }
 
 [features]
 default = []
-std = ["dlms-core/std"]
+std = ["dlms-core/std", "dlms-axdr/std"]
 defmt-log = ["defmt", "dlms-core/defmt-log"]
+
+[dev-dependencies]

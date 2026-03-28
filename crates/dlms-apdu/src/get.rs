@@ -2,8 +2,6 @@
 //!
 //! Reference: IEC 62056-53 §8.4.1
 
-#![no_std]
-
 #[cfg(feature = "std")]
 extern crate std;
 

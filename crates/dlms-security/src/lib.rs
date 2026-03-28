@@ -100,6 +100,7 @@ mod tests {
         assert_eq!(from_array.as_bytes(), &TEST_SYSTEM_TITLE);
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn test_system_title_display() {
         let st = SystemTitle::new(TEST_SYSTEM_TITLE);
