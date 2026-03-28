@@ -28,6 +28,7 @@ mod board;
 mod metering;
 mod comm;
 mod display;
+mod att7022e;
 mod task_scheduler;
 mod fm33lg0;
 mod lcd;
