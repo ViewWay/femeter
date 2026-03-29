@@ -1,377 +1,504 @@
-//! FM33LG0xx Board 初始化和主状态管理
-//!
-//! 复旦微电子 FM33LG0xx Cortex-M0+ @ 64MHz
-//! 256KB Flash, 32KB RAM (24K main + 8K battery-backed)
-//!
-//! 硬件连接:
-//!   SPI1  → 计量芯片 (ATT7022/BL6523)
-//!   UART0 → RS-485 (HDLC/DLMS, 9600-115200 bps)
-//!   UART1 → 红外 (IEC 62056-21, 300-9600 bps)
-//!   UART2 → 模块通信 (38400 bps)
-//!   LCD   → 内置 LCD 控制器 (4COM x 40SEG)
-//!   GPIO  → 继电器控制、RS-485 DE/RE、红外收发使能
-//!   RTC   → 内置 RTC (LSE 32.768kHz)
-//!   IWDT  → 独立看门狗
-//!   AES   → 内置 AES-128 硬件加速
+/* ================================================================== */
+/*                                                                    */
+/*  board.rs — FM33A068EV 板级硬件初始化与资源管理                      */
+/*                                                                    */
+/*  外设分配:                                                          */
+/*    SPI0  → 计量芯片 (ATT7022E/RN8302B/RN8615V2)                    */
+/*    SPI1  → 外部 Flash (W25Q64, 可选)                               */
+/*    UART0 → RS485 (DLMS/COSEM, 9600~115200 8E1)                    */
+/*    UART1 → 红外 (IEC 62056-21, 300~9600)                          */
+/*    UART2 → LoRaWAN (ASR6601, 38400)                                */
+/*    UART3 → 蜂窝模组 (EC800N/BC260Y, 115200)                        */
+/*    LPUART0 → 调试/低功耗唤醒                                       */
+/*    LCD   → 4COM×44SEG 段码显示                                     */
+/*    GPIO  → LED×5 + 蜂鸣器 + 按键×2 + 脉冲输出 + 检测              */
+/*                                                                    */
+/*  (c) 2026 FeMeter Project — ViewWay                                */
+/* ================================================================== */
 
-use crate::comm::{CommDriver, UartChannel};
-use crate::lcd::LcdDriver;
-use crate::metering::{MeteringChip, MeteringDriver, MeteringData};
+use crate::hal::*;
 use crate::fm33lg0;
 
-/// 即时电气量
-#[derive(Clone, Copy)]
-pub struct InstantaneousValues {
-    pub voltage: u16,       // 0.1V (2200 = 220.0V)
-    pub current: u16,       // mA
-    pub active_power: i32,  // W (signed for export)
-    pub reactive_power: i32,// var
-    pub frequency: u16,     // 0.01Hz (5000 = 50.00Hz)
-    pub power_factor: u16,  // 0-1000 (0.000-1.000)
+/* ================================================================== */
+/*  GPIO 引脚分配 (FM33A068EV LQFP80)                                  */
+/* ================================================================== */
+
+pub mod pins {
+    use super::GpioPin;
+
+    // ── SPI0 → 计量芯片 ──
+    /// SPI0_SCK
+    pub const SPI0_SCK:   GpioPin = GpioPin::new(5, 14); // PF14
+    /// SPI0_MISO
+    pub const SPI0_MISO:  GpioPin = GpioPin::new(5, 13); // PF13
+    /// SPI0_MOSI
+    pub const SPI0_MOSI:  GpioPin = GpioPin::new(5, 12); // PF12
+    /// SPI0_CSN (计量芯片片选)
+    pub const SPI0_CSN:   GpioPin = GpioPin::new(5, 15); // PF15
+
+    // ── SPI1 → 外部 Flash ──
+    pub const SPI1_SCK:   GpioPin = GpioPin::new(0, 5);  // PA5
+    pub const SPI1_MISO:  GpioPin = GpioPin::new(0, 6);  // PA6
+    pub const SPI1_MOSI:  GpioPin = GpioPin::new(0, 7);  // PA7
+    pub const SPI1_CSN:   GpioPin = GpioPin::new(0, 4);  // PA4
+
+    // ── UART0 → RS485 ──
+    pub const UART0_TX:   GpioPin = GpioPin::new(6, 9);  // PG9
+    pub const UART0_RX:   GpioPin = GpioPin::new(6, 8);  // PG8
+    /// RS485 方向控制 (高=发送, 低=接收)
+    pub const RS485_DE:   GpioPin = GpioPin::new(5, 2);  // PF2
+
+    // ── UART1 → 红外 ──
+    pub const UART1_TX:   GpioPin = GpioPin::new(4, 4);  // PE4
+    pub const UART1_RX:   GpioPin = GpioPin::new(4, 3);  // PE3
+
+    // ── UART2 → LoRaWAN ──
+    pub const UART2_TX:   GpioPin = GpioPin::new(1, 3);  // PB3
+    pub const UART2_RX:   GpioPin = GpioPin::new(1, 2);  // PB2
+
+    // ── UART3 → 蜂窝模组 ──
+    pub const UART3_TX:   GpioPin = GpioPin::new(1, 15); // PB15
+    pub const UART3_RX:   GpioPin = GpioPin::new(1, 14); // PB14
+    /// 蜂窝模组电源控制
+    pub const CELL_PWRKEY:GpioPin = GpioPin::new(4, 2);  // PE2
+    /// 蜂窝模组复位
+    pub const CELL_RESET: GpioPin = GpioPin::new(4, 7);  // PE7
+
+    // ── LED ──
+    /// 电源指示 (绿)
+    pub const LED_POWER:  GpioPin = GpioPin::new(0, 8);  // PA8
+    /// 通信指示 (黄)
+    pub const LED_COMM:   GpioPin = GpioPin::new(0, 9);  // PA9
+    /// 告警指示 (红)
+    pub const LED_ALARM:  GpioPin = GpioPin::new(0, 10); // PA10
+    /// 有功脉冲 LED (红)
+    pub const LED_PULSE_P:GpioPin = GpioPin::new(0, 11); // PA11
+    /// 无功脉冲 LED (绿)
+    pub const LED_PULSE_Q:GpioPin = GpioPin::new(0, 12); // PA12
+
+    // ── 蜂鸣器 ──
+    pub const BUZZER:     GpioPin = GpioPin::new(0, 15); // PA15
+
+    // ── 按键 ──
+    /// 翻页键 (外部中断唤醒)
+    pub const KEY_PAGE:   GpioPin = GpioPin::new(1, 0);  // PB0
+    /// 编程键
+    pub const KEY_PROG:   GpioPin = GpioPin::new(1, 1);  // PB1
+
+    // ── 脉冲输出 (光耦) ──
+    /// 有功脉冲输出
+    pub const PULSE_P:    GpioPin = GpioPin::new(1, 4);  // PB4
+    /// 无功脉冲输出
+    pub const PULSE_Q:    GpioPin = GpioPin::new(1, 5);  // PB5
+
+    // ── 防窃电检测 ──
+    /// 上盖检测 (微动开关)
+    pub const COVER_DET:  GpioPin = GpioPin::new(3, 8);  // PD8
+    /// 端子盖检测 (微动开关)
+    pub const TERMINAL_DET:GpioPin = GpioPin::new(3, 9); // PD9
+    /// 磁场检测 (霍尔传感器)
+    pub const MAGNETIC_DET:GpioPin = GpioPin::new(0, 13); // PA13
+
+    // ── 电池 / 电源 ──
+    /// 掉电检测 (外部比较器输出)
+    pub const POWER_FAIL: GpioPin = GpioPin::new(1, 1);  // PB1
+    /// 电池电压 ADC 输入
+    pub const BAT_ADC:    GpioPin = GpioPin::new(5, 6);  // PF6 (ADC_IN5)
+
+    // ── SIM 卡 ──
+    /// SIM 卡检测
+    pub const SIM_DET:    GpioPin = GpioPin::new(3, 7);  // PD7
 }
 
-impl Default for InstantaneousValues {
-    fn default() -> Self {
-        Self { voltage: 0, current: 0, active_power: 0,
-               reactive_power: 0, frequency: 5000, power_factor: 1000 }
-    }
-}
+/* ================================================================== */
+/*  板级资源结构体                                                      */
+/* ================================================================== */
 
-/// 累计电能寄存器 (Wh)
-#[derive(Clone, Copy)]
-pub struct EnergyRegisters {
-    pub active_import: u64,
-    pub active_export: u64,
-    pub reactive_import: u64,
-    pub reactive_export: u64,
-    /// 按费率的有功电能 (T1-T8)
-    pub tariff_import: [u64; 8],
-}
-
-impl Default for EnergyRegisters {
-    fn default() -> Self {
-        Self { active_import: 0, active_export: 0, reactive_import: 0,
-               reactive_export: 0, tariff_import: [0u64; 8] }
-    }
-}
-
-/// 告警阈值配置
-pub struct AlarmConfig {
-    pub over_voltage: u16,      // 0.1V (e.g., 2640 = 264.0V → +20%)
-    pub under_voltage: u16,     // 0.1V (e.g., 1760 = 176.0V → -20%)
-    pub over_current: u16,      // mA
-    pub over_power: i32,        // W
-    pub over_frequency: u16,    // 0.01Hz
-    pub under_frequency: u16,   // 0.01Hz
-}
-
-impl Default for AlarmConfig {
-    fn default() -> Self {
-        Self {
-            over_voltage: 2640,   // +20%
-            under_voltage: 1760,  // -20%
-            over_current: 60000,  // 60A
-            over_power: 13200,    // 13.2kW (60A * 220V)
-            over_frequency: 5200, // 52.00Hz
-            under_frequency: 4800,// 48.00Hz
-        }
-    }
-}
-
-/// 费率时段定义 (简化版, 最多8个费率)
-#[derive(Clone, Copy)]
-pub struct TariffPeriod {
-    pub tariff_id: u8,      // 0-7 → T1-T8
-    pub start_hour: u8,
-    pub start_minute: u8,
-}
-
-/// Board 主状态
+/// 板级所有硬件资源
 pub struct Board {
-    systick: u64,
-    pub instantaneous: InstantaneousValues,
-    pub energy: EnergyRegisters,
-    pub relay_closed: bool,
-    pub current_tariff: u8,
-    pub meter_time: u64,    // Unix timestamp (seconds)
-    metering: MeteringDriver,
-    comm: CommDriver,
-    display: LcdDriver,
-    alarm_config: AlarmConfig,
-    tariff_table: [TariffPeriod; 8],
-    tariff_count: usize,
-    sample_count: u64,
-    /// 上次功率计算时的电能值 (用于差分)
-    last_energy_sample: u64,
+    /// 计量芯片驱动
+    pub metering: Metering,
+    /// RS485 UART
+    pub rs485: UartChannelDriver,
+    /// 红外 UART
+    pub infrared: UartChannelDriver,
+    /// LoRaWAN UART
+    pub lorawan_uart: UartChannelDriver,
+    /// 蜂窝模组 UART
+    pub cellular_uart: UartChannelDriver,
+    /// LCD 驱动
+    pub lcd: LcdDriverImpl,
+    /// 脉冲输出
+    pub pulse: PulseOutputImpl,
+    /// 指示灯/蜂鸣器
+    pub indicator: IndicatorImpl,
+    /// 防窃电检测
+    pub tamper: TamperImpl,
+    /// GPIO (通用)
+    pub gpio: GpioImpl,
 }
+
+/// UART 通道驱动 (简化实现)
+pub struct UartChannelDriver {
+    channel: UartChannel,
+    configured: bool,
+}
+
+/// LCD 驱动实现
+pub struct LcdDriverImpl {
+    /// 当前显示模式
+    mode: LcdDisplayMode,
+    /// 当前内容
+    content: LcdContent,
+}
+
+/// 脉冲输出实现
+pub struct PulseOutputImpl {
+    /// 有功脉冲常数 (imp/kWh)
+    active_constant: u32,
+    /// 无功脉冲常数 (imp/kvarh)
+    reactive_constant: u32,
+    /// 脉冲宽度 (ms)
+    pulse_width_ms: u16,
+    /// 有功能量累加器 (Wh)
+    active_accum_wh: u32,
+    /// 无功能量累加器 (varh)
+    reactive_accum_varh: u32,
+    /// 有功脉冲计数器
+    active_pulse_count: u32,
+    /// 无功脉冲计数器
+    reactive_pulse_count: u32,
+}
+
+/// 指示灯/蜂鸣器实现
+pub struct IndicatorImpl {
+    led_states: u8, // bit0=Power, bit1=Comm, bit2=Alarm, bit3=PulseP, bit4=PulseQ
+}
+
+/// 防窃电实现
+pub struct TamperImpl {
+    cover_open: bool,
+    terminal_open: bool,
+    magnetic_detected: bool,
+}
+
+/// GPIO 实现
+pub struct GpioImpl;
+
+/* ================================================================== */
+/*  Board 实现                                                         */
+/* ================================================================== */
 
 impl Board {
-    /// 硬件初始化
-    pub fn init() -> Self {
-        // 1. 系统时钟配置: HSE → PLL → 64MHz
-        Self::init_clocks();
-        // 2. GPIO 初始化
-        Self::init_gpio();
-        // 3. UART 初始化 (RS-485, 红外, 模块)
-        // 4. SPI1 初始化 (计量芯片)
-        // 5. LCD 控制器初始化
-        // 6. RTC 初始化
-        // 7. IWDT 启动
-        // 8. AES 模块使能
-
-        let mut board = Self {
-            systick: 0,
-            instantaneous: InstantaneousValues::default(),
-            energy: EnergyRegisters::default(),
-            relay_closed: true,
-            current_tariff: 0,
-            meter_time: 0,
-            metering: MeteringDriver::new(MeteringChip::Bl6523),
-            comm: CommDriver::new(),
-            display: LcdDriver::new(),
-            alarm_config: AlarmConfig::default(),
-            tariff_table: [
-                TariffPeriod { tariff_id: 0, start_hour: 0, start_minute: 0 };
-                8
-            ],
-            tariff_count: 0,
-            sample_count: 0,
-            last_energy_sample: 0,
-        };
-
-        // 初始化 LCD
-        board.display.init_hw();
-        // 初始化通信
-        board.comm.init_hw();
-
-        board
+    /// 创建板级资源 (所有外设未初始化)
+    pub fn new() -> Self {
+        Self {
+            metering: Metering::new(/* SPI0 */),
+            rs485: UartChannelDriver {
+                channel: UartChannel::Uart0,
+                configured: false,
+            },
+            infrared: UartChannelDriver {
+                channel: UartChannel::Uart1,
+                configured: false,
+            },
+            lorawan_uart: UartChannelDriver {
+                channel: UartChannel::Uart2,
+                configured: false,
+            },
+            cellular_uart: UartChannelDriver {
+                channel: UartChannel::Uart3,
+                configured: false,
+            },
+            lcd: LcdDriverImpl {
+                mode: LcdDisplayMode::Off,
+                content: LcdContent::default(),
+            },
+            pulse: PulseOutputImpl {
+                active_constant: 6400,
+                reactive_constant: 6400,
+                pulse_width_ms: 80,
+                active_accum_wh: 0,
+                reactive_accum_varh: 0,
+                active_pulse_count: 0,
+                reactive_pulse_count: 0,
+            },
+            indicator: IndicatorImpl { led_states: 0 },
+            tamper: TamperImpl {
+                cover_open: false,
+                terminal_open: false,
+                magnetic_detected: false,
+            },
+            gpio: GpioImpl,
+        }
     }
 
-    /// 系统时钟配置
-    fn init_clocks() {
-        // FM33LG0xx RCC:
-        // 1. 使能 HSE (外部高速晶振, 通常 8MHz)
-        // 2. 配置 PLL: HSE * 8 = 64MHz
-        // 3. 等待 PLL 锁定
-        // 4. 切换系统时钟到 PLL
-        // 5. 配置 AHB/APB 分频
-        //    AHB = SYSCLK / 1 = 64MHz
-        //    APB1 = SYSCLK / 1 = 64MHz
-        //    APB2 = SYSCLK / 1 = 64MHz
+    /// 初始化所有板级硬件
+    ///
+    /// 初始化顺序:
+    /// 1. 时钟系统 (PLL 64MHz)
+    /// 2. GPIO 基础配置
+    /// 3. SPI0 (计量芯片)
+    /// 4. SPI1 (外部 Flash, 可选)
+    /// 5. UART0~3 + LPUART0
+    /// 6. LCD 控制器
+    /// 7. ADC (电池/温度)
+    /// 8. RTC
+    /// 9. 中断优先级配置
+    pub fn init(&mut self) {
+        // 1. 时钟初始化
+        Self::clock_init();
+
+        // 2. GPIO 初始化
+        Self::gpio_init();
+
+        // 3. SPI 初始化
+        Self::spi_init();
+
+        // 4. UART 初始化
+        // (延迟到具体使用时配置波特率)
+
+        // 5. LCD 初始化
+        self.lcd.hw_init();
+
+        // 6. ADC 初始化
+        Self::adc_init();
+
+        // 7. RTC 初始化
+        Self::rtc_init();
+
+        // 8. 中断优先级
+        Self::nvic_init();
+    }
+
+    /// 时钟系统初始化
+    ///
+    /// HOSC → PLL → 64MHz SYSCLK
+    /// XTLF → 32.768kHz RTC
+    fn clock_init() {
+        // TODO: 实现 FM33A0xxEV 时钟配置
+        // 1. 使能外部高速晶振 XTHF
+        // 2. 等待 XTHF 稳定
+        // 3. 配置 PLL_H: XTHF/1 × 64/XTHF = 64MHz
+        // 4. 切换系统时钟到 PLL_H
+        // 5. 使能 XTLF (RTC 时钟)
+        // 6. 配置 AHB/APB 分频
     }
 
     /// GPIO 初始化
-    fn init_gpio() {
-        // RS-485 DE/RE 控制:
-        //   DE  → PA8  (Output, Push-Pull)
-        //   RE  → PA9  (Output, Push-Pull)
-        //
-        // 继电器控制:
-        //   RELAY_CLOSE → PB0 (Output)
-        //   RELAY_OPEN  → PB1 (Output)
-        //   RELAY_STATE → PB2 (Input, 上拉) - 继电器状态反馈
-        //
-        // 红外:
-        //   IR_TX_EN → PA10 (Output)
-        //   IR_RX_EN → PA11 (Output)
-        //
-        // SPI1 CS (计量芯片):
-        //   CS → PA4 (Output, Push-Pull, 默认高)
-        //
-        // 按键:
-        //   BTN → PC13 (Input, 上拉)
+    fn gpio_init() {
+        // TODO: 配置所有引脚的复用功能和方向
+        // SPI0: PF12/13/14/15 → SPI0_MOSI/MISO/SCK/SSN
+        // SPI1: PA4/5/6/7 → SPI1_SSN/SCK/MISO/MOSI
+        // UART0: PG8/PG9 → UART0_RX/TX
+        // UART1: PE3/PE4 → UART1_RX/TX
+        // UART2: PB2/PB3 → UART2_RX/TX
+        // UART3: PB14/PB15 → UART3_RX/TX
+        // LCD: PA0~PA7 → COM0~COM7, PA8~... → SEG
+        // LED: PA8~PA12 → 推挽输出
+        // 按键: PB0/PB1 → 上拉输入
+        // 脉冲: PB4/PB5 → 推挽输出
+        // 检测: PD8/PD9/PA13 → 上拉输入
     }
 
-    /// 从 Flash 加载校准参数
-    pub fn load_calibration(&mut self) {
-        // 从 Flash 特定页读取校准数据:
-        // - 电压增益
-        // - 电流增益
-        // - 有功功率增益
-        // - 无功功率增益
-        // - 相角校正
-        // - 费率时段表
-        // - 告警阈值
-        // - 表号
+    /// SPI 初始化
+    fn spi_init() {
+        // SPI0: 计量芯片
+        //   Mode 0 (CPOL=0, CPHA=0)
+        //   MSB first
+        //   8-bit 数据帧
+        //   Master mode
+        //   时钟: SYSCLK/4 = 16MHz (ATT7022E), SYSCLK/8 (RN8302B/RN8615V2)
+
+        // SPI1: 外部 Flash (W25Q64)
+        //   Mode 0/3
+        //   最高 50MHz
+        //   可选 Quad SPI
     }
 
-    /// SysTick (毫秒)
-    pub fn systick_ms(&self) -> u64 { self.systick }
-
-    /// SysTick 递增 (SysTick 中断调用)
-    pub fn tick(&mut self) { self.systick = self.systick.wrapping_add(1); }
-
-    // ── 周期任务实现 ──────────────────────────────────────────────
-
-    /// 任务0: SPI 读取计量芯片 (1ms)
-    pub fn sample_metering(&mut self) {
-        self.sample_count += 1;
-
-        // 读取计量数据 (根据芯片类型)
-        let data = self.metering.read_bl6523();
-        self.instantaneous = InstantaneousValues {
-            voltage: data.voltage,
-            current: data.current,
-            active_power: data.active_power,
-            reactive_power: data.reactive_power,
-            frequency: data.frequency,
-            power_factor: data.power_factor,
-        };
+    /// ADC 初始化 (电池电压/温度)
+    fn adc_init() {
+        // FM33A0xxEV 内置 11-bit ∑-△ ADC
+        // 通道: PF6 (BAT_ADC) — 电池电压分压采样
+        //       内部 — 温度传感器
+        // 低功耗模式: 32kHz 时钟, ~10µA
     }
 
-    /// 任务1: 功率计算 + 能量累加 (200ms)
-    pub fn calculate_power_energy(&mut self) {
-        // 能量增量 = 功率 × 时间间隔
-        // 200ms 采样间隔, 能量单位 Wh
-        let power_w = self.instantaneous.active_power;
-        let energy_delta_wh = (power_w.abs() as u64) * 200 / 3600000;
-
-        if power_w >= 0 {
-            self.energy.active_import += energy_delta_wh;
-            self.energy.tariff_import[self.current_tariff as usize] += energy_delta_wh;
-        } else {
-            self.energy.active_export += energy_delta_wh;
-        }
-
-        // 同时累加无功电能
-        let reactive_var = self.instantaneous.reactive_power;
-        let reactive_delta = (reactive_var.abs() as u64) * 200 / 3600000;
-        if reactive_var >= 0 {
-            self.energy.reactive_import += reactive_delta;
-        } else {
-            self.energy.reactive_export += reactive_delta;
-        }
+    /// RTC 初始化
+    fn rtc_init() {
+        // FM33A0xxEV 内置 RTCC
+        // XTLF 32.768kHz
+        // 数字调校: ±0.119ppm
+        // 后备域: 1KB SRAM (电池保持)
     }
 
-    /// 任务2: LCD 显示刷新 (500ms)
-    pub fn refresh_display(&mut self) {
-        self.display.update(
-            self.instantaneous.voltage,
-            self.instantaneous.current,
-            self.instantaneous.active_power,
-            self.energy.active_import,
-            self.current_tariff,
-            self.instantaneous.frequency,
-            self.instantaneous.power_factor,
-        );
-    }
-
-    /// 任务3: RS-485 HDLC 通信处理 (10ms)
-    pub fn process_rs485_hdlc(&mut self) {
-        // 1. 检查 UART0 是否有数据
-        // 2. 如果有: 逐字节 feed 到 HDLC 解码器
-        // 3. 如果收到完整帧: 解码 APDU → 处理 → 编码响应 → 发送
-        // 4. 如果有待发送数据: 继续发送
-    }
-
-    /// 任务4: 红外通信处理 (50ms)
-    pub fn process_infrared(&mut self) {
-        // 1. 检查 UART1 是否有数据
-        // 2. IEC 62056-21 协议处理:
-        //    - 收到 /?!<CR><LF> → 回应表号
-        //    - 收到 ACK (波特率切换) → 切换波特率
-        //    - 数据模式 → 发送 COSEM 数据
-    }
-
-    /// 任务5: 模块 UART 通信 (1000ms)
-    pub fn process_module_uart(&mut self) {
-        // 与外部模块通信 (如载波模块、GPRS 模块等)
-        // UART2, 38400 bps, 8N1
-        // 协议取决于模块类型
-    }
-
-    /// 任务6: 负荷曲线捕获 (15分钟)
-    pub fn capture_load_profile(&mut self) {
-        // 将当前所有计量数据打包存储到 Flash
-        // Profile Generic IC7 格式:
-        //   timestamp + voltage + current + power + energy + tariff + status
-        // 存储到循环缓冲区 (Flash 页)
-    }
-
-    /// 任务7: 费率时段检查 (1分钟)
-    pub fn check_tariff_schedule(&mut self) {
-        // 获取当前时间
-        // 与费率时段表比较
-        // 如果费率发生变化: 切换 current_tariff
-        let _hour = ((self.meter_time / 3600) % 24) as u8;
-        let _minute = ((self.meter_time / 60) % 60) as u8;
-
-        // 遍历费率表, 找到当前时段
-        for i in 0..self.tariff_count {
-            let _period = &self.tariff_table[i];
-            // if current_time >= period.start_time: current_tariff = period.tariff_id
-        }
-    }
-
-    /// 任务8: 越限告警检查 (200ms)
-    pub fn check_alarm_thresholds(&mut self) {
-        let v = self.instantaneous.voltage;
-        let i = self.instantaneous.current;
-        let p = self.instantaneous.active_power;
-        let f = self.instantaneous.frequency;
-
-        // 过压
-        if v > self.alarm_config.over_voltage {
-            self.trigger_alarm(AlarmCode::OverVoltage);
-        }
-        // 欠压
-        if v < self.alarm_config.under_voltage && v > 0 {
-            self.trigger_alarm(AlarmCode::UnderVoltage);
-        }
-        // 过流
-        if i > self.alarm_config.over_current {
-            self.trigger_alarm(AlarmCode::OverCurrent);
-        }
-        // 过功率
-        if p > self.alarm_config.over_power {
-            self.trigger_alarm(AlarmCode::OverPower);
-        }
-        // 频率异常
-        if f > self.alarm_config.over_frequency || f < self.alarm_config.under_frequency {
-            self.trigger_alarm(AlarmCode::FrequencyAbnormal);
-        }
-    }
-
-    /// 任务9: 喂看门狗 (100ms)
-    pub fn feed_watchdog(&mut self) {
-        // FM33LG0xx IWDT 喂狗:
-        // let iwdt = fm33lg0::iwdt();
-        // iwdt.wdtrld = 0x5A5A5A5A; // reload key
-    }
-
-    // ── 辅助方法 ─────────────────────────────────────────────────
-
-    /// 触发告警
-    fn trigger_alarm(&mut self, code: AlarmCode) {
-        // 1. 记录告警到 Flash 日志
-        // 2. 如果配置了自动拉闸: 断开继电器
-        // 3. 如果配置了告警上报: 通过 RS-485 发送通知
-        defmt::warn!("Alarm: {:?}", code);
-    }
-
-    /// 继电器合闸
-    pub fn relay_close(&mut self) {
-        // PB0 = HIGH (pulse)
-        self.relay_closed = true;
-    }
-
-    /// 继电器跳闸
-    pub fn relay_open(&mut self) {
-        // PB1 = HIGH (pulse)
-        self.relay_closed = false;
+    /// NVIC 中断优先级配置
+    fn nvic_init() {
+        // 优先级分组: 2bit 抢占 + 2bit 子优先级
+        // UART0 (RS485):      抢占1, 子0 (高优先级, 通信不能丢)
+        // UART3 (蜂窝):       抢占1, 子1
+        // SPI0 (计量):         抢占2, 子0
+        // RTC:                 抢占3, 子0 (最低)
+        // EXTI (按键/检测):    抢占2, 子1
     }
 }
 
-/// 告警代码
-#[derive(Debug, Clone, Copy)]
-pub enum AlarmCode {
-    OverVoltage,
-    UnderVoltage,
-    OverCurrent,
-    OverPower,
-    FrequencyAbnormal,
-    TamperDetect,       // 防窃电
-    PowerReverse,       // 反向功率
-    NeutralMissing,     // 缺零
-    PhaseLoss,          // 缺相 (三相)
+/* ================================================================== */
+/*  UART 通道驱动实现                                                   */
+/* ================================================================== */
+
+impl UartDriver for UartChannelDriver {
+    fn init(&mut self, config: &UartConfig) -> Result<(), UartError> {
+        // TODO: 配置对应 UART 通道的波特率/数据位/停止位/校验
+        self.configured = true;
+        Ok(())
+    }
+
+    fn write(&mut self, data: &[u8]) -> Result<(), UartError> {
+        // TODO: 通过对应 UART 发送数据
+        Ok(())
+    }
+
+    fn read(&mut self, buf: &mut [u8], timeout_ms: u32) -> Result<usize, UartError> {
+        // TODO: 通过对应 UART 接收数据
+        Ok(0)
+    }
+
+    fn readable(&self) -> bool {
+        false
+    }
+
+    fn channel(&self) -> UartChannel {
+        self.channel
+    }
+}
+
+/* ================================================================== */
+/*  LCD 驱动实现                                                        */
+/* ================================================================== */
+
+impl LcdDriverImpl {
+    /// 硬件初始化
+    pub fn hw_init(&mut self) {
+        // TODO: FM33A0xxEV LCD 控制器配置
+        // 4COM × 44SEG
+        // 1/3 bias
+        // 片内电阻分压或 Booster 升压
+        // 休眠模式下保持显示
+    }
+}
+
+impl LcdDriver for LcdDriverImpl {
+    fn init(&mut self) {
+        self.hw_init();
+    }
+
+    fn update(&mut self, content: &LcdContent) {
+        self.content = *content;
+        // TODO: 将 LcdContent 映射到 LCD 段码
+        // 每个数字 → 7 段码
+        // 符号 → 对应 SEG 位
+    }
+
+    fn set_mode(&mut self, mode: LcdDisplayMode) {
+        self.mode = mode;
+    }
+
+    fn enable(&mut self, on: bool) {
+        // TODO: LCD 使能/禁用
+    }
+
+    fn set_bias(&mut self, bias: LcdBias) {
+        // TODO: 配置 LCD bias
+    }
+}
+
+/* ================================================================== */
+/*  脉冲输出实现                                                       */
+/* ================================================================== */
+
+impl PulseDriver for PulseOutputImpl {
+    fn configure(&mut self, config: &PulseConfig) {
+        // TODO: 配置脉冲参数
+    }
+
+    fn update_energy(&mut self, pulse_type: PulseType, delta_wh: u32) {
+        // TODO: 根据脉冲常数计算是否输出脉冲
+    }
+}
+
+/* ================================================================== */
+/*  指示灯/蜂鸣器实现                                                  */
+/* ================================================================== */
+
+impl IndicatorDriver for IndicatorImpl {
+    fn set_led(&mut self, led: Led, on: bool) {
+        let bit = match led {
+            Led::Power => 0,
+            Led::Communication => 1,
+            Led::Alarm => 2,
+            Led::PulseActive => 3,
+            Led::PulseReactive => 4,
+        };
+        if on {
+            self.led_states |= 1 << bit;
+        } else {
+            self.led_states &= !(1 << bit);
+        }
+        // TODO: 实际 GPIO 操作
+    }
+
+    fn toggle_led(&mut self, led: Led) {
+        let bit = match led {
+            Led::Power => 0,
+            Led::Communication => 1,
+            Led::Alarm => 2,
+            Led::PulseActive => 3,
+            Led::PulseReactive => 4,
+        };
+        self.led_states ^= 1 << bit;
+    }
+
+    fn buzzer_alarm(&mut self, duration_ms: u16) {
+        // TODO: 启动蜂鸣器, duration_ms 后关闭
+    }
+
+    fn buzzer_off(&mut self) {
+        // TODO: 关闭蜂鸣器
+    }
+}
+
+impl IndicatorImpl {
+    /// 蜂鸣器告警 (简化版, 阻塞)
+    pub fn buzzer_alarm_blocking(&mut self, duration_ms: u16) {
+        // TODO
+    }
+}
+
+/* ================================================================== */
+/*  防窃电检测实现                                                     */
+/* ================================================================== */
+
+impl TamperDriver for TamperImpl {
+    fn check_events(&mut self) -> Option<TamperEvent> {
+        // TODO: 读取 GPIO 状态, 检测变化
+        if self.cover_open {
+            self.cover_open = false;
+            return Some(TamperEvent::CoverOpen);
+        }
+        if self.terminal_open {
+            self.terminal_open = false;
+            return Some(TamperEvent::TerminalCoverOpen);
+        }
+        if self.magnetic_detected {
+            self.magnetic_detected = false;
+            return Some(TamperEvent::MagneticFieldDetected);
+        }
+        None
+    }
+
+    fn magnetic_field_strength(&mut self) -> Option<u16> {
+        // TODO: 读取霍尔传感器 ADC 值
+        None
+    }
 }
