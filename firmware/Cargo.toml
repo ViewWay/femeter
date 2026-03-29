@@ -1,8 +1,8 @@
 [package]
 name = "femeter-firmware"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "FeMeter smart meter firmware for FM33LG0xx (Fudan Microelectronics)"
+description = "FeMeter smart meter firmware for FM33A0xxEV (Fudan Microelectronics)"
 
 [workspace]
 
@@ -12,23 +12,100 @@ path = "src/main.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "femeter-boot"
+path = "src/boot.rs"
+test = false
+bench = false
+
 [dependencies]
 # DLMS/COSEM protocol stack
-dlms-core = { path = "../crates/dlms-core" }
-dlms-hdlc = { path = "../crates/dlms-hdlc" }
-dlms-axdr = { path = "../crates/dlms-axdr" }
-dlms-apdu = { path = "../crates/dlms-apdu" }
-dlms-security = { path = "../crates/dlms-security" }
-dlms-cosem = { path = "../crates/dlms-cosem" }
-dlms-obis = { path = "../crates/dlms-obis" }
+dlms-core  = { path = "../crates/dlms-core", optional = true }
+dlms-hdlc  = { path = "../crates/dlms-hdlc", optional = true }
+dlms-axdr  = { path = "../crates/dlms-axdr", optional = true }
+dlms-apdu  = { path = "../crates/dlms-apdu", optional = true }
+dlms-security = { path = "../crates/dlms-security", optional = true }
+dlms-cosem = { path = "../crates/dlms-cosem", optional = true }
+dlms-obis  = { path = "../crates/dlms-obis", optional = true }
 
 # Embedded runtime
 cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7"
 panic-halt = "1.0"
 defmt = "0.3"
-defmt-rtt = "0.4"
+defmt-rtt = { version = "0.4", optional = true }
 critical-section = "1.2"
+
+# ── Feature flags ──────────────────────────────────────────────────
+#
+# 计量芯片 (三选一, 默认 ATT7022E)
+[features]
+default = ["att7022e", "defmt-rtt"]
+
+# ── 计量芯片 (互斥) ──
+att7022e = []
+rn8302b  = []
+rn8615v2 = []
+
+# ── 蜂窝模组 (可多选) ──
+ec800n   = ["cellular"]
+bc260y   = ["cellular"]
+cellular = []
+
+# ── 红外方案 ──
+ir-dual       = []
+ir-module     = []
+ir-transistor = []
+
+# ── 隔离方案 ──
+iso-digital     = []
+iso-optocoupler = []
+
+# ── 外挂 Flash ──
+ext-flash = []
+
+# ── 电池 ──
+bat-er26500 = []
+bat-er17335 = []
+
+# ── 3GPP 功能 (依赖蜂窝) ──
+gps      = ["ec800n"]
+lwm2m    = ["cellular"]
+coap     = ["cellular"]
+sms      = ["cellular"]
+http     = ["cellular"]
+ftp      = ["cellular"]
+mqtt     = ["cellular"]
+
+# ── 电网质量分析 (仅 RN8615V2) ──
+pq-analysis = ["rn8615v2"]
+
+# ── DLMS 协议栈 ──
+dlms = ["dlms-core", "dlms-hdlc", "dlms-axdr", "dlms-apdu", "dlms-security", "dlms-cosem", "dlms-obis"]
+
+# ── 预设组合 ──
+# 高端型: RN8615V2 + 双模蜂窝 + 全功能
+preset-highend = [
+    "rn8615v2", "ec800n", "bc260y",
+    "gps", "lwm2m", "coap", "sms", "http", "ftp", "mqtt",
+    "ext-flash", "bat-er26500", "pq-analysis",
+    "dlms",
+]
+
+# 标准型: RN8302B + NB-IoT + MQTT
+preset-standard = [
+    "rn8302b", "bc260y",
+    "mqtt", "sms",
+    "bat-er26500",
+    "dlms",
+]
+
+# 经济型: ATT7022E + 无蜂窝
+preset-economy = [
+    "att7022e",
+    "bat-er17335",
+    "dlms",
+]
 
 [profile.dev]
 panic = "abort"
@@ -36,6 +113,6 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 opt-level = "z"
-lto = false
+lto = true
 codegen-units = 1
 debug = 2

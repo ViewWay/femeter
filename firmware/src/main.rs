@@ -1,130 +1,301 @@
-//! FeMeter 智能电表固件 — FM33LG0xx (复旦微电子)
-//!
-//! 硬件平台:
-//!   MCU:  FM33LG0xx Cortex-M0+ @ 64MHz
-//!   Flash: 256KB  RAM: 32KB (24K main + 8K battery-backed)
-//!   内置外设: LCD控制器(4x40段码), UARTx4, SPIx2, I2Cx2, ADC 12-bit, RTC, AES-128
-//!
-//! 通信:
-//!   RS-485: UART0, HDLC/DLMS, 9600/19200/115200 bps, 8N1
-//!   红外:   UART1, IEC 62056-21 (mode C/D), 300/2400/9600 bps, 8N1
-//!   模块通信: UART2, 38400 bps, 8N1 (for metering module communication)
-//!
-//! 计量: 外部计量芯片 (ATT7022/BL6523/BL0937) via SPI0
-//!
-//! 显示: 内置 LCD 控制器 (4COM x 40SEG, 段码/米字/8字)
+/* ================================================================== */
+/*                                                                    */
+/*  main.rs — FeMeter 三相智能电表固件入口                              */
+/*                                                                    */
+/*  硬件: FM33A068EV (512KB Flash, 80KB SRAM, Cortex-M0+ @ 64MHz)      */
+/*  计量: ATT7022E / RN8302B / RN8615V2 (编译时选择)                   */
+/*  通信: RS485 + 红外 + LoRaWAN + Cat.1/NB-IoT                       */
+/*  显示: 4COM×44SEG 段码 LCD                                        */
+/*                                                                    */
+/*  (c) 2026 FeMeter Project — ViewWay                                */
+/* ================================================================== */
 
 #![no_main]
 #![no_std]
 
-extern crate alloc;
-
-use cortex_m::asm;
 use cortex_m_rt::entry;
-use defmt_rtt as _;
 use panic_halt as _;
+use defmt::{info, warn, error, debug};
 
+/* ── HAL 抽象层 ── */
+mod hal;
+mod fm33lg0;
+
+/* ── 计量芯片驱动 (编译时选择) ── */
+#[cfg(feature = "att7022e")]
+mod att7022e;
+#[cfg(feature = "rn8302b")]
+mod rn8302b;
+#[cfg(feature = "rn8615v2")]
+mod rn8615v2;
+
+/* ── 通信驱动 ── */
+mod asr6601;
+mod at_parser;
+mod quectel;
+
+/* ── 板级驱动 ── */
 mod board;
+mod display;
 mod metering;
 mod comm;
-mod display;
-mod att7022e;
-mod task_scheduler;
-mod fm33lg0;
-mod lcd;
 
-use board::Board;
-use task_scheduler::TaskScheduler;
+/* ══════════════════════════════════════════════════════════════════ */
+/*  编译时计量芯片类型别名                                              */
+/* ══════════════════════════════════════════════════════════════════ */
 
-// ── Bump allocator (16KB heap, leave 8KB for stack + globals) ──────
+#[cfg(feature = "att7022e")]
+type Metering = att7022e::Att7022e;
+#[cfg(feature = "rn8302b")]
+type Metering = rn8302b::Rn8302b;
+#[cfg(feature = "rn8615v2")]
+type Metering = rn8615v2::RN8615V2;
 
-const HEAP_SIZE: usize = 16 * 1024;
-static mut HEAP: [u8; HEAP_SIZE] = [0u8; HEAP_SIZE];
-static mut HEAP_PTR: usize = 0;
+/// 固件版本
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-struct BumpAlloc;
+/// 编译时间戳
+const BUILD_TIMESTAMP: &str = concat!(env!("CARGO_PKG_VERSION"), " ", file!());
 
-unsafe impl core::alloc::GlobalAlloc for BumpAlloc {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        let align = layout.align();
-        let size = layout.size();
-        unsafe {
-            let base = HEAP.as_ptr() as usize;
-            let ptr = HEAP_PTR;
-            let aligned = (base + ptr + align - 1) & !(align - 1);
-            let offset = aligned - base;
-            if offset + size > HEAP_SIZE {
-                return core::ptr::null_mut();
-            }
-            HEAP_PTR = offset + size;
-            aligned as *mut u8
-        }
-    }
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
+/* ══════════════════════════════════════════════════════════════════ */
+/*  应用状态                                                           */
+/* ══════════════════════════════════════════════════════════════════ */
+
+/// 全局应用状态
+struct AppState {
+    /// 计量数据
+    metering_data: hal::PhaseData,
+    /// 电能数据
+    energy_data: hal::EnergyData,
+    /// LCD 内容
+    lcd_content: hal::LcdContent,
+    /// 电源状态
+    power_state: hal::PowerState,
+    /// 心跳计数 (ms)
+    uptime_ms: u32,
+    /// 轮显索引
+    display_page: u8,
+    /// 脉冲常数
+    pulse_constant_active: u32,
+    pulse_constant_reactive: u32,
+    /// 有功电能小数累加器
+    active_energy_accum: u32,
+    /// 无功电能小数累加器
+    reactive_energy_accum: u32,
 }
 
-#[global_allocator]
-static ALLOCATOR: BumpAlloc = BumpAlloc;
+impl AppState {
+    const fn new() -> Self {
+        Self {
+            metering_data: hal::PhaseData::default(),
+            energy_data: hal::EnergyData::default(),
+            lcd_content: hal::LcdContent::default(),
+            power_state: hal::PowerState::MainsNormal,
+            uptime_ms: 0,
+            display_page: 0,
+            pulse_constant_active: 6400,
+            pulse_constant_reactive: 6400,
+            active_energy_accum: 0,
+            reactive_energy_accum: 0,
+        }
+    }
+}
 
-// ── Main entry ─────────────────────────────────────────────────────
+/* ══════════════════════════════════════════════════════════════════ */
+/*  主循环                                                             */
+/* ══════════════════════════════════════════════════════════════════ */
 
 #[entry]
 fn main() -> ! {
-    // Phase 1: 硬件初始化
-    let mut board = Board::init();
+    info!("FeMeter v{} starting...", VERSION);
+    info!("MCU: FM33A068EV (512KB/80KB)");
+    info!("Metering: {}", Metering::name());
 
-    // Phase 2: 从 Flash 读取校准参数和计量配置
-    board.load_calibration();
+    // 1. 硬件初始化
+    let mut board = board::Board::new();
+    board.init();
+    info!("Board initialized");
 
-    // Phase 3: 初始化任务调度器
-    let mut scheduler = TaskScheduler::new();
+    // 2. 初始化计量芯片
+    let calib = hal::CalibrationParams::default();
+    board.metering.init(&calib).unwrap_or_else(|e| {
+        error!("Metering chip init failed: {:?}", e);
+    });
+    info!("Metering chip initialized");
 
-    // ┌──────────────────────────────────────────────────────┐
-    // │  任务ID  │ 周期    │ 说明                              │
-    // ├──────────┼─────────┼───────────────────────────────────┤
-    // │  0       │ 1ms     │ SPI读取计量芯片 (ATT7022/BL6523) │
-    // │  1       │ 200ms   │ 功率计算 + 能量累加               │
-    // │  2       │ 500ms   │ LCD显示刷新                       │
-    // │  3       │ 10ms    │ RS-485 HDLC 收发                  │
-    // │  4       │ 50ms    │ 红外通信处理                      │
-    // │  5       │ 1000ms  │ 模块UART通信 (38400 bps)          │
-    // │  6       │ 900000ms│ 负荷曲线捕获 (15分钟)              │
-    // │  7       │ 60000ms │ 费率时段切换检查                   │
-    // │  8       │ 200ms   │ 越限告警检查                       │
-    // │  9       │ 100ms   │ 看门狗喂狗                        │
-    // └──────────────────────────────────────────────────────┘
-    scheduler.register(0,  1);         // 计量采样
-    scheduler.register(1,  200);       // 功率计算
-    scheduler.register(2,  500);       // 显示刷新
-    scheduler.register(3,  10);        // RS-485 HDLC
-    scheduler.register(4,  50);        // 红外通信
-    scheduler.register(5,  1000);      // 模块通信
-    scheduler.register(6,  900_000);   // 负荷曲线
-    scheduler.register(7,  60_000);    // 费率检查
-    scheduler.register(8,  200);       // 告警
-    scheduler.register(9,  100);       // 看门狗
+    // 3. 初始化 LCD
+    board.lcd.init();
+    board.lcd.set_mode(hal::LcdDisplayMode::AutoRotate { interval_sec: 5 });
+    info!("LCD initialized");
 
-    // Phase 4: 主循环 (super-loop)
+    // 4. 初始化通信通道
+    board.rs485.init(&hal::UartConfig {
+        baudrate: 9600,
+        data_bits: 8,
+        stop_bits: 1,
+        parity: hal::Parity::Even,
+    }).ok();
+    info!("RS485 initialized (9600 8E1)");
+
+    // 5. 应用状态
+    let mut state = AppState::new();
+
+    // 6. 进入主循环
+    info!("Entering main loop...");
+
     loop {
-        let now = board.systick_ms();
+        state.uptime_ms += 10; // 假设每次循环 ~10ms
 
-        for task_id in scheduler.poll(now) {
-            match task_id {
-                0 => board.sample_metering(),
-                1 => board.calculate_power_energy(),
-                2 => board.refresh_display(),
-                3 => board.process_rs485_hdlc(),
-                4 => board.process_infrared(),
-                5 => board.process_module_uart(),
-                6 => board.capture_load_profile(),
-                7 => board.check_tariff_schedule(),
-                8 => board.check_alarm_thresholds(),
-                9 => board.feed_watchdog(),
-                _ => {}
+        // ── 读取计量数据 ──
+        if let Ok(data) = board.metering.read_instant_data() {
+            state.metering_data = data;
+        }
+
+        // ── 读取电能数据 (每 1 秒) ──
+        if state.uptime_ms % 1000 == 0 {
+            if let Ok(energy) = board.metering.read_energy() {
+                state.energy_data = energy;
+            }
+
+            // ── 更新 LCD ──
+            update_lcd_content(&mut state);
+            board.lcd.update(&state.lcd_content);
+
+            // ── 脉冲输出 ──
+            // 根据功率积分电能, 脉冲输出
+            let active_power_w = state.metering_data.active_power_total as u32;
+            let delta_wh = active_power_w / 3600; // 简化: 每秒增量
+            state.active_energy_accum += delta_wh;
+            board.pulse.update_energy(hal::PulseType::Active, state.active_energy_accum / 1000);
+            if state.active_energy_accum >= 1000 {
+                state.active_energy_accum -= 1000;
+            }
+
+            let reactive_power_var = state.metering_data.reactive_power_total.abs() as u32;
+            let delta_varh = reactive_power_var / 3600;
+            state.reactive_energy_accum += delta_varh;
+            board.pulse.update_energy(hal::PulseType::Reactive, state.reactive_energy_accum / 1000);
+            if state.reactive_energy_accum >= 1000 {
+                state.reactive_energy_accum -= 1000;
             }
         }
 
-        // Wait For Interrupt — 低功耗
-        asm::wfi();
+        // ── 通信处理 (每 100ms) ──
+        if state.uptime_ms % 100 == 0 {
+            // RS485 DLMS 数据处理
+            comm_process(&mut board, &state);
+
+            // 红外数据处理
+            // TODO: IEC 62056-21 处理
+        }
+
+        // ── 按键处理 ──
+        // TODO: 按键扫描和事件分发
+
+        // ── 防窃电检测 (每 5 秒) ──
+        if state.uptime_ms % 5000 == 0 {
+            if let Some(event) = board.tamper.check_events() {
+                warn!("Tamper detected: {:?}", event);
+                board.indicator.buzzer_alarm(200);
+                board.indicator.set_led(hal::Led::Alarm, true);
+            }
+        }
+
+        // ── 电网质量事件 (RN8615V2) ──
+        #[cfg(feature = "pq-analysis")]
+        {
+            use hal::PowerQuality;
+            if let Some(pq_event) = board.metering.check_pq_event() {
+                warn!("Power quality event: {:?}", pq_event);
+            }
+        }
+
+        // ── 简单延时 ──
+        delay_ms(10);
+    }
+}
+
+/* ================================================================== */
+/*  LCD 内容更新                                                       */
+/* ================================================================== */
+
+fn update_lcd_content(state: &mut AppState) {
+    let d = &state.metering_data;
+    let e = &state.energy_data;
+
+    // 自动轮显: 每 5 秒切换一页
+    state.display_page = ((state.uptime_ms / 5000) % 8) as u8;
+
+    match state.display_page {
+        0 => {
+            // 第 1 页: A 相电压 + A 相电流
+            state.lcd_content.voltage = d.voltage_a;
+            state.lcd_content.current = d.current_a;
+        }
+        1 => {
+            // 第 2 页: B 相电压 + B 相电流
+            state.lcd_content.voltage = d.voltage_b;
+            state.lcd_content.current = d.current_b;
+        }
+        2 => {
+            // 第 3 页: C 相电压 + C 相电流
+            state.lcd_content.voltage = d.voltage_c;
+            state.lcd_content.current = d.current_c;
+        }
+        3 => {
+            // 第 4 页: 总有功功率
+            state.lcd_content.active_power = d.active_power_total;
+        }
+        4 => {
+            // 第 5 页: 总无功功率
+            state.lcd_content.reactive_power = d.reactive_power_total;
+        }
+        5 => {
+            // 第 6 页: 总功率因数 + 频率
+            state.lcd_content.power_factor = d.power_factor_total;
+            state.lcd_content.frequency = d.frequency;
+        }
+        6 => {
+            // 第 7 页: 正向有功总电能
+            state.lcd_content.active_import_energy = e.active_import;
+        }
+        7 => {
+            // 第 8 页: 费率 + 通信状态
+            state.lcd_content.tariff = 0;
+            state.lcd_content.comm_status = 0;
+        }
+        _ => {}
+    }
+}
+
+/* ================================================================== */
+/*  通信处理                                                           */
+/* ================================================================== */
+
+fn comm_process(board: &mut board::Board, state: &AppState) {
+    // RS485 DLMS 接收缓冲区
+    let mut rx_buf = [0u8; 256];
+
+    match board.rs485.read(&mut rx_buf, 10) {
+        Ok(n) if n > 0 => {
+            debug!("RS485 received {} bytes", n);
+            // TODO: DLMS HDLC 帧解析
+            // TODO: COSEM 对象处理
+            // TODO: 构造响应帧
+        }
+        _ => {}
+    }
+}
+
+/* ================================================================== */
+/*  简单延时                                                           */
+/* ================================================================== */
+
+fn delay_ms(ms: u32) {
+    let loops = ms * 6400 / 10;
+    let mut i: u32 = 0;
+    while i < loops {
+        i += 1;
+        cortex_m::asm::nop();
     }
 }
