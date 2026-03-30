@@ -112,7 +112,8 @@ fn main() -> ! {
     info!("Metering: {}", Metering::name());
 
     // 1. 硬件初始化
-    let mut board = board::Board::new();
+    let metering_chip = Metering::new();
+    let mut board = board::Board::new(metering_chip);
     board.init();
     info!("Board initialized");
 
@@ -272,7 +273,7 @@ fn update_lcd_content(state: &mut AppState) {
 /*  通信处理                                                           */
 /* ================================================================== */
 
-fn comm_process(board: &mut board::Board, state: &AppState) {
+fn comm_process(board: &mut board::Board<Metering>, state: &AppState) {
     // RS485 DLMS 接收缓冲区
     let mut rx_buf = [0u8; 256];
 
