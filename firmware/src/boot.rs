@@ -23,8 +23,13 @@
 #![no_main]
 #![no_std]
 
+use defmt_rtt as _; // 确保 defmt-rtt transport 被链接
 use cortex_m_rt::entry;
 use panic_halt as _;
+
+// defmt 要求用户提供 _defmt_timestamp 实现
+#[no_mangle]
+unsafe extern "C" fn _defmt_timestamp() {}
 
 /* ================================================================== */
 /*  Flash 分区地址常量                                                  */

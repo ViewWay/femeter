@@ -144,7 +144,7 @@ impl Default for CalibrationParams {
 }
 
 /// 计量芯片错误
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, defmt::Format)]
 pub enum MeteringError {
     /// SPI 通信错误
     SpiError,

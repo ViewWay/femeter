@@ -10,8 +10,128 @@
 //!
 //! 参考: ATT7022E 用户手册 Rev1.3 (210-SD-138)
 
-use crate::fm33lg0::{self, SpiRegs, spi_cr1, spi_cr2};
-use core::ops::Deref;
+use crate::hal::{self, MeteringChip, CalibrationParams, PhaseData, EnergyData as HalEnergyData, MeteringError};
+use crate::board::GpioImpl;
+
+// ══════════════════════════════════════════════════════════════════
+// Board-specific SPI implementation for ATT7022E
+// ══════════════════════════════════════════════════════════════════
+
+/// Board SPI0 implementation for ATT7022E
+pub struct BoardSpi0;
+
+/// Board CS pin for ATT7022E (PF15)
+pub struct BoardCs0;
+
+impl CsPin for BoardCs0 {
+    fn set_low(&self) {
+        crate::board::gpio_clr(crate::board::pins::SPI0_CSN);
+    }
+    
+    fn set_high(&self) {
+        crate::board::gpio_set(crate::board::pins::SPI0_CSN);
+    }
+}
+
+impl SpiOps for BoardSpi0 {
+    fn transfer(&mut self, tx: u8) -> u8 {
+        crate::board::spi0_transfer(tx)
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Board-specific ATT7022E type alias
+// ══════════════════════════════════════════════════════════════════
+
+/// ATT7022E driver instance for this board
+pub type Att7022eBoard = Att7022e<BoardSpi0, BoardCs0>;
+
+impl MeteringChip for Att7022eBoard {
+    fn init(&mut self, params: &CalibrationParams) -> Result<(), MeteringError> {
+        let _ = params;
+        // Software reset
+        self.soft_reset();
+        
+        // Enable calibration write
+        self.enable_calibration_write();
+        
+        // TODO: Write calibration parameters
+        // For now, just mark as initialized
+        
+        self.disable_calibration_write();
+        Ok(())
+    }
+    
+    fn reset(&mut self) -> Result<(), MeteringError> {
+        self.soft_reset();
+        Ok(())
+    }
+    
+    fn read_instant_data(&mut self) -> Result<PhaseData, MeteringError> {
+        let power = self.read_power();
+        let rms = self.read_rms();
+        let pf = self.read_pf();
+        let freq = self.read_frequency();
+        
+        Ok(PhaseData {
+            voltage_a: (rms.ua / 8192) as u16, // Convert to 0.01V
+            voltage_b: (rms.ub / 8192) as u16,
+            voltage_c: (rms.uc / 8192) as u16,
+            current_a: (rms.ia / 8192) as u16, // Convert to mA
+            current_b: (rms.ib / 8192) as u16,
+            current_c: (rms.ic / 8192) as u16,
+            active_power_a: power.pa,
+            active_power_b: power.pb,
+            active_power_c: power.pc,
+            active_power_total: power.pt,
+            reactive_power_a: power.qa,
+            reactive_power_b: power.qb,
+            reactive_power_c: power.qc,
+            reactive_power_total: power.qt,
+            frequency: freq as u16,
+            power_factor_a: (pf.pfa.max(0).min(1000) as u16),
+            power_factor_b: (pf.pfb.max(0).min(1000) as u16),
+            power_factor_c: (pf.pfc.max(0).min(1000) as u16),
+            power_factor_total: (pf.pft.max(0).min(1000) as u16),
+        })
+    }
+    
+    fn read_energy(&mut self) -> Result<HalEnergyData, MeteringError> {
+        let energy = self.read_energy_raw();
+        Ok(HalEnergyData {
+            active_import: energy.ept as u64,
+            active_export: 0, // TODO: add reverse energy
+            reactive_import: energy.eqt as u64,
+            reactive_export: 0,
+            active_import_a: energy.epa as u64,
+            active_import_b: energy.epb as u64,
+            active_import_c: energy.epc as u64,
+            ..Default::default()
+        })
+    }
+    
+    fn read_neutral_current(&mut self) -> Result<u16, MeteringError> {
+        let rms = self.read_rms();
+        Ok((rms.i0 / 8192) as u16) // Convert to mA
+    }
+    
+    fn chip_id(&mut self) -> Result<u32, MeteringError> {
+        Ok(self.read_device_id())
+    }
+    
+    fn name() -> &'static str {
+        "ATT7022E"
+    }
+    
+    fn supports_fundamental(&self) -> bool {
+        true
+    }
+    
+    fn read_fundamental_power(&mut self) -> Result<[i32; 3], MeteringError> {
+        let line = self.read_line_power();
+        Ok([line.line_pa, line.line_pb, line.line_pc])
+    }
+}
 
 // ══════════════════════════════════════════════════════════════════
 // SPI 协议
@@ -459,9 +579,9 @@ impl<SPI: SpiOps, CS: CsPin> Att7022e<SPI, CS> {
         }
     }
 
-    /// 读取三相电能数据
-    pub fn read_energy(&mut self) -> EnergyData {
-        EnergyData {
+    /// 读取三相电能数据 (芯片原始寄存器值)
+    pub fn read_energy_raw(&mut self) -> ChipEnergyData {
+        ChipEnergyData {
             epa: self.read_reg(reg::EPA),
             epb: self.read_reg(reg::EPB),
             epc: self.read_reg(reg::EPC),
@@ -600,8 +720,9 @@ pub struct RmsData {
     pub it: u32,  // 三相电流矢量和
 }
 
+/// 芯片原始电能寄存器数据
 #[derive(Debug, Clone, Copy)]
-pub struct EnergyData {
+pub struct ChipEnergyData {
     pub epa: u32, pub epb: u32, pub epc: u32, pub ept: u32,
     pub eqa: u32, pub eqb: u32, pub eqc: u32, pub eqt: u32,
     pub esa: u32, pub esb: u32, pub esc: u32, pub est: u32,

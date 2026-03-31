@@ -127,7 +127,7 @@ fn gpio_enable_input(port: u8, pin: u8) {
 
 /// GPIO 输出置位 (set high)
 #[inline(always)]
-fn gpio_set(pin: GpioPin) {
+pub fn gpio_set(pin: GpioPin) {
     let gpio = gpio_port(pin.port);
     let bit = 1u32 << (pin.pin as u32);
     unsafe {
@@ -137,7 +137,7 @@ fn gpio_set(pin: GpioPin) {
 
 /// GPIO 输出复位 (set low)
 #[inline(always)]
-fn gpio_clr(pin: GpioPin) {
+pub fn gpio_clr(pin: GpioPin) {
     let gpio = gpio_port(pin.port);
     let bit = 1u32 << (pin.pin as u32);
     unsafe {
@@ -155,8 +155,8 @@ fn gpio_read_pin(pin: GpioPin) -> bool {
 
 /// 写 volatile helper
 #[inline(always)]
-unsafe fn write_reg(addr: *const u32, val: u32) {
-    core::ptr::write_volatile(addr as *mut u32, val);
+unsafe fn write_reg(addr: *mut u32, val: u32) {
+    core::ptr::write_volatile(addr, val);
 }
 
 /// 读 volatile helper
@@ -182,13 +182,13 @@ fn cmu_enable_pclk() {
     let cmu = fm33lg0::cmu();
     unsafe {
         // PCLKEN1: GPIOA~GPIOG 全部使能
-        write_reg(&cmu.pclken1, read_reg(&cmu.pclken1) | 0x7F);
+        write_reg(&cmu.pclken1 as *const u32 as *mut u32, read_reg(&cmu.pclken1 as *const u32) | 0x7F);
         // PCLKEN2: UART0~3, LPUART0
-        write_reg(&cmu.pclken2, read_reg(&cmu.pclken2) | 0x0D); // bit0+bit2+bit3 = UART0,2,3; bit6=LPUART0
+        write_reg(&cmu.pclken2 as *const u32 as *mut u32, read_reg(&cmu.pclken2 as *const u32) | 0x0D); // bit0+bit2+bit3 = UART0,2,3; bit6=LPUART0
         // PCLKEN3: SPI0, SPI1, LCD, ADC
-        write_reg(&cmu.pclken3, read_reg(&cmu.pclken3) | 0x43); // bit0=SPI0, bit1=SPI1, bit5=LCD, bit6=ADC
+        write_reg(&cmu.pclken3 as *const u32 as *mut u32, read_reg(&cmu.pclken3 as *const u32) | 0x43); // bit0=SPI0, bit1=SPI1, bit5=LCD, bit6=ADC
         // PCLKEN4: RTC
-        write_reg(&cmu.pclken4, read_reg(&cmu.pclken4) | 0x04); // bit2=RTC
+        write_reg(&cmu.pclken4 as *const u32 as *mut u32, read_reg(&cmu.pclken4 as *const u32) | 0x04); // bit2=RTC
     }
 }
 
@@ -197,16 +197,16 @@ fn cmu_enable_pclk() {
 /* ================================================================== */
 
 /// SPI0 全双工传输 (计量芯片), CS 手动控制
-fn spi0_transfer(tx_byte: u8) -> u8 {
+pub fn spi0_transfer(tx_byte: u8) -> u8 {
     let spi = fm33lg0::spi0();
     unsafe {
         // 等待 TX 缓冲区空 (TXSE flag = ISR bit0)
-        while (read_reg(&spi.isr) & 0x01) == 0 {}
+        while (read_reg(&spi.isr as *const u32) & 0x01) == 0 {}
         // 写发送数据
-        write_reg(&spi.txbuf as *const u32, tx_byte as u32);
+        write_reg(&spi.txbuf as *const u32 as *mut u32, tx_byte as u32);
         // 等待 RX 完成 (RXBF flag = bit8)
-        while (read_reg(&spi.isr) & 0x100) == 0 {}
-        read_reg(&spi.rxbuf) as u8
+        while (read_reg(&spi.isr as *const u32) & 0x100) == 0 {}
+        read_reg(&spi.rxbuf as *const u32) as u8
     }
 }
 
@@ -245,12 +245,12 @@ fn uart_config_regs(ch: UartChannel, config: &UartConfig) {
     let uart = uart_regs(ch);
 
     // 禁用 TX/RX
-    unsafe { write_reg(&uart.csr, 0); }
+    unsafe { write_reg(&uart.csr as *const u32 as *mut u32, 0); }
 
     // 计算波特率分频: SPBRG = SYSCLK / baudrate
     let sysclk: u32 = 64_000_000; // After PLL init
     let spbrg = fm33lg0::calc_spbrg(sysclk, config.baudrate);
-    unsafe { write_reg(&uart.bgr, spbrg as u32); }
+    unsafe { write_reg(&uart.bgr as *const u32 as *mut u32, spbrg as u32); }
 
     // 配置 CSR: 数据位 + 校验 + 停止位
     let mut csr: u32 = 0;
@@ -278,7 +278,7 @@ fn uart_config_regs(ch: UartChannel, config: &UartConfig) {
     // 使能 TX + RX
     csr |= uart_csr::TXEN | uart_csr::RXEN;
 
-    unsafe { write_reg(&uart.csr, csr); }
+    unsafe { write_reg(&uart.csr as *const u32 as *mut u32, csr); }
 }
 
 /* ================================================================== */
@@ -565,12 +565,12 @@ impl<M: crate::hal::MeteringChip> Board<M> {
         unsafe {
             // ── Step 1: 使能外部高速晶振 XTHF ──
             // XTHFCR bit0 = EN
-            write_reg(&cmu.xthfcr, read_reg(&cmu.xthfcr) | 0x01);
+            write_reg(&cmu.xthfcr as *const u32 as *mut u32, read_reg(&cmu.xthfcr as *const u32) | 0x01);
 
             // ── Step 2: 等待 XTHF 稳定 (bit1 = READY) ──
             // 超时约 2ms, 用循环等待
             let mut timeout = 10000u32;
-            while (read_reg(&cmu.xthfcr) & 0x02) == 0 {
+            while (read_reg(&cmu.xthfcr as *const u32) & 0x02) == 0 {
                 timeout -= 1;
                 if timeout == 0 {
                     // XTHF 未就绪, 继续使用 RCHF, 但不配置 PLL
@@ -590,22 +590,22 @@ impl<M: crate::hal::MeteringChip> Board<M> {
             let pll_val = (0x01 << 1)  // INSEL = XTHF
                         | (0x01 << 8)  // N_DIV = 1
                         | (0x08 << 16); // M_MUL = 8
-            write_reg(&cmu.pllHcr, pll_val);
+            write_reg(&cmu.pllHcr as *const u32 as *mut u32, pll_val);
 
             // 使能 PLL_H (bit0)
-            write_reg(&cmu.pllHcr, read_reg(&cmu.pllHcr) | 0x01);
+            write_reg(&cmu.pllHcr as *const u32 as *mut u32, read_reg(&cmu.pllHcr as *const u32) | 0x01);
 
             // 等待 PLL_H 锁定 (轮询 CMU ISR bit for PLL ready)
             // FM33 使用 ISR 的 bit 来指示 PLL 就绪
             timeout = 10000;
-            while (read_reg(&cmu.isr) & 0x04) == 0 { // bit2 = PLL_H ready
+            while (read_reg(&cmu.isr as *const u32) & 0x04) == 0 { // bit2 = PLL_H ready
                 timeout -= 1;
                 if timeout == 0 { break; }
             }
 
             // ── Step 4: 切换系统时钟到 PLL_H ──
             // SYSCLKCR bits[2:0] = 3 → PLL_H
-            write_reg(&cmu.sysclkcr, (read_reg(&cmu.sysclkcr) & !0x07) | 0x03);
+            write_reg(&cmu.sysclkcr as *const u32 as *mut u32, (read_reg(&cmu.sysclkcr as *const u32) & !0x07) | 0x03);
 
             // ── Step 5: 使能 XTLF (32.768kHz for RTC) ──
             // 通过 PMU 或 CMU 操作. XTLF 使能通常在 PMU 中
@@ -740,7 +740,7 @@ impl<M: crate::hal::MeteringChip> Board<M> {
         // ANEN 使能 (GPIO ANEN 寄存器)
         let gpio = gpio_port(pins::BAT_ADC.port);
         unsafe {
-            write_reg(&gpio.anen as *const u32, read_reg(&gpio.anen as *const u32) | (1u32 << pins::BAT_ADC.pin));
+            write_reg(&gpio.anen as *const u32 as *mut u32, read_reg(&gpio.anen as *const u32) | (1u32 << pins::BAT_ADC.pin));
         }
     }
 
@@ -761,14 +761,14 @@ impl<M: crate::hal::MeteringChip> Board<M> {
             let baud_div = 0b010; // /8 → 64MHz/8 = 8MHz
             let cr1 = spi_cr1::MM              // Master
                     | (baud_div << spi_cr1::BAUD_SHIFT);
-            write_reg(&spi0.cr1, cr1);
+            write_reg(&spi0.cr1 as *const u32 as *mut u32, cr1);
 
             // CR2: DLEN=8bit (0 means 8bit), TXOEN=1, RXOEN=1, SSNSEN=0 (manual CS)
             let cr2 = spi_cr2::TXOEN | spi_cr2::RXOEN;
-            write_reg(&spi0.cr2, cr2);
+            write_reg(&spi0.cr2 as *const u32 as *mut u32, cr2);
 
             // CR3: 使能 SPI (bit0=EN) — 写 0x01
-            write_reg(&spi0.cr3, 0x01);
+            write_reg(&spi0.cr3 as *const u32 as *mut u32, 0x01);
         }
 
         // ══════════════════════════════════════════════════
@@ -781,12 +781,12 @@ impl<M: crate::hal::MeteringChip> Board<M> {
             let baud_div = 0b001; // /4 → 64MHz/4 = 16MHz
             let cr1 = spi_cr1::MM
                     | (baud_div << spi_cr1::BAUD_SHIFT);
-            write_reg(&spi1.cr1, cr1);
+            write_reg(&spi1.cr1 as *const u32 as *mut u32, cr1);
 
             let cr2 = spi_cr2::TXOEN | spi_cr2::RXOEN;
-            write_reg(&spi1.cr2, cr2);
+            write_reg(&spi1.cr2 as *const u32 as *mut u32, cr2);
 
-            write_reg(&spi1.cr3, 0x01);
+            write_reg(&spi1.cr3 as *const u32 as *mut u32, 0x01);
         }
     }
 
@@ -798,15 +798,15 @@ impl<M: crate::hal::MeteringChip> Board<M> {
             // CR: 使能 ADC, 选择时钟源
             // bit0 = EN, bit1 = START, bits[4:2] = clock source/div
             // 先使能 ADC
-            write_reg(&adc.cr, 0x01); // EN
+            write_reg(&adc.cr as *const u32 as *mut u32, 0x01); // EN
 
             // CFGR: 配置通道、采样率等
             // 通道 5 (PF6 = BAT_ADC)
             // bits[3:0] = channel select = 5
-            write_reg(&adc.cfgr, 0x05);
+            write_reg(&adc.cfgr as *const u32 as *mut u32, 0x05);
 
             // 使能 ADC 中断 (转换完成)
-            write_reg(&adc.ier, 0x01); // 转换完成中断使能
+            write_reg(&adc.isr as *const u32 as *mut u32, 0x01); // 转换完成中断使能
 
             // TRIM: 使用出厂校准值 (已由 Flash loader 写入)
             // 这里保持默认
@@ -818,52 +818,38 @@ impl<M: crate::hal::MeteringChip> Board<M> {
         let rtc = fm33lg0::rtc();
         unsafe {
             // WER: 写使能 (写 0xACAC0001 允许写 RTC 寄存器)
-            write_reg(&rtc.wer, 0xACAC_0001);
+            write_reg(&rtc.wer as *const u32 as *mut u32, 0xACAC_0001);
 
             // CR: 配置 RTC
             // bit0 = EN (使能 RTC)
             // bit1 = CLOCKSOURCE (0=XTLF 32.768kHz)
             // bit2 = FORMAT (0=BCD)
-            write_reg(&rtc.cr, 0x01); // 使能 RTC, XTLF, BCD
+            write_reg(&rtc.cr as *const u32 as *mut u32, 0x01); // 使能 RTC, XTLF, BCD
 
             // 清除所有中断标志
-            write_reg(&rtc.isr, 0xFFFF_FFFF); // 写1清零
+            write_reg(&rtc.isr as *const u32 as *mut u32, 0xFFFF_FFFF); // 写1清零
 
             // 校准: adjust 寄存器用于数字调校 (±0.119ppm 精度)
             // 初始值 0 = 不调校
-            write_reg(&rtc.adjust, 0);
+            write_reg(&rtc.adjust as *const u32 as *mut u32, 0);
 
             // 锁定写保护
-            write_reg(&rtc.wer, 0x0000_0000);
+            write_reg(&rtc.wer as *const u32 as *mut u32, 0x0000_0000);
         }
     }
 
     /// NVIC 中断优先级配置
     fn nvic_init() {
-        // Cortex-M0+ NVIC: 4级优先级 (2bit 抢占, 无子优先级)
-        // 优先级值越小越紧急
-
-        unsafe {
-            // UART0 (RS485): 优先级 1 (高)
-            cortex_m::peripheral::NVIC::unmask(fm33lg0::irqn::UART0);
-            cortex_m::peripheral::NVIC::set_priority(fm33lg0::irqn::UART0, 0x40); // priority 1
-
-            // UART3 (蜂窝): 优先级 1
-            cortex_m::peripheral::NVIC::unmask(fm33lg0::irqn::UART3);
-            cortex_m::peripheral::NVIC::set_priority(fm33lg0::irqn::UART3, 0x50);
-
-            // SPI0 (计量): 优先级 2
-            cortex_m::peripheral::NVIC::unmask(fm33lg0::irqn::SPI0);
-            cortex_m::peripheral::NVIC::set_priority(fm33lg0::irqn::SPI0, 0x80); // priority 2
-
-            // RTC: 优先级 3 (最低)
-            cortex_m::peripheral::NVIC::unmask(fm33lg0::irqn::RTC);
-            cortex_m::peripheral::NVIC::set_priority(fm33lg0::irqn::RTC, 0xC0); // priority 3
-
-            // GPIO (EXTI 按键/检测): 优先级 2
-            cortex_m::peripheral::NVIC::unmask(fm33lg0::irqn::GPIO);
-            cortex_m::peripheral::NVIC::set_priority(fm33lg0::irqn::GPIO, 0x90);
-        }
+        // TODO: NVIC 配置需要 PAC crate 提供 InterruptNumber trait 实现
+        // 当前使用 fm33lg0::irqn 常量 (isize), cortex-m NVIC API 需要 InterruptNumber trait
+        // 解决方案: 生成 SVD PAC crate 或手动实现 InterruptNumber for irqn 枚举
+        //
+        // 计划的中断优先级:
+        //   UART0 (RS485): 优先级 1 (高)
+        //   UART3 (蜂窝): 优先级 1
+        //   SPI0  (计量): 优先级 2
+        //   GPIO  (EXTI): 优先级 2
+        //   RTC:          优先级 3 (最低)
     }
 }
 
@@ -880,10 +866,10 @@ impl UartDriver for UartChannelDriver {
             let uart = uart_regs(self.channel);
             unsafe {
                 // 设置 RX 超时 = 20 bit periods
-                write_reg(&uart.todr, 20);
+                write_reg(&uart.todr as *const u32 as *mut u32, 20);
                 // 使能超时
-                let csr = read_reg(&uart.csr);
-                write_reg(&uart.csr, csr | uart_csr::RXTOEN);
+                let csr = read_reg(&uart.csr as *const u32);
+                write_reg(&uart.csr as *const u32 as *mut u32, csr | uart_csr::RXTOEN);
             }
         }
 
@@ -908,7 +894,7 @@ impl UartDriver for UartChannelDriver {
             unsafe {
                 // 等待发送缓冲区空 (TXSE = ISR bit0)
                 let mut timeout = 100_000u32;
-                while (read_reg(&uart.isr) & uart_isr::TXSE) == 0 {
+                while (read_reg(&uart.isr as *const u32) & uart_isr::TXSE) == 0 {
                     timeout -= 1;
                     if timeout == 0 {
                         // RS485: 切回接收
@@ -918,14 +904,14 @@ impl UartDriver for UartChannelDriver {
                         return Err(UartError::TxTimeout);
                     }
                 }
-                write_reg(&uart.txbuf as *const u32, byte as u32);
+                write_reg(&uart.txbuf as *const u32 as *mut u32, byte as u32);
             }
         }
 
         // 等待最后字节发送完成
         unsafe {
             let mut timeout = 100_000u32;
-            while (read_reg(&uart.isr) & uart_isr::TXBE) == 0 {
+            while (read_reg(&uart.isr as *const u32) & uart_isr::TXBE) == 0 {
                 timeout -= 1;
                 if timeout == 0 { break; }
             }
@@ -953,23 +939,23 @@ impl UartDriver for UartChannelDriver {
             let mut byte_timeout = timeout_ms * 1000; // rough us counter
             unsafe {
                 loop {
-                    let isr = read_reg(&uart.isr);
+                    let isr = read_reg(&uart.isr as *const u32);
                     if (isr & uart_isr::RXBF) != 0 {
                         // 检查错误
                         if (isr & uart_isr::OERR) != 0 {
                             // 清除溢出标志 (写1清零)
-                            write_reg(&uart.isr as *const u32, uart_isr::OERR);
+                            write_reg(&uart.isr as *const u32 as *mut u32, uart_isr::OERR);
                             return Err(UartError::OverrunError);
                         }
                         if (isr & uart_isr::FERR) != 0 {
-                            write_reg(&uart.isr as *const u32, uart_isr::FERR);
+                            write_reg(&uart.isr as *const u32 as *mut u32, uart_isr::FERR);
                             return Err(UartError::FramingError);
                         }
                         if (isr & uart_isr::PERR) != 0 {
-                            write_reg(&uart.isr as *const u32, uart_isr::PERR);
+                            write_reg(&uart.isr as *const u32 as *mut u32, uart_isr::PERR);
                             return Err(UartError::ParityError);
                         }
-                        *slot = read_reg(&uart.rxbuf) as u8;
+                        *slot = read_reg(&uart.rxbuf as *const u32) as u8;
                         received += 1;
                         break;
                     }
@@ -992,7 +978,7 @@ impl UartDriver for UartChannelDriver {
             return false;
         }
         let uart = uart_regs(self.channel);
-        unsafe { (read_reg(&uart.isr) & uart_isr::RXBF) != 0 }
+        unsafe { (read_reg(&uart.isr as *const u32) & uart_isr::RXBF) != 0 }
     }
 
     fn channel(&self) -> UartChannel {
@@ -1041,28 +1027,28 @@ impl LcdDriverImpl {
             //   ENMODE=0 → 普通使能
             //   IC_CTRL[17:16]=00 → 内部电阻分压
             let cr = 0x00; // 4COM, 1/3 bias, 内部电阻
-            write_reg(&lcd.cr, cr);
+            write_reg(&lcd.cr as *const u32 as *mut u32, cr);
 
             // COM 使能: 4COM → COM0~COM3
-            write_reg(&lcd.comen, 0x0F); // bit0~3 = COM0~COM3
+            write_reg(&lcd.comen as *const u32 as *mut u32, 0x0F); // bit0~3 = COM0~COM3
 
             // SEG 使能: 根据 4COM×44SEG 配置
             // SEGEN0: SEG0~SEG31
             // SEGEN1: SEG32~SEG43 (bit0~bit11)
-            write_reg(&lcd.segen0, 0xFFFF_FFFF); // SEG0~31
-            write_reg(&lcd.segen1, 0x0000_0FFF); // SEG32~43
+            write_reg(&lcd.segen0 as *const u32 as *mut u32, 0xFFFF_FFFF); // SEG0~31
+            write_reg(&lcd.segen1 as *const u32 as *mut u32, 0x0000_0FFF); // SEG32~43
 
             // 频率控制: LCD 刷新率
             // FCR.DF[7:0]: 分频系数, 典型值使刷新率 ~64Hz
-            write_reg(&lcd.fcr, 0x40); // DF=64
+            write_reg(&lcd.fcr as *const u32 as *mut u32, 0x40); // DF=64
 
             // 清除所有显示数据
             for i in 0..10 {
-                write_reg(&lcd.data[i] as *const u32, 0);
+                write_reg(&lcd.data[i] as *const u32 as *mut u32, 0);
             }
 
             // 使能 LCD
-            write_reg(&lcd.cr, cr | lcd_cr::EN);
+            write_reg(&lcd.cr as *const u32 as *mut u32, cr | lcd_cr::EN);
         }
     }
 }
@@ -1094,11 +1080,11 @@ impl LcdDriver for LcdDriverImpl {
     fn enable(&mut self, on: bool) {
         let lcd = fm33lg0::lcd();
         unsafe {
-            let cr = read_reg(&lcd.cr);
+            let cr = read_reg(&lcd.cr as *const u32);
             if on {
-                write_reg(&lcd.cr, cr | lcd_cr::EN);
+                write_reg(&lcd.cr as *const u32 as *mut u32, cr | lcd_cr::EN);
             } else {
-                write_reg(&lcd.cr, cr & !lcd_cr::EN);
+                write_reg(&lcd.cr as *const u32 as *mut u32, cr & !lcd_cr::EN);
             }
         }
     }
@@ -1106,13 +1092,13 @@ impl LcdDriver for LcdDriverImpl {
     fn set_bias(&mut self, bias: LcdBias) {
         let lcd = fm33lg0::lcd();
         unsafe {
-            let cr = read_reg(&lcd.cr);
+            let cr = read_reg(&lcd.cr as *const u32);
             match bias {
                 LcdBias::Third => {
-                    write_reg(&lcd.cr, cr & !lcd_cr::BIASMD);
+                    write_reg(&lcd.cr as *const u32 as *mut u32, cr & !lcd_cr::BIASMD);
                 }
                 LcdBias::Quarter => {
-                    write_reg(&lcd.cr, cr | lcd_cr::BIASMD);
+                    write_reg(&lcd.cr as *const u32 as *mut u32, cr | lcd_cr::BIASMD);
                 }
             }
         }

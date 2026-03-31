@@ -312,7 +312,7 @@ impl LcdPanel {
 
         // 写入段码
         for i in start..8 {
-            let dp = if dp_pos > 0 && (7 - i) == dp_pos { true } else { false };
+            let dp = if dp_pos > 0 && (7 - i) == dp_pos as usize { true } else { false };
             self.write_digit(start_digit + (i - start) as u8, digits[i], dp);
         }
     }

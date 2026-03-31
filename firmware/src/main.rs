@@ -12,10 +12,17 @@
 
 #![no_main]
 #![no_std]
+#![allow(invalid_reference_casting)]
 
+use defmt_rtt as _; // 确保 defmt-rtt transport 被链接
 use cortex_m_rt::entry;
 use panic_halt as _;
 use defmt::{info, warn, error, debug};
+use crate::hal::{UartDriver, MeteringChip, LcdDriver, PulseDriver, IndicatorDriver, TamperDriver};
+
+// defmt 要求用户提供 _defmt_timestamp 实现 (空 = 无时间戳, 省空间)
+#[no_mangle]
+unsafe extern "C" fn _defmt_timestamp() {}
 
 /* ── HAL 抽象层 ── */
 mod hal;
@@ -31,7 +38,9 @@ mod rn8615v2;
 
 /* ── 通信驱动 ── */
 mod asr6601;
+#[cfg(feature = "cellular")]
 mod at_parser;
+#[cfg(feature = "cellular")]
 mod quectel;
 
 /* ── 板级驱动 ── */
@@ -45,7 +54,7 @@ mod comm;
 /* ══════════════════════════════════════════════════════════════════ */
 
 #[cfg(feature = "att7022e")]
-type Metering = att7022e::Att7022e;
+type Metering = att7022e::Att7022eBoard;
 #[cfg(feature = "rn8302b")]
 type Metering = rn8302b::Rn8302b;
 #[cfg(feature = "rn8615v2")]
@@ -85,7 +94,7 @@ struct AppState {
 }
 
 impl AppState {
-    const fn new() -> Self {
+    fn new() -> Self {
         Self {
             metering_data: hal::PhaseData::default(),
             energy_data: hal::EnergyData::default(),
@@ -112,7 +121,8 @@ fn main() -> ! {
     info!("Metering: {}", Metering::name());
 
     // 1. 硬件初始化
-    let metering_chip = Metering::new();
+    use crate::att7022e::{BoardSpi0, BoardCs0};
+    let metering_chip = Metering::new(BoardSpi0, BoardCs0);
     let mut board = board::Board::new(metering_chip);
     board.init();
     info!("Board initialized");

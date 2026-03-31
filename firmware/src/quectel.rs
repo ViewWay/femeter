@@ -18,6 +18,7 @@ use super::*;
 // 移远模组型号枚举
 // ============================================================
 
+/// 移远模组型号枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuectelModel {
     // --- LTE Cat.4 ---
