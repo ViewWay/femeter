@@ -14,11 +14,11 @@
 #![no_std]
 #![allow(invalid_reference_casting)]
 
-use defmt_rtt as _; // 确保 defmt-rtt transport 被链接
+use defmt_rtt as _;
 use cortex_m_rt::entry;
 use panic_halt as _;
 use defmt::{info, warn, error, debug};
-use crate::hal::{UartDriver, MeteringChip, LcdDriver, PulseDriver, IndicatorDriver, TamperDriver};
+use crate::hal::{MeteringChip, LcdDriver, UartDriver};
 
 // defmt 要求用户提供 _defmt_timestamp 实现 (空 = 无时间戳, 省空间)
 #[no_mangle]
@@ -48,6 +48,9 @@ mod board;
 mod display;
 mod metering;
 mod comm;
+mod task_scheduler;
+
+use task_scheduler::{TaskScheduler, TaskId, TASK_NONE, task};
 
 /* ══════════════════════════════════════════════════════════════════ */
 /*  编译时计量芯片类型别名                                              */
@@ -63,55 +66,36 @@ type Metering = rn8615v2::RN8615V2;
 /// 固件版本
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// 编译时间戳
-const BUILD_TIMESTAMP: &str = concat!(env!("CARGO_PKG_VERSION"), " ", file!());
-
 /* ══════════════════════════════════════════════════════════════════ */
 /*  应用状态                                                           */
 /* ══════════════════════════════════════════════════════════════════ */
 
 /// 全局应用状态
-struct AppState {
-    /// 计量数据
-    metering_data: hal::PhaseData,
-    /// 电能数据
-    energy_data: hal::EnergyData,
-    /// LCD 内容
+struct AppState<M: hal::MeteringChip> {
+    /// 计量管理器 (封装计量芯片 + 电能累计 + 费率)
+    metering_mgr: metering::MeteringManager<M>,
+    /// LCD 驱动
+    lcd: display::LcdPanel,
+    /// LCD 显示内容
     lcd_content: hal::LcdContent,
-    /// 电源状态
-    power_state: hal::PowerState,
-    /// 心跳计数 (ms)
-    uptime_ms: u32,
-    /// 轮显索引
-    display_page: u8,
-    /// 脉冲常数
+    /// RS485 通信
+    rs485: board::UartChannelDriver,
+    /// 脉冲常数 (有功, imp/kWh)
     pulse_constant_active: u32,
+    /// 脉冲常数 (无功, imp/kvarh)
     pulse_constant_reactive: u32,
     /// 有功电能小数累加器
     active_energy_accum: u32,
     /// 无功电能小数累加器
     reactive_energy_accum: u32,
-}
-
-impl AppState {
-    fn new() -> Self {
-        Self {
-            metering_data: hal::PhaseData::default(),
-            energy_data: hal::EnergyData::default(),
-            lcd_content: hal::LcdContent::default(),
-            power_state: hal::PowerState::MainsNormal,
-            uptime_ms: 0,
-            display_page: 0,
-            pulse_constant_active: 6400,
-            pulse_constant_reactive: 6400,
-            active_energy_accum: 0,
-            reactive_energy_accum: 0,
-        }
-    }
+    /// 心跳 LED 闪烁计数
+    heartbeat_count: u32,
+    /// 上次 RS485 收到的数据长度
+    rs485_rx_len: usize,
 }
 
 /* ══════════════════════════════════════════════════════════════════ */
-/*  主循环                                                             */
+/*  主入口                                                             */
 /* ══════════════════════════════════════════════════════════════════ */
 
 #[entry]
@@ -122,24 +106,23 @@ fn main() -> ! {
 
     // 1. 硬件初始化
     use crate::att7022e::{BoardSpi0, BoardCs0};
-    let metering_chip = Metering::new(BoardSpi0, BoardCs0);
-    let mut board = board::Board::new(metering_chip);
+    let chip = Metering::new(BoardSpi0, BoardCs0);
+    let mut board = board::Board::new(chip);
     board.init();
     info!("Board initialized");
 
-    // 2. 初始化计量芯片
+    // 2. 初始化计量管理器 (含校准)
     let calib = hal::CalibrationParams::default();
-    board.metering.init(&calib).unwrap_or_else(|e| {
-        error!("Metering chip init failed: {:?}", e);
-    });
-    info!("Metering chip initialized");
+    let metering_mgr = metering::MeteringManager::new(board.metering, calib);
+    info!("Metering manager initialized");
 
     // 3. 初始化 LCD
-    board.lcd.init();
-    board.lcd.set_mode(hal::LcdDisplayMode::AutoRotate { interval_sec: 5 });
+    let mut lcd = display::LcdPanel::new();
+    lcd.init_hw();
+    lcd.init();
     info!("LCD initialized");
 
-    // 4. 初始化通信通道
+    // 4. 初始化 RS485
     board.rs485.init(&hal::UartConfig {
         baudrate: 9600,
         data_bits: 8,
@@ -149,157 +132,147 @@ fn main() -> ! {
     info!("RS485 initialized (9600 8E1)");
 
     // 5. 应用状态
-    let mut state = AppState::new();
+    let mut state = AppState {
+        metering_mgr,
+        lcd,
+        lcd_content: hal::LcdContent::default(),
+        rs485: board.rs485,
+        pulse_constant_active: 6400,
+        pulse_constant_reactive: 6400,
+        active_energy_accum: 0,
+        reactive_energy_accum: 0,
+        heartbeat_count: 0,
+        rs485_rx_len: 0,
+    };
 
-    // 6. 进入主循环
+    // 6. 注册任务
+    let mut sched = TaskScheduler::new();
+    sched.register(200);   // 0: 计量采样
+    sched.register(1000);  // 1: 电能累计
+    sched.register(500);   // 2: LCD 刷新
+    sched.register(10);    // 3: RS485 通信
+    sched.register(50);    // 4: 红外通信
+    sched.register(50);    // 5: 按键扫描
+    sched.register(100);   // 6: 脉冲输出
+    sched.register(5000);  // 7: 防窃电
+    sched.register(10000); // 8: 温度
+    sched.register(1000);  // 9: 看门狗
+    sched.register(30000); // 10: LoRaWAN
+    sched.register(60000); // 11: 蜂窝
+
+    info!("Task scheduler initialized (12 tasks)");
+
+    // 7. 进入主循环
     info!("Entering main loop...");
+    let mut uptime_ms: u64 = 0;
+    let mut ready_buf = [TASK_NONE; 16];
 
     loop {
-        state.uptime_ms += 10; // 假设每次循环 ~10ms
+        uptime_ms += 5; // 假设每次循环 ~5ms
 
-        // ── 读取计量数据 ──
-        if let Ok(data) = board.metering.read_instant_data() {
-            state.metering_data = data;
-        }
+        // 查询就绪任务
+        let n_ready = sched.poll(uptime_ms, &mut ready_buf);
 
-        // ── 读取电能数据 (每 1 秒) ──
-        if state.uptime_ms % 1000 == 0 {
-            if let Ok(energy) = board.metering.read_energy() {
-                state.energy_data = energy;
-            }
-
-            // ── 更新 LCD ──
-            update_lcd_content(&mut state);
-            board.lcd.update(&state.lcd_content);
-
-            // ── 脉冲输出 ──
-            // 根据功率积分电能, 脉冲输出
-            let active_power_w = state.metering_data.active_power_total as u32;
-            let delta_wh = active_power_w / 3600; // 简化: 每秒增量
-            state.active_energy_accum += delta_wh;
-            board.pulse.update_energy(hal::PulseType::Active, state.active_energy_accum / 1000);
-            if state.active_energy_accum >= 1000 {
-                state.active_energy_accum -= 1000;
-            }
-
-            let reactive_power_var = state.metering_data.reactive_power_total.abs() as u32;
-            let delta_varh = reactive_power_var / 3600;
-            state.reactive_energy_accum += delta_varh;
-            board.pulse.update_energy(hal::PulseType::Reactive, state.reactive_energy_accum / 1000);
-            if state.reactive_energy_accum >= 1000 {
-                state.reactive_energy_accum -= 1000;
+        // 执行就绪任务
+        for i in 0..n_ready {
+            let task_id = ready_buf[i];
+            match task_id {
+                task::METERING => task_metering(&mut state),
+                task::ENERGY => task_energy(&mut state),
+                task::DISPLAY => task_display(&mut state),
+                task::RS485 => task_rs485(&mut state),
+                task::KEY => task_key(&mut state),
+                task::PULSE => task_pulse(&mut state),
+                task::TAMPER => task_tamper(&mut state),
+                task::WATCHDOG => task_watchdog(&mut state),
+                _ => {}
             }
         }
 
-        // ── 通信处理 (每 100ms) ──
-        if state.uptime_ms % 100 == 0 {
-            // RS485 DLMS 数据处理
-            comm_process(&mut board, &state);
-
-            // 红外数据处理
-            // TODO: IEC 62056-21 处理
+        // 低功耗延时 (等待下一个任务)
+        let sleep_ms = sched.time_until_next(uptime_ms);
+        if sleep_ms > 5 {
+            delay_ms(sleep_ms.min(10)); // 最多睡 10ms, 避免错过中断
+        } else {
+            cortex_m::asm::nop();
         }
-
-        // ── 按键处理 ──
-        // TODO: 按键扫描和事件分发
-
-        // ── 防窃电检测 (每 5 秒) ──
-        if state.uptime_ms % 5000 == 0 {
-            if let Some(event) = board.tamper.check_events() {
-                warn!("Tamper detected: {:?}", event);
-                board.indicator.buzzer_alarm(200);
-                board.indicator.set_led(hal::Led::Alarm, true);
-            }
-        }
-
-        // ── 电网质量事件 (RN8615V2) ──
-        #[cfg(feature = "pq-analysis")]
-        {
-            use hal::PowerQuality;
-            if let Some(pq_event) = board.metering.check_pq_event() {
-                warn!("Power quality event: {:?}", pq_event);
-            }
-        }
-
-        // ── 简单延时 ──
-        delay_ms(10);
     }
 }
 
 /* ================================================================== */
-/*  LCD 内容更新                                                       */
+/*  任务实现                                                           */
 /* ================================================================== */
 
-fn update_lcd_content(state: &mut AppState) {
-    let d = &state.metering_data;
-    let e = &state.energy_data;
-
-    // 自动轮显: 每 5 秒切换一页
-    state.display_page = ((state.uptime_ms / 5000) % 8) as u8;
-
-    match state.display_page {
-        0 => {
-            // 第 1 页: A 相电压 + A 相电流
-            state.lcd_content.voltage = d.voltage_a;
-            state.lcd_content.current = d.current_a;
-        }
-        1 => {
-            // 第 2 页: B 相电压 + B 相电流
-            state.lcd_content.voltage = d.voltage_b;
-            state.lcd_content.current = d.current_b;
-        }
-        2 => {
-            // 第 3 页: C 相电压 + C 相电流
-            state.lcd_content.voltage = d.voltage_c;
-            state.lcd_content.current = d.current_c;
-        }
-        3 => {
-            // 第 4 页: 总有功功率
-            state.lcd_content.active_power = d.active_power_total;
-        }
-        4 => {
-            // 第 5 页: 总无功功率
-            state.lcd_content.reactive_power = d.reactive_power_total;
-        }
-        5 => {
-            // 第 6 页: 总功率因数 + 频率
-            state.lcd_content.power_factor = d.power_factor_total;
-            state.lcd_content.frequency = d.frequency;
-        }
-        6 => {
-            // 第 7 页: 正向有功总电能
-            state.lcd_content.active_import_energy = e.active_import;
-        }
-        7 => {
-            // 第 8 页: 费率 + 通信状态
-            state.lcd_content.tariff = 0;
-            state.lcd_content.comm_status = 0;
-        }
-        _ => {}
-    }
+/// Task 0: 读取计量芯片实时数据 (200ms)
+fn task_metering<M: hal::MeteringChip>(state: &mut AppState<M>) {
+    let data = state.metering_mgr.poll_instant();
+    // 更新 LCD 内容 (由 task_display 决定显示哪页)
+    state.lcd_content.voltage = data.voltage_a; // 默认显示 A 相
+    state.lcd_content.current = data.current_a;
+    state.lcd_content.active_power = data.active_power_total;
+    state.lcd_content.reactive_power = data.reactive_power_total;
+    state.lcd_content.power_factor = data.power_factor_total;
+    state.lcd_content.frequency = data.frequency;
 }
 
-/* ================================================================== */
-/*  通信处理                                                           */
-/* ================================================================== */
+/// Task 1: 电能累计 (1000ms)
+fn task_energy<M: hal::MeteringChip>(state: &mut AppState<M>) {
+    let energy = state.metering_mgr.poll_energy();
+    state.lcd_content.active_import_energy = energy.active_import;
+}
 
-fn comm_process(board: &mut board::Board<Metering>, state: &AppState) {
-    // RS485 DLMS 接收缓冲区
+/// Task 2: LCD 刷新 (500ms)
+fn task_display<M: hal::MeteringChip>(state: &mut AppState<M>) {
+    state.lcd.update(&state.lcd_content);
+}
+
+/// Task 3: RS485 通信处理 (10ms)
+fn task_rs485<M: hal::MeteringChip>(state: &mut AppState<M>) {
     let mut rx_buf = [0u8; 256];
-
-    match board.rs485.read(&mut rx_buf, 10) {
+    match state.rs485.read(&mut rx_buf, 5) {
         Ok(n) if n > 0 => {
-            debug!("RS485 received {} bytes", n);
-            // TODO: DLMS HDLC 帧解析
-            // TODO: COSEM 对象处理
-            // TODO: 构造响应帧
+            state.rs485_rx_len = n;
+            debug!("RS485 rx {} bytes", n);
+            // TODO: DLMS HDLC 帧解析 + COSEM 响应
         }
         _ => {}
     }
 }
 
+/// Task 5: 按键扫描 (50ms)
+fn task_key<M: hal::MeteringChip>(state: &mut AppState<M>) {
+    // TODO: 读取 GPIO 按键状态, 去抖, 生成事件
+    // 翻页键 → lcd.next_page()
+    // 编程键 → 进入/退出编程模式
+    let _ = state;
+}
+
+/// Task 6: 脉冲输出 (100ms)
+fn task_pulse<M: hal::MeteringChip>(state: &mut AppState<M>) {
+    let active_power = state.metering_mgr.poll_instant().active_power_total as u32;
+    let delta_wh = active_power / 36; // 100ms = 1/36 小时...简化计算
+    state.active_energy_accum += delta_wh;
+    if state.active_energy_accum >= 1000 {
+        state.active_energy_accum -= 1000;
+        // TODO: 脉冲输出 GPIO 翻转
+    }
+}
+
+/// Task 7: 防窃电检测 (5000ms)
+fn task_tamper<M: hal::MeteringChip>(state: &mut AppState<M>) {
+    // TODO: 读取上盖/端子盖/磁场传感器
+    // 检测到异常 → 告警 LED + 蜂鸣器 + 事件记录
+    let _ = state;
+}
+
+/// Task 9: 看门狗喂狗 (1000ms)
+fn task_watchdog<M: hal::MeteringChip>(_state: &mut AppState<M>) {
+    // TODO: IWDT 喂狗 (写 0x12345678 到 IWDT_SERV)
+    // 目前无看门狗, 仅心跳 LED
+}
+
 /* ================================================================== */
-/*  简单延时                                                           */
+/*  延时函数                                                           */
 /* ================================================================== */
 
 fn delay_ms(ms: u32) {
