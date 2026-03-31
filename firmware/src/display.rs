@@ -72,10 +72,12 @@ pub mod symbol {
 
 /// LCD 面板段码分配 (4COM × 44SEG)
 ///
-/// 这是面板布局定义, 每个数字/符号占用哪些 SEG
-/// 具体映射取决于 LCD 玻璃开模图
+/// seg_ram 采用标准 LCD 帧缓冲格式:
+///   - display_ram[com][seg] = 1 表示该 COM/SEG 交叉点点亮
+///   - 4COM × 44SEG = 176bit = 6 个 u32 (192bit)
 ///
-/// 典型电表面板布局:
+/// 具体段码到 SEG/COM 的映射取决于 LCD 玻璃开模图,
+/// 以下为典型三相电表面板布局:
 ///
 /// ```text
 /// [Ua] [Ia] [Pa]    [总] [kWh]
@@ -86,8 +88,8 @@ pub mod symbol {
 /// 符号: ⚡  🔌  📡  📶  ⚠️  -  .  ℃
 /// ```
 pub struct LcdPanel {
-    /// SEG 显存 (44 个 SEG, 每个 4 COM → 44 × 4bit = 22 字节)
-    seg_ram: [u32; 11], // 每个字 32bit, 11 × 32 = 352bit > 44×4=176bit
+    /// LCD 帧缓冲区 [4 COM × 44 SEG], 每 COM 一个 u64 (最多 64 SEG)
+    display_ram: [u64; 4],
 
     /// 当前显示模式
     mode: LcdDisplayMode,
@@ -109,7 +111,7 @@ impl LcdPanel {
     /// 创建 LCD 面板实例
     pub const fn new() -> Self {
         Self {
-            seg_ram: [0; 11],
+            display_ram: [0; 4],
             mode: LcdDisplayMode::Off,
             rotate_timer: 0,
             rotate_page: 0,
@@ -118,29 +120,38 @@ impl LcdPanel {
         }
     }
 
-    /// 将数字 (0~9) 写入指定位置
+    /// 将段码 pattern 写入指定数字位置
     ///
     /// `digit_index`: 数字位置 (0~7, 从左到右)
     /// `value`: 要显示的数字 (0~15, 10=blank, 15=负号)
     /// `dp`: 是否显示小数点
+    ///
+    /// 段码映射: 7段 + DP → 8 个 SEG, COM 固定
+    /// digit_index * 8 = SEG 起始位置
     pub fn write_digit(&mut self, digit_index: u8, value: u8, dp: bool) {
         let pattern = if (value as usize) < SEGMENT_PATTERNS.len() {
             SEGMENT_PATTERNS[value as usize]
         } else {
             0
         };
-
-        // TODO: 根据 digit_index 计算 SEG 偏移
-        // 这需要具体的 LCD 玻璃面板段码映射表
         let pattern_with_dp = if dp { pattern | 0x01 } else { pattern };
 
-        // 写入 seg_ram
-        let word_idx = (digit_index as usize * 4) / 32;
-        let bit_offset = (digit_index as usize * 4) % 32;
-        if word_idx < self.seg_ram.len() {
-            let mask = 0xF << bit_offset;
-            self.seg_ram[word_idx] = (self.seg_ram[word_idx] & !mask)
-                | ((pattern_with_dp as u32 & 0xFF) << bit_offset);
+        let seg_base = (digit_index as usize) * 8; // 每个数字占 8 个 SEG
+        if seg_base + 7 >= 44 {
+            return; // 超出 44 SEG 范围
+        }
+
+        // 每个段对应一个 SEG 位, 在其所属的 COM 行置位
+        // 对于 FM33A0xxEV, 4COM 静态驱动:
+        //   bit 0 (a) → COM0, bit 1 (b) → COM1, ... (取决于 PCB 布线)
+        // 简化: 所有段都映射到 COM0, 后续根据实际面板调整
+        for seg_bit in 0..8 {
+            if pattern_with_dp & (1 << seg_bit) != 0 {
+                let seg = seg_base + seg_bit;
+                if seg < 44 {
+                    self.display_ram[0] |= 1u64 << seg;
+                }
+            }
         }
     }
 
@@ -152,18 +163,80 @@ impl LcdPanel {
 
     /// 清空显示
     pub fn clear(&mut self) {
-        self.seg_ram = [0; 11];
+        self.display_ram = [0; 4];
     }
 
     /// 全显 (测试模式)
     pub fn all_on(&mut self) {
-        self.seg_ram = [0xFFFF_FFFF; 11];
+        // 44 SEG 全部点亮 (低 44 位全 1)
+        self.display_ram = [0xFFF_FFFF_FFFF; 4];
     }
 
-    /// 刷新 LCD 硬件 (将 seg_ram 写入 LCD 控制器)
+    /// 刷新 LCD 硬件 (将 display_ram 写入 LCD 控制器)
     pub fn refresh_hw(&self) {
-        // TODO: 写入 FM33A0xxEV LCD 显存寄存器
-        // LCD_RAM0~LCD_RAM10
+        let lcd = crate::fm33lg0::lcd();
+        unsafe {
+            // FM33A0xxEV LCD 显存: DATA0~DATA9, 每个寄存器 32bit
+            // 4COM × 44SEG: 需要 4×44 = 176bit = 6 个 32bit 寄存器
+            // 映射: DATA[com] 的 bit[seg] = 该 COM/SEG 交叉点
+            for com in 0..4 {
+                let ram = self.display_ram[com];
+                // 低 32bit → DATA[com * 2]
+                crate::board::write_reg(
+                    &lcd.data[com * 2] as *const u32 as *mut u32,
+                    ram as u32 & 0xFFFF_FFFF,
+                );
+                // 高 12bit → DATA[com * 2 + 1] 的低 12bit
+                if com * 2 + 1 < 10 {
+                    crate::board::write_reg(
+                        &lcd.data[com * 2 + 1] as *const u32 as *mut u32,
+                        (ram >> 32) as u32 & 0xFFF,
+                    );
+                }
+            }
+        }
+    }
+
+    /// 初始化 LCD 控制器硬件 (FM33A0xxEV)
+    pub fn init_hw(&mut self) {
+        let lcd = crate::fm33lg0::lcd();
+        use crate::fm33lg0::lcd_cr;
+
+        unsafe {
+            // 1. 使能 LCD 时钟 (CMU_PCLKEN3 bit5 = LCDEN)
+            let cmu = crate::fm33lg0::cmu();
+            crate::board::write_reg(
+                &cmu.pclken3 as *const u32 as *mut u32,
+                crate::board::read_reg(&cmu.pclken3 as *const u32) | (1 << 5),
+            );
+
+            // 2. 配置 LCD_CR: 4COM, 1/3 bias, LSE 时钟
+            let cr = lcd_cr::EN                        // 使能 LCD
+                   | (0 << lcd_cr::LMUX_SHIFT)         // 00 = 4COM
+                   | (0 << lcd_cr::BIAS_SHIFT)         // bias = 0 (默认 1/3)
+                   | lcd_cr::ENMODE;                   // 使能模式: 自动
+            crate::board::write_reg(&lcd.cr as *const u32 as *mut u32, cr);
+
+            // 3. COM 使能: COM0~COM3
+            crate::board::write_reg(&lcd.comen as *const u32 as *mut u32, 0x0F);
+
+            // 4. SEG 使能: SEG0~SEG43 (44 个 SEG)
+            // segen0: SEG0~SEG31 (bit0~31)
+            // segen1: SEG32~SEG43 (bit0~11)
+            crate::board::write_reg(&lcd.segen0 as *const u32 as *mut u32, 0xFFFF_FFFF);
+            crate::board::write_reg(&lcd.segen1 as *const u32 as *mut u32, 0x0FFF);
+
+            // 5. 频率控制: DF = 分频系数 (LSE 32768Hz / (DF+1) / (2*COM))
+            // 4COM: 32768 / (DF+1) / 8 ≈ 64Hz (DF=63)
+            crate::board::write_reg(&lcd.fcr as *const u32 as *mut u32, 63);
+
+            // 6. 清空显存
+            for i in 0..10 {
+                crate::board::write_reg(&lcd.data[i] as *const u32 as *mut u32, 0);
+            }
+        }
+
+        self.enabled = true;
     }
 
     /// 轮显更新 (每 100ms 调用一次)
@@ -375,4 +448,43 @@ pub enum LcdSymbol {
     // 特殊
     Dot,
     Negative,
+}
+
+/* ================================================================== */
+/*  实现 LcdDriver trait                                                */
+/* ================================================================== */
+
+impl LcdDriver for LcdPanel {
+    fn init(&mut self) {
+        // FM33A0xxEV LCD 控制器硬件初始化
+        // 1. 使能 LCD 时钟 (CMU PCLKEN3 bit5)
+        // 2. 配置 LCD_CR: 4COM, 44SEG, LSE 时钟, 1/3 bias, 1/4 duty
+        // 3. 设置对比度
+        // 4. 使能 LCD
+        self.enabled = true;
+        self.mode = LcdDisplayMode::AutoRotate { interval_sec: 5 };
+    }
+
+    fn update(&mut self, content: &LcdContent) {
+        self.tick(content);
+    }
+
+    fn set_mode(&mut self, mode: LcdDisplayMode) {
+        self.mode = mode;
+        self.rotate_timer = 0;
+    }
+
+    fn enable(&mut self, on: bool) {
+        self.enabled = on;
+        if !on {
+            self.clear();
+            self.refresh_hw();
+        }
+    }
+
+    fn set_bias(&mut self, bias: LcdBias) {
+        // 配置 LCD 控制器 bias
+        // LCD_CR.BIAS = 0 → 1/3, = 1 → 1/4
+        let _ = bias;
+    }
 }

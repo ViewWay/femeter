@@ -155,13 +155,13 @@ fn gpio_read_pin(pin: GpioPin) -> bool {
 
 /// 写 volatile helper
 #[inline(always)]
-unsafe fn write_reg(addr: *mut u32, val: u32) {
+pub unsafe fn write_reg(addr: *mut u32, val: u32) {
     core::ptr::write_volatile(addr, val);
 }
 
 /// 读 volatile helper
 #[inline(always)]
-unsafe fn read_reg(addr: *const u32) -> u32 {
+pub unsafe fn read_reg(addr: *const u32) -> u32 {
     core::ptr::read_volatile(addr)
 }
 
