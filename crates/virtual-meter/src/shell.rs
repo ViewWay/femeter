@@ -69,8 +69,8 @@ impl Shell {
 
     /// 简单欢迎信息
     fn print_welcome_simple(&self, stdout: &mut impl Write) -> Result<()> {
-        write!(stdout, "FeMeter Virtual Meter v0.1 (line mode)\n")?;
-        write!(stdout, "输入 'help' 查看可用命令\n")?;
+        writeln!(stdout, "FeMeter Virtual Meter v0.1 (line mode)")?;
+        writeln!(stdout, "输入 'help' 查看可用命令")?;
         stdout.flush()?;
         Ok(())
     }
@@ -111,8 +111,8 @@ impl Shell {
                             queue!(stdout, style::Print(c))?;
                             stdout.flush()?;
                         }
-                        KeyCode::Backspace => {
-                            if !input.is_empty() {
+                        KeyCode::Backspace
+                            if !input.is_empty() => {
                                 input.pop();
                                 queue!(
                                     stdout,
@@ -121,24 +121,21 @@ impl Shell {
                                 )?;
                                 stdout.flush()?;
                             }
-                        }
                         KeyCode::Enter => {
                             break;
                         }
-                        KeyCode::Up => {
-                            if !history.is_empty() && history_index > 0 {
+                        KeyCode::Up
+                            if !history.is_empty() && history_index > 0 => {
                                 history_index -= 1;
                                 self.replace_input(&mut stdout, &input, &history[history_index])?;
                                 input = history[history_index].clone();
                             }
-                        }
-                        KeyCode::Down => {
-                            if !history.is_empty() && history_index < history.len() - 1 {
+                        KeyCode::Down
+                            if !history.is_empty() && history_index < history.len() - 1 => {
                                 history_index += 1;
                                 self.replace_input(&mut stdout, &input, &history[history_index])?;
                                 input = history[history_index].clone();
                             }
-                        }
                         _ => {}
                     }
                 }

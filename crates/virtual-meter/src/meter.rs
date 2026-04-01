@@ -15,18 +15,15 @@ use std::sync::{Arc, Mutex};
 
 /// 计量芯片类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum ChipType {
     /// ATT7022E: 19-bit, 精度 ±0.1%
+    #[default]
     ATT7022E,
     /// RN8302B: 24-bit, 精度 ±0.01%
     RN8302B,
 }
 
-impl Default for ChipType {
-    fn default() -> Self {
-        ChipType::ATT7022E
-    }
-}
 
 impl ChipType {
     /// 获取寄存器数据位宽

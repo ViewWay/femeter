@@ -148,10 +148,10 @@ impl SerialService {
                     // 检测行结束 (\n 或 \r\n)
                     if byte[0] == b'\n' {
                         // 移除 \r\n 或 \n
-                        if line_buf.ends_with(&[b'\r', b'\n']) {
+                        if line_buf.ends_with(b"\r\n") {
                             line_buf.pop();
                             line_buf.pop();
-                        } else if line_buf.ends_with(&[b'\n']) {
+                        } else if line_buf.ends_with(b"\n") {
                             line_buf.pop();
                         }
 
