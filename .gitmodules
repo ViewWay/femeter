@@ -1,0 +1,4 @@
+[submodule "firmware/third_party/freertos"]
+	path = firmware/third_party/freertos
+	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
+	branch = main
