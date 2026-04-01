@@ -15,6 +15,8 @@ bench = false
 [[bin]]
 name = "femeter-boot"
 path = "src/boot.rs"
+required-features = []
+default-features = false
 test = false
 bench = false
 
@@ -41,7 +43,7 @@ heapless = "0.8"
 #
 # 计量芯片 (三选一, 默认 ATT7022E)
 [features]
-default = ["att7022e", "defmt-rtt"]
+default = ["att7022e", "defmt-rtt", "freertos"]
 
 # ── 计量芯片 (互斥) ──
 att7022e = []
@@ -84,6 +86,10 @@ pq-analysis = ["rn8615v2"]
 # ── DLMS 协议栈 ──
 dlms = ["dlms-core", "dlms-hdlc", "dlms-axdr", "dlms-apdu", "dlms-security", "dlms-cosem", "dlms-obis"]
 
+# ── RTOS ──
+freertos = []
+bare = []
+
 # ── 预设组合 ──
 # 高端型: RN8615V2 + 双模蜂窝 + 全功能
 preset-highend = [
@@ -107,6 +113,9 @@ preset-economy = [
     "bat-er17335",
     "dlms",
 ]
+
+[build-dependencies]
+cc = "1.0"
 
 [profile.dev]
 panic = "abort"
