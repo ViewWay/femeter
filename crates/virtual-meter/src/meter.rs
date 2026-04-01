@@ -22,6 +22,11 @@ use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+// New v1.0 modules
+use crate::tariff::TouManager;
+use crate::demand::DemandMeter;
+use crate::statistics::Statistics;
+
 /// 全局日志开关
 static LOG_ENABLED: AtomicBool = AtomicBool::new(true);
 
@@ -225,6 +230,12 @@ pub struct VirtualMeter {
     pulse_constant: u32,
     /// 累计脉冲数
     pulse_count: u64,
+    /// 分时费率管理器
+    tou: TouManager,
+    /// 需量测量
+    demand: DemandMeter,
+    /// 统计记录
+    statistics: Statistics,
 }
 
 impl Default for VirtualMeter {
@@ -247,6 +258,9 @@ impl VirtualMeter {
             thresholds: EventThresholds::default(),
             pulse_constant: 6400,
             pulse_count: 0,
+            tou: TouManager::default(),
+            demand: DemandMeter::default(),
+            statistics: Statistics::default(),
         }
     }
 
@@ -288,6 +302,14 @@ impl VirtualMeter {
     pub fn events(&self) -> &[EventRecord] { &self.events }
     pub fn active_events(&self) -> &[MeterEvent] { &self.active_events }
     pub fn pulse_count(&self) -> u64 { self.pulse_count }
+
+    // v1.0 new getters
+    pub fn tou(&self) -> &TouManager { &self.tou }
+    pub fn tou_mut(&mut self) -> &mut TouManager { &mut self.tou }
+    pub fn demand(&self) -> &DemandMeter { &self.demand }
+    pub fn demand_mut(&mut self) -> &mut DemandMeter { &mut self.demand }
+    pub fn statistics(&self) -> &Statistics { &self.statistics }
+    pub fn statistics_mut(&mut self) -> &mut Statistics { &mut self.statistics }
 
     pub fn reset_energy(&mut self) {
         self.energy = EnergyData::default();
@@ -468,8 +490,29 @@ impl VirtualMeter {
 
     /* ── 快照 (主接口) ── */
 
+    /// Update TOU and demand before snapshot
+    fn update_modules(&mut self) {
+        self.tou.update();
+        let p_a = self.phase_a.active_power();
+        let p_b = self.phase_b.active_power();
+        let p_c = self.phase_c.active_power();
+        let q_a = self.phase_a.reactive_power();
+        let q_b = self.phase_b.reactive_power();
+        let q_c = self.phase_c.reactive_power();
+        self.demand.sample(p_a, p_b, p_c, q_a, q_b, q_c);
+        let s_total = self.phase_a.apparent_power() + self.phase_b.apparent_power() + self.phase_c.apparent_power();
+        let p_total = p_a + p_b + p_c;
+        let pf = if s_total > 0.0 { p_total / s_total } else { 0.0 };
+        self.statistics.sample(
+            self.phase_a.voltage, self.phase_b.voltage, self.phase_c.voltage,
+            self.phase_a.current, self.phase_b.current, self.phase_c.current,
+            self.config.freq, pf,
+        );
+    }
+
     pub fn snapshot(&mut self) -> MeterSnapshot {
         self.update_energy();
+        self.update_modules();
         self.detect_events();
 
         let p_a = self.apply_noise(self.phase_a.active_power());

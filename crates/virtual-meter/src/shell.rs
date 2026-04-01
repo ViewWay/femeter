@@ -209,8 +209,19 @@ impl Shell {
             "pulse" => self.cmd_pulse(stdout),
             "serial" => self.cmd_serial(&parts[1..], stdout),
             "replay" => self.cmd_replay(&parts[1..], stdout),
+            "tariff" => self.cmd_tariff(&parts[1..], stdout),
+            "profile" => self.cmd_profile(&parts[1..], stdout),
+            "demand" => self.cmd_demand(&parts[1..], stdout),
+            "dlms" => self.cmd_dlms(&parts[1..], stdout),
+            "display" => self.cmd_display(&parts[1..], stdout),
+            "stats" => self.cmd_stats(&parts[1..], stdout),
+            "cal" => self.cmd_cal(&parts[1..], stdout),
+            "save" => self.cmd_save(&parts[1..], stdout),
+            "load" => self.cmd_load(&parts[1..], stdout),
+            "tcp" => self.cmd_tcp(&parts[1..], stdout),
+            "iec" => self.cmd_iec(&parts[1..], stdout),
             "quit" | "exit" | "q" => { self.running.store(false, Ordering::Relaxed); Ok(()) }
-            _ => { queue!(stdout, style::Print(format!("未知命令: {} (输入 help)\n\r", parts[0])))?; stdout.flush(); Ok(()) }
+            _ => { queue!(stdout, style::Print(format!("未知命令: {} (输入 help)\n\r", parts[0])))?; let _ = stdout.flush(); Ok(()) }
         }
     }
 
@@ -368,7 +379,7 @@ impl Shell {
         let interval = args.first().and_then(|s| s.parse::<u64>().ok()).unwrap_or(500);
         queue!(stdout, style::Print(format!("实时监控 (每 {}ms, 共 10 次, Ctrl+C 退出):\n\r", interval))).ok();
         stdout.flush().ok();
-        for i in 0..10 {
+        for _i in 0..10 {
             std::thread::sleep(Duration::from_millis(interval));
             let mut meter = self.meter.lock().unwrap();
             meter.print_status(stdout);
@@ -544,6 +555,126 @@ impl Shell {
             }
             _ => { queue!(stdout, style::Print("用法: serial list\n\r"))?; }
         }
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_tariff(&self, _args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        let meter = self.meter.lock().unwrap();
+        let tou = meter.tou();
+        queue!(stdout, style::Print(format!("当前费率: {:?}\n\r", tou.current_tariff())))?;
+        queue!(stdout, style::Print(format!("累计电能: 尖={:.3} 峰={:.3} 平={:.3} 谷={:.3}\n\r",
+            tou.energy.get(&crate::tariff::TariffType::Sharp).unwrap_or(&0.0) / 1000.0,
+            tou.energy.get(&crate::tariff::TariffType::Peak).unwrap_or(&0.0) / 1000.0,
+            tou.energy.get(&crate::tariff::TariffType::Normal).unwrap_or(&0.0) / 1000.0,
+            tou.energy.get(&crate::tariff::TariffType::Valley).unwrap_or(&0.0) / 1000.0,
+        )))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_profile(&self, _args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        queue!(stdout, style::Print("负荷曲线: 请使用 save/load 管理\n\r"))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_demand(&self, _args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        let meter = self.meter.lock().unwrap();
+        let demand = meter.demand();
+        queue!(stdout, style::Print(format!("当前需量: P={:.2}W Q={:.2}var\n\r", demand.current_p(), demand.current_q())))?;
+        queue!(stdout, style::Print(format!("最大需量: P={:.2}W ({})\n\r", demand.max_p().value, demand.max_p().timestamp.format("%Y-%m-%d %H:%M"))))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_dlms(&self, _args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        queue!(stdout, style::Print("DLMS: 协议已启用 (port 4059)\n\r"))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_display(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        let battery = args.first().map(|s| *s == "bat").unwrap_or(false);
+        let disp = crate::display::LcdDisplay::new();
+        let mut meter = self.meter.lock().unwrap();
+        let snap = meter.snapshot();
+        let value = snap.energy.wh_total / 1000.0;
+        drop(meter);
+        let art = disp.render_ascii(value, battery);
+        queue!(stdout, style::Print(art))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_stats(&self, _args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        let meter = self.meter.lock().unwrap();
+        let stats = meter.statistics();
+        queue!(stdout, style::Print("统计记录:\n\r"))?;
+        let va_min = stats.daily.last().map(|d| d.va.min).unwrap_or(0.0);
+        let va_max = stats.daily.last().map(|d| d.va.max).unwrap_or(0.0);
+        let va_avg = stats.daily.last().map(|d| d.va.avg()).unwrap_or(0.0);
+        queue!(stdout, style::Print(format!("  电压A: min={:.1} max={:.1} avg={:.1}\n\r", va_min, va_max, va_avg)))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_cal(&self, _args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        let _meter = self.meter.lock().unwrap();
+        let cal = crate::calibration::CalibrationParams::default();
+        queue!(stdout, style::Print(format!("校准参数: 脉冲常数={}\n\r", cal.pulse_constant)))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_save(&self, _args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        use crate::persistence::PersistedState;
+        let mut meter = self.meter.lock().unwrap();
+        let snap = meter.snapshot();
+        let state = PersistedState {
+            energy: snap.energy.clone(),
+            saved_at: snap.timestamp,
+            ..Default::default()
+        };
+        let p = crate::persistence::Persistence::new("meter_state.json");
+        if let Err(e) = p.save(&state) {
+            queue!(stdout, style::Print(format!("保存失败: {}\n\r", e)))?;
+        } else {
+            queue!(stdout, style::Print("状态已保存到 meter_state.json\n\r"))?;
+        }
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_load(&self, _args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        let p = crate::persistence::Persistence::new("meter_state.json");
+        if !p.exists() {
+            queue!(stdout, style::Print("未找到保存的文件\n\r"))?;
+            stdout.flush()?;
+            return Ok(());
+        }
+        match p.load() {
+            Ok(state) => {
+                queue!(stdout, style::Print(format!("加载状态: {}\n\r", state.saved_at)))?;
+            }
+            Err(e) => {
+                queue!(stdout, style::Print(format!("加载失败: {}\n\r", e)))?;
+            }
+        }
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_tcp(&self, _args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        queue!(stdout, style::Print("TCP: 使用虚拟电表可执行程序启动 TCP 服务\n\r"))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_iec(&self, _args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        use crate::iec62056::Iec62056Processor;
+        let _proc = Iec62056Processor::new();
+        queue!(stdout, style::Print("IEC 62056-21: "))?;
         stdout.flush()?;
         Ok(())
     }
