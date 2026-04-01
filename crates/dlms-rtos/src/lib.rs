@@ -28,7 +28,7 @@
 //! - `defmt-log` - Enable defmt formatting for all traits
 
 #![no_std]
-#![allow(dead_code)]
+#![allow(dead_code, unused_imports)]
 
 extern crate alloc;
 
