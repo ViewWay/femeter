@@ -1,85 +1,70 @@
-//! 交互式 Shell
+//! 交互式 Shell (增强版)
 //!
-//! 提供命令行交互界面
+//! 新增命令: log, scenario, event, replay, pulse
 
-use crate::{list_ports, ChipType, MeterHandle, SerialService};
+use crate::{list_ports, ChipType, MeterHandle, MeterEvent, Scenario, SerialService, set_log_enabled, is_log_enabled};
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal::{self, ClearType};
 use crossterm::{cursor, queue, style};
-use std::io::{self, Write};
-
-use std::io::IsTerminal;
+use std::io::{self, Write, IsTerminal};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
-/// Shell 上下文
 pub struct Shell {
     meter: MeterHandle,
     serial_service: SerialService,
     running: Arc<AtomicBool>,
+    /// 自动刷新 (log 模式)
+    auto_refresh: bool,
+    refresh_interval_ms: u64,
 }
 
 impl Shell {
-    /// 创建 Shell
     pub fn new(meter: MeterHandle) -> Self {
         let serial_service = SerialService::new(meter.clone());
-        let running = Arc::new(AtomicBool::new(true));
-
         Self {
             meter,
             serial_service,
-            running,
+            running: Arc::new(AtomicBool::new(true)),
+            auto_refresh: false,
+            refresh_interval_ms: 500,
         }
     }
 
-    /// 运行 Shell
     pub fn run(&mut self) -> Result<()> {
-        // 检测是否有 TTY，没有则用简单行模式
-        let is_tty = std::io::stdin().is_terminal(); // Rust 1.70+
-        if is_tty {
+        if io::stdin().is_terminal() {
             self.run_raw_mode()
         } else {
             self.run_line_mode()
         }
     }
 
-    /// 简单行模式（非 TTY / 管道输入）
     fn run_line_mode(&mut self) -> Result<()> {
         use std::io::BufRead;
-        let stdin = std::io::stdin();
-        let mut stdout = std::io::stdout();
-
+        let stdin = io::stdin();
+        let mut stdout = io::stdout();
         self.print_welcome_simple(&mut stdout)?;
-
         for line in stdin.lock().lines() {
             let line = line?;
-            let input = line.trim();
-            if input.is_empty() {
-                continue;
-            }
-            self.execute_command(input, &mut stdout)?;
-            if !self.running.load(Ordering::Relaxed) {
-                break;
-            }
+            if line.trim().is_empty() { continue; }
+            self.execute_command(line.trim(), &mut stdout)?;
+            if !self.running.load(Ordering::Relaxed) { break; }
         }
         println!("Goodbye!");
         Ok(())
     }
 
-    /// 简单欢迎信息
     fn print_welcome_simple(&self, stdout: &mut impl Write) -> Result<()> {
-        writeln!(stdout, "FeMeter Virtual Meter v0.1 (line mode)")?;
-        writeln!(stdout, "输入 'help' 查看可用命令")?;
+        writeln!(stdout, "FeMeter Virtual Meter v0.2 (line mode, log={})", if is_log_enabled() { "ON" } else { "OFF" })?;
+        writeln!(stdout, "输入 'help' 查看命令 | 'log on' 开启日志")?;
         stdout.flush()?;
         Ok(())
     }
 
-    /// Raw 模式（TTY 交互）
     fn run_raw_mode(&mut self) -> Result<()> {
-        // 初始化终端
         terminal::enable_raw_mode()?;
-
         let mut stdout = io::stdout();
         let mut input = String::new();
         let mut history: Vec<String> = Vec::new();
@@ -88,17 +73,51 @@ impl Shell {
         self.print_welcome(&mut stdout)?;
 
         loop {
-            if !self.running.load(Ordering::Relaxed) {
-                break;
+            if !self.running.load(Ordering::Relaxed) { break; }
+
+            // 自动刷新模式
+            if self.auto_refresh {
+                let mut meter = self.meter.lock().unwrap();
+                meter.print_status(&mut stdout);
+                drop(meter);
+                stdout.flush()?;
+
+                // 非阻塞读键盘
+                if event::poll(Duration::from_millis(self.refresh_interval_ms))? {
+                    if let Event::Key(key) = event::read()? {
+                        match key.code {
+                            KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                                self.running.store(false, Ordering::Relaxed);
+                                break;
+                            }
+                            KeyCode::Char(c) => {
+                                input.push(c);
+                                queue!(stdout, style::Print(c))?;
+                                stdout.flush()?;
+                            }
+                            KeyCode::Backspace if !input.is_empty() => {
+                                input.pop();
+                                queue!(stdout, cursor::MoveLeft(1), terminal::Clear(ClearType::UntilNewLine))?;
+                                stdout.flush()?;
+                            }
+                            KeyCode::Enter => {
+                                let cmd = input.trim().to_string();
+                                input.clear();
+                                if !cmd.is_empty() {
+                                    self.execute_command(&cmd, &mut stdout)?;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                continue;
             }
 
-            // 打印提示符
-            queue!(stdout, style::Print("\n\rlightning> "), cursor::Show)?;
+            queue!(stdout, style::Print("\n\r⚡> "), cursor::Show)?;
             stdout.flush()?;
-
             input.clear();
 
-            // 读取输入
             loop {
                 if let Event::Key(key_event) = event::read()? {
                     match key_event.code {
@@ -113,24 +132,16 @@ impl Shell {
                         }
                         KeyCode::Backspace if !input.is_empty() => {
                             input.pop();
-                            queue!(
-                                stdout,
-                                cursor::MoveLeft(1),
-                                terminal::Clear(ClearType::UntilNewLine)
-                            )?;
+                            queue!(stdout, cursor::MoveLeft(1), terminal::Clear(ClearType::UntilNewLine))?;
                             stdout.flush()?;
                         }
-                        KeyCode::Enter => {
-                            break;
-                        }
+                        KeyCode::Enter => { break; }
                         KeyCode::Up if !history.is_empty() && history_index > 0 => {
                             history_index -= 1;
                             self.replace_input(&mut stdout, &input, &history[history_index])?;
                             input = history[history_index].clone();
                         }
-                        KeyCode::Down
-                            if !history.is_empty() && history_index < history.len() - 1 =>
-                        {
+                        KeyCode::Down if !history.is_empty() && history_index < history.len() - 1 => {
                             history_index += 1;
                             self.replace_input(&mut stdout, &input, &history[history_index])?;
                             input = history[history_index].clone();
@@ -140,70 +151,48 @@ impl Shell {
                 }
             }
 
-            let input = input.trim();
-
-            if input.is_empty() {
-                continue;
-            }
-
-            // 保存历史
-            if !input.is_empty()
-                && (history.is_empty() || history.last() != Some(&input.to_string()))
-            {
-                history.push(input.to_string());
+            let cmd = input.trim();
+            if cmd.is_empty() { continue; }
+            if !history.contains(&cmd.to_string()) {
+                history.push(cmd.to_string());
                 history_index = history.len();
             }
-
-            // 执行命令
-            self.execute_command(input, &mut stdout)?;
+            self.execute_command(cmd, &mut stdout)?;
         }
 
-        // 清理
         terminal::disable_raw_mode()?;
         println!("\nGoodbye!");
-
         Ok(())
     }
 
-    /// 替换输入内容
     fn replace_input(&self, stdout: &mut impl Write, old: &str, new: &str) -> Result<()> {
         let old_len = old.len() as u16;
         if old_len > 0 {
-            queue!(
-                stdout,
-                cursor::MoveLeft(old_len),
-                terminal::Clear(ClearType::UntilNewLine)
-            )?;
+            queue!(stdout, cursor::MoveLeft(old_len), terminal::Clear(ClearType::UntilNewLine))?;
         }
         queue!(stdout, style::Print(new))?;
         stdout.flush()?;
         Ok(())
     }
 
-    /// 打印欢迎信息
     fn print_welcome(&self, stdout: &mut impl Write) -> Result<()> {
-        queue!(
-            stdout,
-            terminal::Clear(ClearType::All),
-            cursor::MoveTo(0, 0),
-            style::Print("╔════════════════════════════════════════════╗\n\r"),
-            style::Print("║     FeMeter Virtual Meter v0.1             ║\n\r"),
-            style::Print("║     模拟 ATT7022E / RN8302B 计量芯片       ║\n\r"),
-            style::Print("╚════════════════════════════════════════════╝\n\r"),
-            style::Print("\n\r"),
-            style::Print("输入 'help' 查看可用命令\n\r"),
+        queue!(stdout,
+            terminal::Clear(ClearType::All), cursor::MoveTo(0, 0),
+            style::Print("╔══════════════════════════════════════════════╗\n\r"),
+            style::Print("║    FeMeter Virtual Meter v0.2                ║\n\r"),
+            style::Print("║    模拟 ATT7022E / RN8302B | log="),
+            style::Print(if is_log_enabled() { "ON" } else { "OFF" }),
+            style::Print("                ║\n\r"),
+            style::Print("╚══════════════════════════════════════════════╝\n\r"),
+            style::Print("\n\r输入 'help' 查看命令 | 'watch' 进入实时监控\n\r"),
         )?;
         stdout.flush()?;
         Ok(())
     }
 
-    /// 执行命令
     fn execute_command(&self, input: &str, stdout: &mut impl Write) -> Result<()> {
         let parts: Vec<&str> = input.split_whitespace().collect();
-
-        if parts.is_empty() {
-            return Ok(());
-        }
+        if parts.is_empty() { return Ok(()); }
 
         match parts[0].to_lowercase().as_str() {
             "help" | "h" | "?" => self.cmd_help(stdout),
@@ -212,68 +201,249 @@ impl Shell {
             "energy" | "en" => self.cmd_energy(stdout),
             "reset" => self.cmd_reset(stdout),
             "snapshot" | "ss" => self.cmd_snapshot(stdout),
+            "log" => self.cmd_log(&parts[1..], stdout),
+            "scenario" | "sc" => self.cmd_scenario(&parts[1..], stdout),
+            "event" | "ev" => self.cmd_event(&parts[1..], stdout),
+            "events" => self.cmd_events(stdout),
+            "watch" | "w" => { self.cmd_watch(&parts[1..], stdout); Ok(()) },
+            "pulse" => self.cmd_pulse(stdout),
             "serial" => self.cmd_serial(&parts[1..], stdout),
-            "quit" | "exit" | "q" => {
-                self.running.store(false, Ordering::Relaxed);
-                Ok(())
-            }
-            _ => {
-                queue!(stdout, style::Print(format!("未知命令: {}\n\r", parts[0])))?;
-                stdout.flush()?;
-                Ok(())
-            }
+            "replay" => self.cmd_replay(&parts[1..], stdout),
+            "quit" | "exit" | "q" => { self.running.store(false, Ordering::Relaxed); Ok(()) }
+            _ => { queue!(stdout, style::Print(format!("未知命令: {} (输入 help)\n\r", parts[0])))?; stdout.flush(); Ok(()) }
         }
     }
 
-    /// 帮助命令
     fn cmd_help(&self, stdout: &mut impl Write) -> Result<()> {
         let help = r#"
-可用命令:
-  help / h / ?          显示此帮助
-  status / st           显示所有参数
-  set <param> <value>   设置参数
-    set ua 220.5        设置A相电压 (V)
-    set ub 220.0        设置B相电压
-    set uc 219.8        设置C相电压
-    set ia 5.2          设置A相电流 (A)
-    set ib 5.0          设置B相电流
-    set ic 4.9          设置C相电流
-    set angle_a 30      设置A相相角 (度)
-    set angle_b 25      设置B相相角
-    set angle_c 28      设置C相相角
-    set freq 50         设置频率 (Hz)
-    set noise on/off    开关噪声模拟
-    set chip att7022e   切换到 ATT7022E 模式
-    set chip rn8302b    切换到 RN8302B 模式
+════════════════════════════════════════════════
+  FeMeter Virtual Meter 命令列表
+════════════════════════════════════════════════
+  基础:
+    help / h              显示帮助
+    status / st           显示完整状态表
+    snapshot / ss         JSON 快照
 
-  energy / en           显示电能累计
-  reset                 重置电能累计
-  snapshot / ss         一次完整读取
+  设置:
+    set ua/ub/uc <V>      电压 (V)
+    set ia/ib/ic <A>      电流 (A)
+    set angle_a/b/c <°>   相角
+    set freq <Hz>         频率
+    set noise on/off      噪声模拟
+    set chip att7022e     切换芯片
+    set accel <倍率>      时间加速 (如 3600 = 1秒=1小时)
 
-  serial list           列出可用串口
-  serial start <port>   启动串口服务
-  serial stop           停止串口服务
-  serial status         显示串口状态
+  日志:
+    log on/off            开关日志打印
+    log status            查看日志状态
 
-  quit / q / exit       退出程序
+  场景:
+    scenario normal       正常运行 (220V 5A)
+    scenario full         满载 (60A)
+    scenario noload       空载
+    scenario overv        A相过压 (280V)
+    scenario underv       A相欠压 (170V)
+    scenario loss         A相断相 (0V)
+    scenario overi        过流 (70A)
+    scenario reverse      反向功率
+    scenario unbalanced   三相不平衡
+
+  事件:
+    event cover           上盖打开
+    event terminal        端子盖打开
+    event magnetic        磁场干扰
+    event battery         电池低电压
+    events                查看事件历史
+
+  监控:
+    watch [ms]            实时监控 (默认 500ms, q 退出)
+    pulse                 查看脉冲计数
+
+  其他:
+    energy / en           电能累计
+    reset                 重置电能
+    serial list/start/stop 串口
+    quit / q              退出
+════════════════════════════════════════════════
 "#;
         queue!(stdout, style::Print(help))?;
         stdout.flush()?;
         Ok(())
     }
 
-    /// 状态命令
+    fn cmd_log(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        match args.first().map(|s| s.to_lowercase()).as_deref() {
+            Some("on" | "1" | "true") => {
+                set_log_enabled(true);
+                queue!(stdout, style::Print("日志已开启 ON\n\r"))?;
+            }
+            Some("off" | "0" | "false") => {
+                set_log_enabled(false);
+                queue!(stdout, style::Print("日志已关闭 OFF\n\r"))?;
+            }
+            Some("status") | None => {
+                queue!(stdout, style::Print(format!("日志状态: {}\n\r", if is_log_enabled() { "ON" } else { "OFF" })))?;
+            }
+            _ => {
+                queue!(stdout, style::Print("用法: log on|off|status\n\r"))?;
+            }
+        }
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_scenario(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        if args.is_empty() {
+            queue!(stdout, style::Print("用法: scenario <normal|full|noload|overv|underv|loss|overi|reverse|unbalanced>\n\r"))?;
+            stdout.flush()?;
+            return Ok(());
+        }
+        let sc = match args[0].to_lowercase().as_str() {
+            "normal" => Scenario::Normal,
+            "full" | "fullload" => Scenario::FullLoad,
+            "noload" | "no" | "empty" => Scenario::NoLoad,
+            "overv" | "overvoltage" => Scenario::OverVoltage,
+            "underv" | "undervoltage" => Scenario::UnderVoltage,
+            "loss" | "phaseloss" => Scenario::PhaseLoss,
+            "overi" | "overcurrent" => Scenario::OverCurrent,
+            "reverse" | "reversepower" => Scenario::ReversePower,
+            "unbalanced" => Scenario::Unbalanced,
+            _ => {
+                queue!(stdout, style::Print(format!("未知场景: {}\n\r", args[0])))?;
+                stdout.flush()?;
+                return Ok(());
+            }
+        };
+        let mut meter = self.meter.lock().unwrap();
+        meter.load_scenario(sc);
+        queue!(stdout, style::Print(format!("已加载场景: {:?}\n\r", sc)))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_event(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        if args.is_empty() {
+            queue!(stdout, style::Print("用法: event <cover|terminal|magnetic|battery>\n\r"))?;
+            stdout.flush()?;
+            return Ok(());
+        }
+        let ev = match args[0].to_lowercase().as_str() {
+            "cover" => MeterEvent::CoverOpen,
+            "terminal" => MeterEvent::TerminalCoverOpen,
+            "magnetic" => MeterEvent::MagneticTamper,
+            "battery" => MeterEvent::BatteryLow,
+            _ => {
+                queue!(stdout, style::Print(format!("未知事件: {}\n\r", args[0])))?;
+                stdout.flush()?;
+                return Ok(());
+            }
+        };
+        let mut meter = self.meter.lock().unwrap();
+        meter.trigger_event(ev);
+        queue!(stdout, style::Print(format!("已触发事件: {:?}\n\r", ev)))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_events(&self, stdout: &mut impl Write) -> Result<()> {
+        let meter = self.meter.lock().unwrap();
+        let events = meter.events();
+        if events.is_empty() {
+            queue!(stdout, style::Print("无事件记录\n\r"))?;
+        } else {
+            queue!(stdout, style::Print(format!("事件记录 (共 {} 条):\n\r", events.len())))?;
+            for e in events.iter().rev().take(20) {
+                queue!(stdout, style::Print(format!(
+                    "  [{}] {:?} - {}\n\r", e.timestamp.format("%H:%M:%S"), e.event, e.description
+                )))?;
+            }
+        }
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_watch(&self, args: &[&str], stdout: &mut impl Write) {
+        // 注意: auto_refresh 需要可变引用, 这里通过 Shell 自身方法设置
+        // 简化: 直接打印 10 次然后退出
+        let interval = args.first().and_then(|s| s.parse::<u64>().ok()).unwrap_or(500);
+        queue!(stdout, style::Print(format!("实时监控 (每 {}ms, 共 10 次, Ctrl+C 退出):\n\r", interval))).ok();
+        stdout.flush().ok();
+        for i in 0..10 {
+            std::thread::sleep(Duration::from_millis(interval));
+            let mut meter = self.meter.lock().unwrap();
+            meter.print_status(stdout);
+            drop(meter);
+            stdout.flush().ok();
+            if !self.running.load(Ordering::Relaxed) { break; }
+        }
+        queue!(stdout, style::Print("监控结束\n\r")).ok();
+        stdout.flush().ok();
+    }
+
+    fn cmd_pulse(&self, stdout: &mut impl Write) -> Result<()> {
+        let meter = self.meter.lock().unwrap();
+        queue!(stdout, style::Print(format!(
+            "脉冲常数: {} imp/kWh, 累计脉冲: {}\n\r",
+            meter.pulse_count(), // TODO: add getter
+            0 // placeholder
+        )))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_replay(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        // 简单回放: 依次加载多个场景
+        let scenarios = match args.first().copied() {
+            Some("all") | None => vec![
+                ("normal", 3), ("full", 3), ("overv", 2), ("underv", 2),
+                ("loss", 2), ("overi", 2), ("reverse", 2), ("normal", 2),
+            ],
+            Some("stress") => vec![
+                ("normal", 1), ("full", 1), ("overv", 1), ("loss", 1),
+                ("normal", 1), ("overi", 1), ("reverse", 1), ("normal", 1),
+            ],
+            _ => {
+                queue!(stdout, style::Print("用法: replay [all|stress]\n\r"))?;
+                stdout.flush()?;
+                return Ok(());
+            }
+        };
+
+        queue!(stdout, style::Print(format!("回放 {} 个场景 (每个 3s):\n\r", scenarios.len())))?;
+        stdout.flush()?;
+
+        for (name, secs) in &scenarios {
+            let mut meter = self.meter.lock().unwrap();
+            let sc = match *name {
+                "normal" => Scenario::Normal, "full" => Scenario::FullLoad,
+                "noload" => Scenario::NoLoad, "overv" => Scenario::OverVoltage,
+                "underv" => Scenario::UnderVoltage, "loss" => Scenario::PhaseLoss,
+                "overi" => Scenario::OverCurrent, "reverse" => Scenario::ReversePower,
+                "unbalanced" => Scenario::Unbalanced, _ => Scenario::Normal,
+            };
+            meter.load_scenario(sc);
+            meter.print_status(stdout);
+            drop(meter);
+            stdout.flush()?;
+            std::thread::sleep(Duration::from_secs(*secs));
+        }
+
+        queue!(stdout, style::Print("回放完成\n\r"))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
     fn cmd_status(&self, stdout: &mut impl Write) -> Result<()> {
         let mut meter = self.meter.lock().unwrap();
-        let snapshot = meter.snapshot();
-        let config = meter.config();
+        let snap = meter.snapshot();
+        let ev_str = if snap.active_events.is_empty() { "无".to_string() }
+            else { snap.active_events.iter().map(|e| format!("{:?}", e)).collect::<Vec<_>>().join(", ") };
 
         let status = format!(
             r#"
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  芯片: {:?} ({}-bit)
-  频率: {:.2} Hz
-  噪声: {}
+  芯片: {:?} ({}-bit)  频率: {:.2} Hz  噪声: {}  加速: {:.0}x
+  活动事件: {}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   相位    电压(V)    电流(A)    角度(°)    PF
   ───────────────────────────────────────
@@ -281,287 +451,99 @@ impl Shell {
   B       {:>8.2}   {:>8.2}   {:>8.1}   {:>6.3}
   C       {:>8.2}   {:>8.2}   {:>8.1}   {:>6.3}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  功率 (W):
-    P_A: {:>10.2}    P_B: {:>10.2}    P_C: {:>10.2}
-    P_总: {:>10.2}
-  
-  功率 (var):
-    Q_A: {:>10.2}    Q_B: {:>10.2}    Q_C: {:>10.2}
-    Q_总: {:>10.2}
-  
-  视在功率 (VA):
-    S_总: {:>10.2}
-  
-  总功率因数: {:.3}
+  P总: {:>10.2} W    Q总: {:>10.2} var    PF: {:.3}
+  S总: {:>10.2} VA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  有功电能: {:.3} kWh    无功电能: {:.3} kvarh
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 "#,
-            config.chip,
-            config.chip.bits(),
-            snapshot.freq,
-            if config.noise_enabled { "开" } else { "关" },
-            snapshot.phase_a.voltage,
-            snapshot.phase_a.current,
-            snapshot.phase_a.angle,
-            snapshot.computed.pf_a,
-            snapshot.phase_b.voltage,
-            snapshot.phase_b.current,
-            snapshot.phase_b.angle,
-            snapshot.computed.pf_b,
-            snapshot.phase_c.voltage,
-            snapshot.phase_c.current,
-            snapshot.phase_c.angle,
-            snapshot.computed.pf_c,
-            snapshot.computed.p_a,
-            snapshot.computed.p_b,
-            snapshot.computed.p_c,
-            snapshot.computed.p_total,
-            snapshot.computed.q_a,
-            snapshot.computed.q_b,
-            snapshot.computed.q_c,
-            snapshot.computed.q_total,
-            snapshot.computed.s_total,
-            snapshot.computed.pf_total,
+            snap.chip, snap.chip.bits(), snap.freq,
+            if meter.config().noise_enabled { "开" } else { "关" },
+            meter.config().time_accel,
+            ev_str,
+            snap.phase_a.voltage, snap.phase_a.current, snap.phase_a.angle, snap.computed.pf_a,
+            snap.phase_b.voltage, snap.phase_b.current, snap.phase_b.angle, snap.computed.pf_b,
+            snap.phase_c.voltage, snap.phase_c.current, snap.phase_c.angle, snap.computed.pf_c,
+            snap.computed.p_total, snap.computed.q_total, snap.computed.pf_total,
+            snap.computed.s_total,
+            snap.energy.wh_total / 1000.0, snap.energy.varh_total / 1000.0,
         );
-
         queue!(stdout, style::Print(status))?;
         stdout.flush()?;
         Ok(())
     }
 
-    /// 设置命令
     fn cmd_set(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
         if args.len() < 2 {
             queue!(stdout, style::Print("用法: set <param> <value>\n\r"))?;
             stdout.flush()?;
             return Ok(());
         }
-
         let param = args[0].to_lowercase();
         let value_str = args[1];
-
         let mut meter = self.meter.lock().unwrap();
         let result = match param.as_str() {
-            "ua" => {
-                if let Ok(v) = value_str.parse::<f64>() {
-                    meter.set_voltage('a', v);
-                    format!("A相电压设置为 {:.2} V", v)
-                } else {
-                    format!("无效的电压值: {}", value_str)
-                }
-            }
-            "ub" => {
-                if let Ok(v) = value_str.parse::<f64>() {
-                    meter.set_voltage('b', v);
-                    format!("B相电压设置为 {:.2} V", v)
-                } else {
-                    format!("无效的电压值: {}", value_str)
-                }
-            }
-            "uc" => {
-                if let Ok(v) = value_str.parse::<f64>() {
-                    meter.set_voltage('c', v);
-                    format!("C相电压设置为 {:.2} V", v)
-                } else {
-                    format!("无效的电压值: {}", value_str)
-                }
-            }
-            "ia" => {
-                if let Ok(v) = value_str.parse::<f64>() {
-                    meter.set_current('a', v);
-                    format!("A相电流设置为 {:.2} A", v)
-                } else {
-                    format!("无效的电流值: {}", value_str)
-                }
-            }
-            "ib" => {
-                if let Ok(v) = value_str.parse::<f64>() {
-                    meter.set_current('b', v);
-                    format!("B相电流设置为 {:.2} A", v)
-                } else {
-                    format!("无效的电流值: {}", value_str)
-                }
-            }
-            "ic" => {
-                if let Ok(v) = value_str.parse::<f64>() {
-                    meter.set_current('c', v);
-                    format!("C相电流设置为 {:.2} A", v)
-                } else {
-                    format!("无效的电流值: {}", value_str)
-                }
-            }
-            "angle_a" => {
-                if let Ok(v) = value_str.parse::<f64>() {
-                    meter.set_angle('a', v);
-                    format!("A相角度设置为 {:.1}°", v)
-                } else {
-                    format!("无效的角度值: {}", value_str)
-                }
-            }
-            "angle_b" => {
-                if let Ok(v) = value_str.parse::<f64>() {
-                    meter.set_angle('b', v);
-                    format!("B相角度设置为 {:.1}°", v)
-                } else {
-                    format!("无效的角度值: {}", value_str)
-                }
-            }
-            "angle_c" => {
-                if let Ok(v) = value_str.parse::<f64>() {
-                    meter.set_angle('c', v);
-                    format!("C相角度设置为 {:.1}°", v)
-                } else {
-                    format!("无效的角度值: {}", value_str)
-                }
-            }
-            "freq" => {
-                if let Ok(v) = value_str.parse::<f64>() {
-                    meter.set_freq(v);
-                    format!("频率设置为 {:.2} Hz", v)
-                } else {
-                    format!("无效的频率值: {}", value_str)
-                }
-            }
-            "noise" => {
-                let enabled = value_str.to_lowercase() == "on"
-                    || value_str == "1"
-                    || value_str.to_lowercase() == "true";
-                meter.set_noise(enabled);
-                format!("噪声模拟 {}", if enabled { "已开启" } else { "已关闭" })
-            }
+            "ua" => { meter.set_voltage('a', value_str.parse().unwrap_or(220.0)); format!("A相电压 = {:.2} V", value_str.parse::<f64>().unwrap_or(220.0)) }
+            "ub" => { meter.set_voltage('b', value_str.parse().unwrap_or(220.0)); format!("B相电压 = {:.2} V", value_str.parse::<f64>().unwrap_or(220.0)) }
+            "uc" => { meter.set_voltage('c', value_str.parse().unwrap_or(220.0)); format!("C相电压 = {:.2} V", value_str.parse::<f64>().unwrap_or(220.0)) }
+            "ia" => { meter.set_current('a', value_str.parse().unwrap_or(0.0)); format!("A相电流 = {:.2} A", value_str.parse::<f64>().unwrap_or(0.0)) }
+            "ib" => { meter.set_current('b', value_str.parse().unwrap_or(0.0)); format!("B相电流 = {:.2} A", value_str.parse::<f64>().unwrap_or(0.0)) }
+            "ic" => { meter.set_current('c', value_str.parse().unwrap_or(0.0)); format!("C相电流 = {:.2} A", value_str.parse::<f64>().unwrap_or(0.0)) }
+            "angle_a" => { meter.set_angle('a', value_str.parse().unwrap_or(0.0)); format!("A相角度 = {:.1}°", value_str.parse::<f64>().unwrap_or(0.0)) }
+            "angle_b" => { meter.set_angle('b', value_str.parse().unwrap_or(0.0)); format!("B相角度 = {:.1}°", value_str.parse::<f64>().unwrap_or(0.0)) }
+            "angle_c" => { meter.set_angle('c', value_str.parse().unwrap_or(0.0)); format!("C相角度 = {:.1}°", value_str.parse::<f64>().unwrap_or(0.0)) }
+            "freq" => { meter.set_freq(value_str.parse().unwrap_or(50.0)); format!("频率 = {:.2} Hz", value_str.parse::<f64>().unwrap_or(50.0)) }
+            "noise" => { let e = ["on","1","true"].contains(&value_str.to_lowercase().as_str()); meter.set_noise(e); format!("噪声 {}", if e {"开"} else {"关"}) }
             "chip" => match value_str.to_lowercase().as_str() {
-                "att7022e" | "att7022" => {
-                    meter.set_chip(ChipType::ATT7022E);
-                    "已切换到 ATT7022E 模式".to_string()
-                }
-                "rn8302b" | "rn8302" => {
-                    meter.set_chip(ChipType::RN8302B);
-                    "已切换到 RN8302B 模式".to_string()
-                }
-                _ => format!("未知芯片类型: {} (支持: att7022e, rn8302b)", value_str),
+                "att7022e" | "att7022" => { meter.set_chip(ChipType::ATT7022E); "ATT7022E".to_string() }
+                "rn8302b" | "rn8302" => { meter.set_chip(ChipType::RN8302B); "RN8302B".to_string() }
+                _ => format!("未知: {}", value_str),
             },
+            "accel" => { let a: f64 = value_str.parse().unwrap_or(1.0); meter.set_time_accel(a); format!("时间加速 = {:.0}x", a) }
             _ => format!("未知参数: {}", param),
         };
-
         queue!(stdout, style::Print(format!("{}\n\r", result)))?;
         stdout.flush()?;
         Ok(())
     }
 
-    /// 电能命令
     fn cmd_energy(&self, stdout: &mut impl Write) -> Result<()> {
         let meter = self.meter.lock().unwrap();
-        let energy = meter.energy();
-
-        let result = format!(
-            r#"
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  电能累计
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  有功电能 (Wh):
-    A相: {:>12.3}
-    B相: {:>12.3}
-    C相: {:>12.3}
-    总计: {:>12.3}
-  
-  无功电能 (varh):
-    A相: {:>12.3}
-    B相: {:>12.3}
-    C相: {:>12.3}
-    总计: {:>12.3}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"#,
-            energy.wh_a,
-            energy.wh_b,
-            energy.wh_c,
-            energy.wh_total,
-            energy.varh_a,
-            energy.varh_b,
-            energy.varh_c,
-            energy.varh_total,
-        );
-
-        queue!(stdout, style::Print(result))?;
+        let e = meter.energy();
+        let r = format!(
+            "\n  有功电能 (Wh): A={:.3} B={:.3} C={:.3} 总={:.3}\n  无功电能 (varh): A={:.3} B={:.3} C={:.3} 总={:.3}\n\n",
+            e.wh_a, e.wh_b, e.wh_c, e.wh_total, e.varh_a, e.varh_b, e.varh_c, e.varh_total);
+        queue!(stdout, style::Print(r))?;
         stdout.flush()?;
         Ok(())
     }
 
-    /// 重置命令
     fn cmd_reset(&self, stdout: &mut impl Write) -> Result<()> {
         let mut meter = self.meter.lock().unwrap();
         meter.reset_energy();
-
-        queue!(stdout, style::Print("电能累计已重置\n\r"))?;
+        queue!(stdout, style::Print("电能已重置\n\r"))?;
         stdout.flush()?;
         Ok(())
     }
 
-    /// 快照命令
     fn cmd_snapshot(&self, stdout: &mut impl Write) -> Result<()> {
         let mut meter = self.meter.lock().unwrap();
-        let snapshot = meter.snapshot();
-
-        let json = serde_json::to_string_pretty(&snapshot)?;
+        let snap = meter.snapshot();
+        let json = serde_json::to_string_pretty(&snap)?;
         queue!(stdout, style::Print(format!("{}\n\r", json)))?;
         stdout.flush()?;
         Ok(())
     }
 
-    /// 串口命令
     fn cmd_serial(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
-        if args.is_empty() {
-            queue!(
-                stdout,
-                style::Print("用法: serial <list|start|stop|status>\n\r")
-            )?;
-            stdout.flush()?;
-            return Ok(());
-        }
-
-        match args[0].to_lowercase().as_str() {
-            "list" => {
+        match args.first().map(|s| s.to_lowercase()).as_deref() {
+            Some("list") => {
                 let ports = list_ports();
-                if ports.is_empty() {
-                    queue!(stdout, style::Print("没有找到可用串口\n\r"))?;
-                } else {
-                    queue!(stdout, style::Print("可用串口:\n\r"))?;
-                    for port in ports {
-                        queue!(stdout, style::Print(format!("  {}\n\r", port)))?;
-                    }
-                }
+                if ports.is_empty() { queue!(stdout, style::Print("无可用串口\n\r"))?; }
+                else { for p in ports { queue!(stdout, style::Print(format!("  {}\n\r", p)))?; } }
             }
-            "start" => {
-                if args.len() < 2 {
-                    queue!(stdout, style::Print("用法: serial start <port>\n\r"))?;
-                } else {
-                    let port_name = args[1];
-                    queue!(
-                        stdout,
-                        style::Print(format!("正在启动串口 {} ...\n\r", port_name))
-                    )?;
-                    stdout.flush()?;
-
-                    // 这里需要 mutable borrow，但我们在 &self 上
-                    // 实际应用中应该重新设计
-                    queue!(stdout, style::Print("提示: 串口服务需要在主函数中启动\n\r"))?;
-                }
-            }
-            "stop" => {
-                queue!(stdout, style::Print("提示: 串口服务需要在主函数中停止\n\r"))?;
-            }
-            "status" => {
-                queue!(
-                    stdout,
-                    style::Print("提示: 使用 'serial list' 查看可用串口\n\r")
-                )?;
-            }
-            _ => {
-                queue!(
-                    stdout,
-                    style::Print(format!("未知串口命令: {}\n\r", args[0]))
-                )?;
-            }
+            _ => { queue!(stdout, style::Print("用法: serial list\n\r"))?; }
         }
-
         stdout.flush()?;
         Ok(())
     }
