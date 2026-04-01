@@ -14,8 +14,7 @@ use std::f64::consts::PI;
 use std::sync::{Arc, Mutex};
 
 /// 计量芯片类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ChipType {
     /// ATT7022E: 19-bit, 精度 ±0.1%
     #[default]
@@ -23,7 +22,6 @@ pub enum ChipType {
     /// RN8302B: 24-bit, 精度 ±0.01%
     RN8302B,
 }
-
 
 impl ChipType {
     /// 获取寄存器数据位宽

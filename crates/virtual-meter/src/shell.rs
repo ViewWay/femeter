@@ -111,31 +111,30 @@ impl Shell {
                             queue!(stdout, style::Print(c))?;
                             stdout.flush()?;
                         }
-                        KeyCode::Backspace
-                            if !input.is_empty() => {
-                                input.pop();
-                                queue!(
-                                    stdout,
-                                    cursor::MoveLeft(1),
-                                    terminal::Clear(ClearType::UntilNewLine)
-                                )?;
-                                stdout.flush()?;
-                            }
+                        KeyCode::Backspace if !input.is_empty() => {
+                            input.pop();
+                            queue!(
+                                stdout,
+                                cursor::MoveLeft(1),
+                                terminal::Clear(ClearType::UntilNewLine)
+                            )?;
+                            stdout.flush()?;
+                        }
                         KeyCode::Enter => {
                             break;
                         }
-                        KeyCode::Up
-                            if !history.is_empty() && history_index > 0 => {
-                                history_index -= 1;
-                                self.replace_input(&mut stdout, &input, &history[history_index])?;
-                                input = history[history_index].clone();
-                            }
+                        KeyCode::Up if !history.is_empty() && history_index > 0 => {
+                            history_index -= 1;
+                            self.replace_input(&mut stdout, &input, &history[history_index])?;
+                            input = history[history_index].clone();
+                        }
                         KeyCode::Down
-                            if !history.is_empty() && history_index < history.len() - 1 => {
-                                history_index += 1;
-                                self.replace_input(&mut stdout, &input, &history[history_index])?;
-                                input = history[history_index].clone();
-                            }
+                            if !history.is_empty() && history_index < history.len() - 1 =>
+                        {
+                            history_index += 1;
+                            self.replace_input(&mut stdout, &input, &history[history_index])?;
+                            input = history[history_index].clone();
+                        }
                         _ => {}
                     }
                 }

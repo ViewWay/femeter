@@ -49,7 +49,6 @@ pub use error::{HalError, HalResult};
 
 // Core error type
 mod error {
-    
 
     /// Hardware Abstraction Layer error type
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
