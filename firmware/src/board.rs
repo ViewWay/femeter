@@ -55,7 +55,7 @@ fn uart3() -> &'static fm33lg0::UartRegs {
 /* ================================================================== */
 
 /// 根据 port 编号返回对应的 GpioRegs 指针
-fn gpio_port(port: u8) -> &'static fm33lg0::GpioRegs {
+pub(crate) fn gpio_port(port: u8) -> &'static fm33lg0::GpioRegs {
     match port {
         0 => fm33lg0::gpioa(),
         1 => fm33lg0::gpiob(),
@@ -71,7 +71,7 @@ fn gpio_port(port: u8) -> &'static fm33lg0::GpioRegs {
 /// 配置 GPIO 引脚功能 (FCR: 2 bits per pin)
 /// 00 = 输入, 01 = 输出, 10 = 数字功能, 11 = 模拟
 #[inline(always)]
-fn gpio_set_fcr(port: u8, pin: u8, mode: u32) {
+pub(crate) fn gpio_set_fcr(port: u8, pin: u8, mode: u32) {
     let gpio = gpio_port(port);
     let shift = (pin as u32) * 2;
     let mask = 0x03 << shift;
@@ -97,7 +97,7 @@ fn gpio_set_dfs(port: u8, pin: u8, func: u32) {
 
 /// 使能 GPIO 上拉
 #[inline(always)]
-fn gpio_enable_pullup(port: u8, pin: u8) {
+pub(crate) fn gpio_enable_pullup(port: u8, pin: u8) {
     let gpio = gpio_port(port);
     let bit = 1u32 << (pin as u32);
     unsafe {
@@ -117,7 +117,7 @@ fn gpio_disable_pullup(port: u8, pin: u8) {
 
 /// 使能 GPIO 输入
 #[inline(always)]
-fn gpio_enable_input(port: u8, pin: u8) {
+pub(crate) fn gpio_enable_input(port: u8, pin: u8) {
     let gpio = gpio_port(port);
     let bit = 1u32 << (pin as u32);
     unsafe {
@@ -147,7 +147,7 @@ pub fn gpio_clr(pin: GpioPin) {
 
 /// 读取 GPIO 输入电平
 #[inline(always)]
-fn gpio_read_pin(pin: GpioPin) -> bool {
+pub(crate) fn gpio_read_pin(pin: GpioPin) -> bool {
     let gpio = gpio_port(pin.port);
     let bit = 1u32 << (pin.pin as u32);
     (gpio.din & bit) != 0

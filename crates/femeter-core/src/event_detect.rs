@@ -8,7 +8,7 @@
 /*  (c) 2026 FeMeter Project — ViewWay                                */
 /* ================================================================== */
 
-use crate::hal::PhaseData;
+use crate::PhaseData;
 
 /* ── 事件阈值 (单位与 PhaseData 一致) ── */
 

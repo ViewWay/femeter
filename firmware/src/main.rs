@@ -41,6 +41,7 @@ mod rn8615v2;
 
 /* ── 通信驱动 ── */
 mod asr6601;
+mod uart_driver;
 #[cfg(feature = "cellular")]
 mod at_parser;
 #[cfg(feature = "cellular")]
@@ -52,6 +53,10 @@ mod display;
 mod metering;
 mod comm;
 
+/* ── DLMS/COSEM 协议栈 (feature gate) ── */
+#[cfg(feature = "dlms")]
+mod dlms_stack;
+
 /* ── FreeRTOS (feature gate) ── */
 #[cfg(feature = "freertos")]
 mod freertos;
@@ -60,8 +65,12 @@ mod freertos_hooks;
 
 /* ── 事件检测 & 存储 ── */
 mod event_detect;
+mod rtc;
+mod watchdog;
 #[cfg(feature = "ext-flash")]
 mod storage;
+mod key_scan;
+mod power_manager;
 
 /* ── FreeRTOS interrupt handlers provided by portasm.c ── */
 /* SVC_Handler, PendSV_Handler, vStartFirstTask are all in portasm.c */
@@ -265,8 +274,10 @@ unsafe extern "C" fn task_pulse_entry(_arg: *mut c_void) {
 unsafe extern "C" fn task_tamper_entry(_arg: *mut c_void) {
     info!("Task: Tamper started");
     loop {
-        // TODO: 上盖/端子盖/磁场检测
-        delay_ms(5000);
+        // TODO: 通过 board tamper driver 检测
+        // 需要在 SharedState 中持有 Board 引用
+        // 目前占位, 等 board 引用集成后完善
+        delay_ms(1000);
     }
 }
 

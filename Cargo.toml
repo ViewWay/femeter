@@ -14,6 +14,7 @@ members = [
     "crates/dlms-hal",
     "crates/dlms-host",
     "crates/virtual-meter",
+    "crates/femeter-core",
 ]
 
 [workspace.dependencies]

@@ -1,9 +1,10 @@
-/* FM33A068EV Memory Layout
- * 512KB Flash + 80KB SRAM
- */
+/* memory.x — FM33A068EV 链接器内存布局 */
 
 MEMORY
 {
-    FLASH : ORIGIN = 0x00000000, LENGTH = 512K
-    RAM   : ORIGIN = 0x20000000, LENGTH = 80K
+  /* Flash: 512KB */
+  FLASH (rx)  : ORIGIN = 0x00000000, LENGTH = 512K
+
+  /* SRAM: 80KB */
+  RAM (rwx)   : ORIGIN = 0x20000000, LENGTH = 80K
 }

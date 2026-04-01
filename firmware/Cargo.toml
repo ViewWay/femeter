@@ -9,7 +9,6 @@ description = "FeMeter smart meter firmware for FM33A0xxEV (Fudan Microelectroni
 [[bin]]
 name = "femeter"
 path = "src/main.rs"
-test = false
 bench = false
 
 [[bin]]
@@ -17,7 +16,6 @@ name = "femeter-boot"
 path = "src/boot.rs"
 required-features = []
 default-features = false
-test = false
 bench = false
 
 [dependencies]
