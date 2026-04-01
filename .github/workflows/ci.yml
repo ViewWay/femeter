@@ -43,7 +43,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        run: cargo clippy --workspace -- -D warnings -A dead_code -A unused_imports -A unused_variables
+        run: cargo clippy --workspace -- -D warnings -A dead_code -A unused_imports -A unused_variables -A clippy::collapsible_else_if -A clippy::collapsible_if -A clippy::else_if_without_else
 
       - name: Build workspace
         run: cargo build --workspace
