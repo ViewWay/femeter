@@ -5,12 +5,7 @@
 //!
 //! Token Gateway processes token-based credit transfers for prepaid meters.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// Token gateway status
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -5,12 +5,7 @@
 //!
 //! Parameter Monitor monitors parameter values and triggers actions.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 65: Parameter Monitor
 ///

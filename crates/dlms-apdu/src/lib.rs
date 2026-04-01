@@ -41,42 +41,38 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 // Public modules
-pub mod types;
-pub mod codec;
-pub mod get;
-pub mod set;
 pub mod action;
-pub mod event;
 pub mod block_transfer;
+pub mod codec;
+pub mod event;
 pub mod exception;
+pub mod get;
 pub mod initiate;
 pub mod selective;
+pub mod set;
+pub mod types;
 
 // Core re-exports
-pub use types::*;
-pub use codec::{ApduEncoder, ApduDecoder};
-pub use get::{
-    GetRequest, GetResponse,
-    GetRequestNormal, GetRequestNext, GetRequestWithList,
-    GetResponseNormal, GetResponseBlock, GetResponseError,
-};
-pub use set::{
-    SetRequest, SetResponse,
-    SetRequestNormal, SetRequestWithList,
-    SetResponseNormal, SetResponseBlock, SetResponseError,
-    SetRequestItem,
-};
 pub use action::{
-    ActionRequest, ActionResponse,
-    ActionRequestNormal, ActionRequestWithList, ActionRequestNext,
-    ActionResponseNormal, ActionResponseWithList, ActionResponseBlock,
-    ActionRequestListItem, ActionResponseListItem,
+    ActionRequest, ActionRequestListItem, ActionRequestNext, ActionRequestNormal,
+    ActionRequestWithList, ActionResponse, ActionResponseBlock, ActionResponseListItem,
+    ActionResponseNormal, ActionResponseWithList,
 };
-pub use event::{EventNotification, EventCode, Priority};
-pub use block_transfer::{GeneralBlockTransfer, BlockTransferCommand};
-pub use exception::{ExceptionResponse};
-pub use initiate::{InitiateRequest, InitiateResponse, conformance};
-pub use selective::{SelectiveAccess, apply_selective_access};
+pub use block_transfer::{BlockTransferCommand, GeneralBlockTransfer};
+pub use codec::{ApduDecoder, ApduEncoder};
+pub use event::{EventCode, EventNotification, Priority};
+pub use exception::ExceptionResponse;
+pub use get::{
+    GetRequest, GetRequestNext, GetRequestNormal, GetRequestWithList, GetResponse,
+    GetResponseBlock, GetResponseError, GetResponseNormal,
+};
+pub use initiate::{conformance, InitiateRequest, InitiateResponse};
+pub use selective::{apply_selective_access, SelectiveAccess};
+pub use set::{
+    SetRequest, SetRequestItem, SetRequestNormal, SetRequestWithList, SetResponse,
+    SetResponseBlock, SetResponseError, SetResponseNormal,
+};
+pub use types::*;
 
 // ============================================================
 // Top-level APDU encoding/decoding
@@ -149,7 +145,9 @@ impl Apdu {
             TAG_ACTION_REQUEST => Ok(Self::ActionRequest(ActionRequest::decode(data)?)),
             TAG_ACTION_RESPONSE => Ok(Self::ActionResponse(ActionResponse::decode(data)?)),
             TAG_EVENT_NOTIFICATION => Ok(Self::EventNotification(EventNotification::decode(data)?)),
-            TAG_GENERAL_BLOCK_TRANSFER => Ok(Self::GeneralBlockTransfer(GeneralBlockTransfer::decode(data)?)),
+            TAG_GENERAL_BLOCK_TRANSFER => Ok(Self::GeneralBlockTransfer(
+                GeneralBlockTransfer::decode(data)?,
+            )),
             TAG_EXCEPTION_RESPONSE => Ok(Self::ExceptionResponse(ExceptionResponse::decode(data)?)),
             0xFF => {
                 // Initiate Request/Response have tag 0xFF
@@ -178,7 +176,7 @@ pub fn decode_apdu(data: &[u8]) -> Result<Apdu, ApduError> {
 mod tests {
     use super::*;
     use alloc::vec::Vec;
-    use dlms_core::{ObisCode, DataAccessError, DlmsType};
+    use dlms_core::{DataAccessError, DlmsType, ObisCode};
 
     #[test]
     fn test_apdu_get_request_roundtrip() {
@@ -268,12 +266,7 @@ mod tests {
 
     #[test]
     fn test_apdu_initiate_request_roundtrip() {
-        let req = InitiateRequest::new(
-            InvokeId::new(1),
-            conformance::standard_meter(),
-            2048,
-            2048,
-        );
+        let req = InitiateRequest::new(InvokeId::new(1), conformance::standard_meter(), 2048, 2048);
         let apdu = Apdu::InitiateRequest(req);
         let encoded = apdu.encode().unwrap();
         let decoded = Apdu::decode(&encoded).unwrap();

@@ -47,19 +47,16 @@ pub mod g3;
 pub mod hs;
 
 // Re-export commonly used types
-pub use sfsk::{
-    SfskPhyMacSetup, SfskActiveInitiator, SfskMacSyncTimeouts,
-    SfskMacCounters, IecLlcSetup, SfskReportingSystemList,
-};
-pub use prime::{
-    PrimeLlcSscsSetup, PrimePhyCounters, PrimeMacSetup,
-    PrimeMacFunctionalParams, PrimeMacCounters, PrimeMacNetworkAdminData,
-    PrimeAppIdentification,
-};
 pub use g3::{
-    G3MacCounters, G3MacSetup, G3SixlowpanSetup,
-    G3HybridRfMacCounters, G3HybridRfMacSetup, G3HybridSixlowpanSetup,
+    G3HybridRfMacCounters, G3HybridRfMacSetup, G3HybridSixlowpanSetup, G3MacCounters, G3MacSetup,
+    G3SixlowpanSetup,
 };
-pub use hs::{
-    HsMacSetup, HsCpasSetup, HsIpSsasSetup, HsHdlcSsasSetup,
+pub use hs::{HsCpasSetup, HsHdlcSsasSetup, HsIpSsasSetup, HsMacSetup};
+pub use prime::{
+    PrimeAppIdentification, PrimeLlcSscsSetup, PrimeMacCounters, PrimeMacFunctionalParams,
+    PrimeMacNetworkAdminData, PrimeMacSetup, PrimePhyCounters,
+};
+pub use sfsk::{
+    IecLlcSetup, SfskActiveInitiator, SfskMacCounters, SfskMacSyncTimeouts, SfskPhyMacSetup,
+    SfskReportingSystemList,
 };

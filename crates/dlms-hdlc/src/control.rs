@@ -38,37 +38,72 @@ pub struct ControlField {
 impl ControlField {
     /// Create an I-frame control field
     pub fn information(send_seq: u8, recv_seq: u8, pf: bool) -> Self {
-        Self { frame_type: FrameType::I, send_seq: send_seq & 0x07, recv_seq: recv_seq & 0x07, poll_final: pf }
+        Self {
+            frame_type: FrameType::I,
+            send_seq: send_seq & 0x07,
+            recv_seq: recv_seq & 0x07,
+            poll_final: pf,
+        }
     }
 
     /// Create RR control field
     pub fn rr(recv_seq: u8, pf: bool) -> Self {
-        Self { frame_type: FrameType::RR, send_seq: 0, recv_seq: recv_seq & 0x07, poll_final: pf }
+        Self {
+            frame_type: FrameType::RR,
+            send_seq: 0,
+            recv_seq: recv_seq & 0x07,
+            poll_final: pf,
+        }
     }
 
     /// Create RNR control field
     pub fn rnr(recv_seq: u8, pf: bool) -> Self {
-        Self { frame_type: FrameType::RNR, send_seq: 0, recv_seq: recv_seq & 0x07, poll_final: pf }
+        Self {
+            frame_type: FrameType::RNR,
+            send_seq: 0,
+            recv_seq: recv_seq & 0x07,
+            poll_final: pf,
+        }
     }
 
     /// Create SNRM control field
     pub fn snrm(pf: bool) -> Self {
-        Self { frame_type: FrameType::SNRM, send_seq: 0, recv_seq: 0, poll_final: pf }
+        Self {
+            frame_type: FrameType::SNRM,
+            send_seq: 0,
+            recv_seq: 0,
+            poll_final: pf,
+        }
     }
 
     /// Create UA control field
     pub fn ua(pf: bool) -> Self {
-        Self { frame_type: FrameType::UA, send_seq: 0, recv_seq: 0, poll_final: pf }
+        Self {
+            frame_type: FrameType::UA,
+            send_seq: 0,
+            recv_seq: 0,
+            poll_final: pf,
+        }
     }
 
     /// Create DISC control field
     pub fn disc(pf: bool) -> Self {
-        Self { frame_type: FrameType::DISC, send_seq: 0, recv_seq: 0, poll_final: pf }
+        Self {
+            frame_type: FrameType::DISC,
+            send_seq: 0,
+            recv_seq: 0,
+            poll_final: pf,
+        }
     }
 
     /// Create DM control field
     pub fn dm(pf: bool) -> Self {
-        Self { frame_type: FrameType::DM, send_seq: 0, recv_seq: 0, poll_final: pf }
+        Self {
+            frame_type: FrameType::DM,
+            send_seq: 0,
+            recv_seq: 0,
+            poll_final: pf,
+        }
     }
 
     /// Encode to byte(s). Returns Vec<u8> — 1 byte for U/S frames, 1 byte for I-frames in HDLC.
@@ -115,12 +150,8 @@ impl ControlField {
                 // Standard: DM = 0001 1111 = 0x1F
                 0x0F | ((self.poll_final as u8) << 4)
             }
-            FrameType::UI => {
-                0x03 | ((self.poll_final as u8) << 4)
-            }
-            FrameType::FRMR => {
-                0x87 | ((self.poll_final as u8) << 4)
-            }
+            FrameType::UI => 0x03 | ((self.poll_final as u8) << 4),
+            FrameType::FRMR => 0x87 | ((self.poll_final as u8) << 4),
         }
     }
 
@@ -132,7 +163,12 @@ impl ControlField {
             // I-frame: bit0=0
             let send_seq = (byte >> 1) & 0x07;
             let recv_seq = (byte >> 5) & 0x07;
-            Self { frame_type: FrameType::I, send_seq, recv_seq, poll_final: pf }
+            Self {
+                frame_type: FrameType::I,
+                send_seq,
+                recv_seq,
+                poll_final: pf,
+            }
         } else if byte & 0x02 == 0 {
             // S-frame: bit0=1, bit1=0
             let recv_seq = (byte >> 5) & 0x07;
@@ -142,11 +178,17 @@ impl ControlField {
                 1 => FrameType::RNR,
                 _ => FrameType::RR, // REJ not implemented
             };
-            Self { frame_type, send_seq: 0, recv_seq, poll_final: pf }
+            Self {
+                frame_type,
+                send_seq: 0,
+                recv_seq,
+                poll_final: pf,
+            }
         } else {
             // U-frame: bit0=1, bit1=1
             let _m_bits = ((byte >> 2) & 0x03) | ((byte >> 3) & 0x1C);
-            let frame_type = match byte & 0xEF { // mask out P/F bit
+            let frame_type = match byte & 0xEF {
+                // mask out P/F bit
                 0x83 => FrameType::SNRM,
                 0x63 => FrameType::UA,
                 0x42 => FrameType::DISC,
@@ -155,7 +197,12 @@ impl ControlField {
                 0x87 => FrameType::FRMR,
                 _ => FrameType::UA, // fallback
             };
-            Self { frame_type, send_seq: 0, recv_seq: 0, poll_final: pf }
+            Self {
+                frame_type,
+                send_seq: 0,
+                recv_seq: 0,
+                poll_final: pf,
+            }
         }
     }
 }

@@ -3,10 +3,10 @@
 //! This module provides a framework for running integration tests
 //! against a real or simulated meter.
 
-use std::time::Duration;
 use std::net::TcpListener;
-use std::thread;
 use std::path::Path;
+use std::thread;
+use std::time::Duration;
 
 /// Test result
 #[derive(Debug, Clone, PartialEq)]
@@ -100,7 +100,8 @@ impl TestRunner {
     /// Run tests matching a pattern
     pub fn run_pattern(&self, pattern: &str) -> TestSummary {
         let mut summary = TestSummary::new();
-        let matched: Vec<_> = self.tests
+        let matched: Vec<_> = self
+            .tests
             .iter()
             .filter(|t| t.name.contains(pattern))
             .collect();

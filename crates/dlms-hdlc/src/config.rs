@@ -62,11 +62,17 @@ impl HdlcConfig {
         while i + 2 <= data.len() {
             let tag = data[i];
             let len = data[i + 1] as usize;
-            if i + 2 + len > data.len() { break; }
+            if i + 2 + len > data.len() {
+                break;
+            }
             match tag {
                 0x05 if len == 1 => config.window_size = data[i + 2],
-                0x06 if len == 2 => config.max_info_tx = u16::from_be_bytes([data[i + 2], data[i + 3]]),
-                0x07 if len == 2 => config.max_info_rx = u16::from_be_bytes([data[i + 2], data[i + 3]]),
+                0x06 if len == 2 => {
+                    config.max_info_tx = u16::from_be_bytes([data[i + 2], data[i + 3]])
+                }
+                0x07 if len == 2 => {
+                    config.max_info_rx = u16::from_be_bytes([data[i + 2], data[i + 3]])
+                }
                 _ => {}
             }
             i += 2 + len;

@@ -129,7 +129,8 @@ impl TariffManager {
 
     /// Get active billing period
     pub fn active_period(&self) -> Option<&BillingPeriod> {
-        self.active_period.and_then(|idx| self.billing_periods.get(idx))
+        self.active_period
+            .and_then(|idx| self.billing_periods.get(idx))
     }
 
     /// Update active billing period based on current time
@@ -250,7 +251,9 @@ impl Season {
 
     /// Create season mask from multiple seasons
     pub fn mask_from_seasons(seasons: &[Season]) -> u8 {
-        seasons.iter().fold(0u8, |mask, season| mask | season.bit_mask())
+        seasons
+            .iter()
+            .fold(0u8, |mask, season| mask | season.bit_mask())
     }
 }
 
@@ -359,7 +362,10 @@ mod tests {
         manager.active_period = Some(0);
 
         assert!(manager.close_billing_period().is_ok());
-        assert_eq!(manager.billing_periods()[0].status, BillingStatus::Completed);
+        assert_eq!(
+            manager.billing_periods()[0].status,
+            BillingStatus::Completed
+        );
     }
 
     #[test]

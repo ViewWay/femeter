@@ -57,7 +57,7 @@ impl ExtendedRegister {
                     second: 0xFF,
                     hundredths: 0xFF,
                 },
-                deviation: -32768,  // 0x8000 = not specified for i16
+                deviation: -32768, // 0x8000 = not specified for i16
                 clock_status: 0,
             },
         }

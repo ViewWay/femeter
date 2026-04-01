@@ -182,7 +182,13 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn test_timer_error_display() {
-        assert_eq!(alloc::format!("{}", TimerError::TimerLimit), "Timer limit reached");
-        assert_eq!(alloc::format!("{}", TimerError::NotFound), "Timer not found");
+        assert_eq!(
+            alloc::format!("{}", TimerError::TimerLimit),
+            "Timer limit reached"
+        );
+        assert_eq!(
+            alloc::format!("{}", TimerError::NotFound),
+            "Timer not found"
+        );
     }
 }

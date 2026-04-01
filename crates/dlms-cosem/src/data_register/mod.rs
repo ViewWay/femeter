@@ -15,16 +15,16 @@
 //! - IC 66: Measurement Data Monitoring Objects
 
 pub mod ic1_data;
+pub mod ic26_utility_tables;
 pub mod ic3_register;
 pub mod ic4_extended_register;
 pub mod ic5_demand_register;
-pub mod ic6_register_activation;
-pub mod ic7_profile_generic;
-pub mod ic26_utility_tables;
 pub mod ic61_register_table;
 pub mod ic62_compact_data;
 pub mod ic63_status_mapping;
 pub mod ic66_measurement_data;
+pub mod ic6_register_activation;
+pub mod ic7_profile_generic;
 
 // Re-export commonly used types
 pub use ic1_data::Data;

@@ -8,10 +8,10 @@ extern crate std;
 
 extern crate alloc;
 
+use crate::types::{ApduError, AttributeDescriptor, InvokeId, MethodDescriptor};
 use alloc::vec::Vec;
-use dlms_axdr::{AxdrEncoder, AxdrDecoder};
+use dlms_axdr::{AxdrDecoder, AxdrEncoder};
 use dlms_core::{DlmsType, ObisCode};
-use crate::types::{ApduError, InvokeId, AttributeDescriptor, MethodDescriptor};
 
 /// APDU encoder
 pub struct ApduEncoder {
@@ -24,7 +24,9 @@ impl ApduEncoder {
     }
 
     pub fn with_capacity(cap: usize) -> Self {
-        Self { buf: Vec::with_capacity(cap) }
+        Self {
+            buf: Vec::with_capacity(cap),
+        }
     }
 
     /// Write APDU tag (2 bytes: type + subtype)
@@ -160,8 +162,14 @@ impl<'a> ApduDecoder<'a> {
         let class_id = u16::from_be_bytes([self.buf[self.pos], self.buf[self.pos + 1]]);
         self.pos += 2;
 
-        let obis_bytes = [self.buf[self.pos], self.buf[self.pos + 1], self.buf[self.pos + 2],
-                          self.buf[self.pos + 3], self.buf[self.pos + 4], self.buf[self.pos + 5]];
+        let obis_bytes = [
+            self.buf[self.pos],
+            self.buf[self.pos + 1],
+            self.buf[self.pos + 2],
+            self.buf[self.pos + 3],
+            self.buf[self.pos + 4],
+            self.buf[self.pos + 5],
+        ];
         let instance = ObisCode::from_bytes(&obis_bytes);
         self.pos += 6;
 
@@ -180,8 +188,14 @@ impl<'a> ApduDecoder<'a> {
         let class_id = u16::from_be_bytes([self.buf[self.pos], self.buf[self.pos + 1]]);
         self.pos += 2;
 
-        let obis_bytes = [self.buf[self.pos], self.buf[self.pos + 1], self.buf[self.pos + 2],
-                          self.buf[self.pos + 3], self.buf[self.pos + 4], self.buf[self.pos + 5]];
+        let obis_bytes = [
+            self.buf[self.pos],
+            self.buf[self.pos + 1],
+            self.buf[self.pos + 2],
+            self.buf[self.pos + 3],
+            self.buf[self.pos + 4],
+            self.buf[self.pos + 5],
+        ];
         let instance = ObisCode::from_bytes(&obis_bytes);
         self.pos += 6;
 
@@ -260,11 +274,7 @@ mod tests {
 
     #[test]
     fn test_encoder_attribute_descriptor() {
-        let desc = AttributeDescriptor::new(
-            3,
-            ObisCode::new(1, 0, 1, 8, 0, 255),
-            2,
-        );
+        let desc = AttributeDescriptor::new(3, ObisCode::new(1, 0, 1, 8, 0, 255), 2);
         let mut enc = ApduEncoder::new();
         enc.write_attribute_descriptor(&desc);
 

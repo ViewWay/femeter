@@ -4,12 +4,7 @@
 //!
 //! Reference: IEC 62056-6-2 (Blue Book Part 2) §7.7.104
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// ZigBee Network Control Interface Class (IC 104)
 ///
@@ -67,9 +62,9 @@ impl CosemClass for ZigbeeNetworkControl {
 
     fn execute_method(&mut self, id: u8, _params: DlmsType) -> Result<DlmsType, CosemError> {
         match id {
-            1 => Ok(DlmsType::Null),  // reset
-            2 => Ok(DlmsType::Null),  // form_network
-            3 => Ok(DlmsType::Null),  // join_network
+            1 => Ok(DlmsType::Null), // reset
+            2 => Ok(DlmsType::Null), // form_network
+            3 => Ok(DlmsType::Null), // join_network
             _ => Err(CosemError::NoSuchMethod(id)),
         }
     }

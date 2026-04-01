@@ -21,8 +21,14 @@ use crate::interrupt::{InterruptGuard, InterruptState, RtosInterrupt};
 use crate::mempool::{MemPoolError, MemPoolHandle, PoolConfig, RtosMemPool};
 use crate::queue::{QueueError, QueueHandle, RtosQueue};
 use crate::semaphore::{RtosSemaphore, SemaphoreHandle};
-use crate::task::{Priority, RtosTask, TaskConfig, TaskError, TaskFn, TaskHandle as CrateTaskHandle, TaskId, TaskState};
-use crate::timer::{RtosTimer, TimerCallback, TimerConfig as TimerConfigType, TimerError, TimerHandle as CrateTimerHandle, TimerMode};
+use crate::task::{
+    Priority, RtosTask, TaskConfig, TaskError, TaskFn, TaskHandle as CrateTaskHandle, TaskId,
+    TaskState,
+};
+use crate::timer::{
+    RtosTimer, TimerCallback, TimerConfig as TimerConfigType, TimerError,
+    TimerHandle as CrateTimerHandle, TimerMode,
+};
 use crate::{Rtos, Tick};
 
 /// System tick counter
@@ -270,7 +276,10 @@ impl<T: Send> MutexPtr<T> for StdMutex<T> {
     }
 
     fn try_lock(&self) -> Option<StdMutexGuardRef<'_, T>> {
-        self.inner.try_write().ok().map(|w| StdMutexGuardRef { _borrow: w })
+        self.inner
+            .try_write()
+            .ok()
+            .map(|w| StdMutexGuardRef { _borrow: w })
     }
 }
 
@@ -297,7 +306,11 @@ impl<'a, T> MutexGuard<'a, T> for StdMutexGuardRef<'a, T> {}
 
 impl RtosMutex for StdRtos {
     type MutexPtr<T: Send> = StdMutex<T>;
-    type Guard<'a, T: Send> = StdMutexGuardRef<'a, T> where T: 'a, Self: 'a;
+    type Guard<'a, T: Send>
+        = StdMutexGuardRef<'a, T>
+    where
+        T: 'a,
+        Self: 'a;
 
     fn create_mutex<T: Default + Send>(&self) -> StdMutex<T> {
         StdMutex::new(T::default())
@@ -580,10 +593,16 @@ impl RtosMemPool for StdRtos {
     }
 
     fn allocate(&self, pool: &StdMemPoolHandle) -> Result<*mut u8, MemPoolError> {
-        let mut blocks = pool.blocks.write().map_err(|_| MemPoolError::InvalidConfig)?;
+        let mut blocks = pool
+            .blocks
+            .write()
+            .map_err(|_| MemPoolError::InvalidConfig)?;
         for block in blocks.iter_mut() {
             if block.is_some() {
-                let ptr = block.as_ref().expect("block.is_some() guarantees Some").as_ptr() as *mut u8;
+                let ptr = block
+                    .as_ref()
+                    .expect("block.is_some() guarantees Some")
+                    .as_ptr() as *mut u8;
                 *block = None;
                 pool.free_count.fetch_sub(1, Ordering::AcqRel);
                 return Ok(ptr);
@@ -593,7 +612,10 @@ impl RtosMemPool for StdRtos {
     }
 
     fn deallocate(&self, pool: &StdMemPoolHandle, _block: *mut u8) -> Result<(), MemPoolError> {
-        let mut blocks = pool.blocks.write().map_err(|_| MemPoolError::InvalidConfig)?;
+        let mut blocks = pool
+            .blocks
+            .write()
+            .map_err(|_| MemPoolError::InvalidConfig)?;
         for _b in blocks.iter_mut() {
             if _b.is_none() {
                 let new_block = std::vec![0u8; pool.block_size].into_boxed_slice();

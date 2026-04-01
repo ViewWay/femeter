@@ -4,12 +4,7 @@
 //!
 //! Reference: IEC 62056-6-2 (Blue Book Part 2) §7.9.58
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// GPRS Setup Interface Class (IC 58)
 ///

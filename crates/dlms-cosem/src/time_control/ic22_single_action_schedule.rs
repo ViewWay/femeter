@@ -5,12 +5,7 @@
 //!
 //! Single Action Schedule defines a single scheduled action.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 22: Single Action Schedule
 ///
@@ -79,10 +74,7 @@ mod tests {
 
     #[test]
     fn test_single_action_schedule_class_id() {
-        let sas = SingleActionSchedule::new(
-            ObisCode::new(0, 0, 22, 0, 0, 255),
-            DlmsType::Null,
-        );
+        let sas = SingleActionSchedule::new(ObisCode::new(0, 0, 22, 0, 0, 255), DlmsType::Null);
         assert_eq!(SingleActionSchedule::CLASS_ID, 22);
     }
 }

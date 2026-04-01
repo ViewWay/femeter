@@ -7,11 +7,7 @@
 //! scaler and unit, typically used for metering values like energy, power, etc.
 
 use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-    units::Unit,
+    errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType, units::Unit,
 };
 
 /// COSEM IC 3: Register

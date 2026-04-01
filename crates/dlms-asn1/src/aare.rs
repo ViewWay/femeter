@@ -1,9 +1,9 @@
 //! AARE (Association Response) encode/decode
 
-use alloc::vec::Vec;
-use crate::ber::{BerEncoder, BerDecoder, BerTag, BerError};
+use crate::ber::{BerDecoder, BerEncoder, BerError, BerTag};
 use crate::context::ApplicationContextName;
-use crate::initiate::{InitiateResponse, encode_initiate_response, decode_initiate_response};
+use crate::initiate::{decode_initiate_response, encode_initiate_response, InitiateResponse};
+use alloc::vec::Vec;
 
 /// Association result
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,7 +68,10 @@ impl Aare {
 
             // [2] result-source-diagnostic
             inner.write_constructed(BerTag::context_constructed(0x02), |ctx| {
-                ctx.write_tlv(BerTag::universal(0x0A), &[self.result_source_diagnostic as u8]);
+                ctx.write_tlv(
+                    BerTag::universal(0x0A),
+                    &[self.result_source_diagnostic as u8],
+                );
             });
 
             // [30] user-information (optional)
@@ -111,7 +114,9 @@ impl Aare {
                                 let b = oid_data[i];
                                 n = (n << 7) | ((b & 0x7F) as u64);
                                 i += 1;
-                                if (b & 0x80) == 0 { break; }
+                                if (b & 0x80) == 0 {
+                                    break;
+                                }
                             }
                             components.push(n);
                         }
@@ -189,7 +194,10 @@ mod tests {
         let decoded = decode_aare(&bytes).unwrap();
         assert_eq!(decoded.result, AssociationResult::Accepted);
         assert!(decoded.user_information.is_some());
-        assert_eq!(decoded.user_information.unwrap().negotiated_max_pdu_size, 2048);
+        assert_eq!(
+            decoded.user_information.unwrap().negotiated_max_pdu_size,
+            2048
+        );
     }
 
     #[test]

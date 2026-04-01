@@ -5,12 +5,7 @@
 //!
 //! Activity Calendar defines seasons, weeks, and days for tariff scheduling.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 20: Activity Calendar
 ///

@@ -152,10 +152,7 @@ mod tests {
     #[test]
     fn test_rtc_not_initialized() {
         let mut rtc = MockRtc::uninitialized();
-        assert_eq!(
-            rtc.get_datetime().unwrap_err(),
-            HalError::NotInitialized
-        );
+        assert_eq!(rtc.get_datetime().unwrap_err(), HalError::NotInitialized);
         assert_eq!(
             rtc.set_datetime(DateTime::default()).unwrap_err(),
             HalError::NotInitialized

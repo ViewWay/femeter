@@ -6,19 +6,19 @@
 
 extern crate alloc;
 
-use alloc::vec::Vec;
 use alloc::string::String;
-use dlms_core::{errors::CosemError, types::CosemDateTime, obis::ObisCode};
+use alloc::vec::Vec;
+use dlms_core::{errors::CosemError, obis::ObisCode, types::CosemDateTime};
 
-use crate::common::{DemandConfig, BillingStatus};
-use crate::measurement::MeasurementEngine;
-use crate::tariff::TariffManager;
-use crate::profile::ProfileManager;
 use crate::alarm::AlarmManager;
+use crate::clock::{ClockManager, DstMode, Timezone};
+use crate::comm::{CommManager, PortType};
+use crate::common::{BillingStatus, DemandConfig};
 use crate::control::{RelayControl, RelayState};
 use crate::firmware::FirmwareManager;
-use crate::clock::{ClockManager, Timezone, DstMode};
-use crate::comm::{CommManager, PortType};
+use crate::measurement::MeasurementEngine;
+use crate::profile::ProfileManager;
+use crate::tariff::TariffManager;
 
 /// Meter application state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -214,12 +214,23 @@ impl MeterApp {
         };
 
         // Set up timezone
-        let tz = Timezone::new(meter.config.timezone_offset, if meter.config.dst_enabled { DstMode::Daylight } else { DstMode::Standard });
+        let tz = Timezone::new(
+            meter.config.timezone_offset,
+            if meter.config.dst_enabled {
+                DstMode::Daylight
+            } else {
+                DstMode::Standard
+            },
+        );
         meter.clock.set_timezone(tz);
-        meter.clock.set_sync_interval(meter.config.clock_sync_interval_s);
+        meter
+            .clock
+            .set_sync_interval(meter.config.clock_sync_interval_s);
 
         // Enable auto reconnect if configured
-        meter.control.set_auto_reconnect(meter.config.auto_reconnect);
+        meter
+            .control
+            .set_auto_reconnect(meter.config.auto_reconnect);
 
         // Transition to running state
         meter.state = MeterAppState::Running;
@@ -281,7 +292,8 @@ impl MeterApp {
         self.clock.tick(1);
 
         // Update tariff based on current time
-        self.tariff.update_tariff_for_time(self.clock.current_time());
+        self.tariff
+            .update_tariff_for_time(self.clock.current_time());
         self.tariff.update_billing_period(self.clock.current_time());
 
         // Check if profile capture is needed
@@ -345,7 +357,11 @@ impl MeterApp {
 
         // Check alarms for energy value
         let total_energy = self.measurement.total_energy_import();
-        self.alarm.update_value(dlms_core::obis::TOTAL_ACTIVE_ENERGY_IMPORT, total_energy, self.uptime);
+        self.alarm.update_value(
+            dlms_core::obis::TOTAL_ACTIVE_ENERGY_IMPORT,
+            total_energy,
+            self.uptime,
+        );
     }
 
     /// Check for active alarms and return any new events
@@ -395,7 +411,9 @@ impl MeterApp {
     /// # Arguments
     /// * `period` - Billing period identifier (1-12)
     pub fn get_billing_data(&self, period: u8) -> Option<BillingData> {
-        let billing_period = self.tariff.billing_periods()
+        let billing_period = self
+            .tariff
+            .billing_periods()
             .iter()
             .find(|p| p.period_id == period)?;
 
@@ -493,7 +511,12 @@ impl MeterApp {
     }
 
     /// Add an alarm threshold
-    pub fn add_alarm(&mut self, obis_code: ObisCode, threshold: i64, hysteresis: i64) -> Result<u8, CosemError> {
+    pub fn add_alarm(
+        &mut self,
+        obis_code: ObisCode,
+        threshold: i64,
+        hysteresis: i64,
+    ) -> Result<u8, CosemError> {
         use crate::common::{AlarmThreshold, AlarmType};
         let alarm = AlarmThreshold {
             obis_code,
@@ -550,16 +573,29 @@ impl MeterApp {
             tariff.saturating_sub(1)
         };
 
-        self.measurement.process_power(power_w, effective_tariff, interval_s);
+        self.measurement
+            .process_power(power_w, effective_tariff, interval_s);
 
         // Update alarm with new value
         let total_energy = self.measurement.total_energy_import();
-        self.alarm.update_value(dlms_core::obis::TOTAL_ACTIVE_ENERGY_IMPORT, total_energy, self.uptime);
+        self.alarm.update_value(
+            dlms_core::obis::TOTAL_ACTIVE_ENERGY_IMPORT,
+            total_energy,
+            self.uptime,
+        );
     }
 
     /// Process 3-phase power measurement (backward compatibility)
-    pub fn process_3phase_power(&mut self, l1_w: i32, l2_w: i32, l3_w: i32, tariff: usize, interval_s: u32) {
-        self.measurement.process_3phase_power(l1_w, l2_w, l3_w, tariff, interval_s);
+    pub fn process_3phase_power(
+        &mut self,
+        l1_w: i32,
+        l2_w: i32,
+        l3_w: i32,
+        tariff: usize,
+        interval_s: u32,
+    ) {
+        self.measurement
+            .process_3phase_power(l1_w, l2_w, l3_w, tariff, interval_s);
     }
 
     /// Update voltage measurement (backward compatibility)
@@ -585,7 +621,8 @@ impl MeterApp {
         self.clock.tick(elapsed_seconds);
 
         // Update tariff based on time
-        self.tariff.update_tariff_for_time(self.clock.current_time());
+        self.tariff
+            .update_tariff_for_time(self.clock.current_time());
         self.tariff.update_billing_period(self.clock.current_time());
 
         // Check if sync is needed
@@ -772,7 +809,8 @@ mod tests {
     #[test]
     fn test_check_alarms() {
         let mut app = MeterApp::new();
-        app.add_alarm(dlms_core::obis::TOTAL_ACTIVE_ENERGY_IMPORT, 500, 50).unwrap();
+        app.add_alarm(dlms_core::obis::TOTAL_ACTIVE_ENERGY_IMPORT, 500, 50)
+            .unwrap();
 
         // Process reading below threshold
         app.process_reading(0, 100.0);
@@ -877,7 +915,8 @@ mod tests {
         app.control.set_min_interval(0);
 
         // 1. Set up meter
-        app.add_alarm(dlms_core::obis::TOTAL_ACTIVE_ENERGY_IMPORT, 500, 50).unwrap();
+        app.add_alarm(dlms_core::obis::TOTAL_ACTIVE_ENERGY_IMPORT, 500, 50)
+            .unwrap();
         app.add_profile_column([1, 0, 1, 8, 0, 255], -3).unwrap();
         app.enable_profile();
         app.connect().unwrap();

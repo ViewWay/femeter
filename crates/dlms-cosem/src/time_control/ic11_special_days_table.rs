@@ -5,12 +5,7 @@
 //!
 //! Special Days Table defines special calendar days (holidays, etc.).
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 11: Special Days Table
 ///

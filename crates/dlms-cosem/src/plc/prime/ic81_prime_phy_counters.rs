@@ -4,12 +4,7 @@
 //!
 //! Reference: IEC 62056-6-2 (Blue Book Part 2) §7.7.81
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// PRIME Physical Layer Counters Interface Class (IC 81)
 ///

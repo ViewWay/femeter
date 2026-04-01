@@ -139,10 +139,7 @@ mod tests {
     #[test]
     fn test_gpio_output_without_direction() {
         let mut gpio = MockGpio::new();
-        assert_eq!(
-            gpio.set_high(5).unwrap_err(),
-            HalError::InvalidParam
-        );
+        assert_eq!(gpio.set_high(5).unwrap_err(), HalError::InvalidParam);
     }
 
     #[test]

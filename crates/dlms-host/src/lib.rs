@@ -19,44 +19,78 @@ pub use cli::{Cli, Commands};
 pub use simulator::{MeterSimulator, SimulatorApp};
 
 // Re-export sniffer types
-pub use sniffer::{ProtocolSniffer, CapturedFrame, Direction, DecodedFrame, FrameType};
+pub use sniffer::{CapturedFrame, DecodedFrame, Direction, FrameType, ProtocolSniffer};
 
 // Re-export test runner types
-pub use test_runner::{TestRunner, IntegrationTest, TestResult, TestSummary,
-                     list_serial_ports, find_available_port};
+pub use test_runner::{
+    find_available_port, list_serial_ports, IntegrationTest, TestResult, TestRunner, TestSummary,
+};
 
 // Re-export everything from dlms_meter_app
 pub use dlms_meter_app::{
+    AlarmCallback,
+
+    // Alarm
+    AlarmManager,
+    AlarmRecord,
+    AlarmState,
+    // Common types
+    AlarmThreshold,
+    AlarmType,
+    BillingPeriod,
+    BillingStatus,
+    // Clock
+    ClockManager,
+    ClockStats,
+
+    // Communication
+    CommManager,
+    CommStats,
+    ConnectionState,
+    ControlMode,
+    // Tariff
+    DayOfWeek,
+    DemandConfig,
+    DisplayEntry,
+    DisplayFormat,
+    DstMode,
+    // Firmware
+    FirmwareManager,
+    HistoricalEntry,
+
+    HistoricalManager,
+    ImageInfo,
+    // Measurement
+    MeasurementEngine,
     // Main types
     MeterApp,
 
-    // Common types
-    AlarmThreshold, AlarmType, BillingPeriod, BillingStatus, DemandConfig,
-    DisplayEntry, DisplayFormat, PhaseEnergy, PowerQuality, TariffSchedule,
+    OutputState,
 
-    // Measurement
-    MeasurementEngine, Phase, MAX_TARIFFS,
-
-    // Tariff
-    DayOfWeek, Season, TariffManager,
-
+    Phase,
+    PhaseEnergy,
+    PortType,
+    PowerQuality,
     // Profile
-    ProfileColumn, ProfileEntry, ProfileManager, HistoricalManager, HistoricalEntry,
-
-    // Alarm
-    AlarmManager, AlarmRecord, AlarmState, AlarmCallback,
-
+    ProfileColumn,
+    ProfileEntry,
+    ProfileManager,
+    PushConfig,
+    PushTrigger,
     // Control
-    RelayControl, RelayState, ControlMode, OutputState,
+    RelayControl,
+    RelayState,
+    Season,
+    SyncStatus,
+    TariffManager,
 
-    // Firmware
-    FirmwareManager, ImageInfo, TransferState, TransferStats,
+    TariffSchedule,
 
-    // Clock
-    ClockManager, Timezone, DstMode, SyncStatus, ClockStats,
+    Timezone,
+    TransferState,
+    TransferStats,
 
-    // Communication
-    CommManager, PortType, ConnectionState, PushConfig, PushTrigger, CommStats,
+    MAX_TARIFFS,
 };
 
 /// Builder for creating configured MeterApp instances

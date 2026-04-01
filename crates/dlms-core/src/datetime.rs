@@ -2,7 +2,7 @@
 //!
 //! Re-exported from types.rs for convenience.
 
-pub use crate::types::{CosemDate, CosemTime, CosemDateTime, ScalerUnit, clock_status};
+pub use crate::types::{clock_status, CosemDate, CosemDateTime, CosemTime, ScalerUnit};
 
 /// Not-specified sentinel values
 pub const YEAR_NOT_SPECIFIED: u16 = 0xFFFF;

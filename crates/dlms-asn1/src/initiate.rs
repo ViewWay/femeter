@@ -1,8 +1,8 @@
 //! InitiateRequest / InitiateResponse
 
-use alloc::vec::Vec;
-use crate::ber::{BerEncoder, BerDecoder, BerTag, BerError};
+use crate::ber::{BerDecoder, BerEncoder, BerError, BerTag};
 use crate::conformance::ConformanceBlock;
+use alloc::vec::Vec;
 
 /// InitiateRequest PDU (client → server)
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,8 +47,7 @@ impl InitiateRequest {
             return Err(BerError::InvalidData);
         }
         let dlms_version = data[0];
-        let conformance = ConformanceBlock::from_bytes(&data[1..4])
-            .ok_or(BerError::InvalidData)?;
+        let conformance = ConformanceBlock::from_bytes(&data[1..4]).ok_or(BerError::InvalidData)?;
         let max_pdu = u16::from_be_bytes([data[4], data[5]]);
         Ok(Self {
             proposed_conformance: conformance,
@@ -104,8 +103,7 @@ impl InitiateResponse {
             return Err(BerError::InvalidData);
         }
         let dlms_version = data[0];
-        let conformance = ConformanceBlock::from_bytes(&data[1..4])
-            .ok_or(BerError::InvalidData)?;
+        let conformance = ConformanceBlock::from_bytes(&data[1..4]).ok_or(BerError::InvalidData)?;
         let max_pdu = u16::from_be_bytes([data[4], data[5]]);
         let vaa_name = u16::from_be_bytes([data[6], data[7]]);
         Ok(Self {
@@ -152,7 +150,10 @@ mod tests {
         let decoded = decode_initiate_request(&bytes).unwrap();
         assert_eq!(decoded.proposed_dlms_version, 6);
         assert_eq!(decoded.proposed_max_pdu_size, 1024);
-        assert_eq!(decoded.proposed_conformance, ConformanceBlock::standard_meter());
+        assert_eq!(
+            decoded.proposed_conformance,
+            ConformanceBlock::standard_meter()
+        );
     }
 
     #[test]

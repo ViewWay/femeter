@@ -1,9 +1,9 @@
 //! A-XDR decoder
 
-use dlms_core::types::*;
-use dlms_core::DlmsType;
 use crate::AxdrError;
 use alloc::vec::Vec;
+use dlms_core::types::*;
+use dlms_core::DlmsType;
 
 /// A-XDR decoder - reads COSEM data types from a byte buffer
 pub struct AxdrDecoder<'a> {
@@ -73,11 +73,15 @@ impl<'a> AxdrDecoder<'a> {
             }
             TAG_FLOAT32 => {
                 let b = self.read_bytes(4)?;
-                Ok(DlmsType::Float32(f32::from_be_bytes([b[0], b[1], b[2], b[3]])))
+                Ok(DlmsType::Float32(f32::from_be_bytes([
+                    b[0], b[1], b[2], b[3],
+                ])))
             }
             TAG_FLOAT64 => {
                 let b = self.read_bytes(8)?;
-                Ok(DlmsType::Float64(f64::from_be_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]])))
+                Ok(DlmsType::Float64(f64::from_be_bytes([
+                    b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+                ])))
             }
             TAG_BIT_STRING => {
                 let num_bits = self.decode_length()?;
@@ -112,7 +116,11 @@ impl<'a> AxdrDecoder<'a> {
                 let element_count = self.read_u32()?;
                 let data_len = self.remaining();
                 let data = self.read_bytes(data_len)?.to_vec();
-                Ok(DlmsType::CompactArray { element_type, element_count, data })
+                Ok(DlmsType::CompactArray {
+                    element_type,
+                    element_count,
+                    data,
+                })
             }
             TAG_DATETIME => {
                 let b = self.read_bytes(12)?;
@@ -249,12 +257,16 @@ impl<'a> AxdrDecoder<'a> {
 
     fn read_u64(&mut self) -> Result<u64, AxdrError> {
         let b = self.read_bytes(8)?;
-        Ok(u64::from_be_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]))
+        Ok(u64::from_be_bytes([
+            b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+        ]))
     }
 
     fn read_i64(&mut self) -> Result<i64, AxdrError> {
         let b = self.read_bytes(8)?;
-        Ok(i64::from_be_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]))
+        Ok(i64::from_be_bytes([
+            b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+        ]))
     }
 
     /// Decode A-XDR length field
@@ -276,8 +288,8 @@ impl<'a> AxdrDecoder<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::AxdrEncoder;
     use super::*;
+    use crate::AxdrEncoder;
     use alloc::vec;
 
     #[test]
@@ -319,7 +331,10 @@ mod tests {
     #[test]
     fn test_decode_octet_string() {
         let mut dec = AxdrDecoder::new(&[0x09, 0x03, 0x01, 0x02, 0x03]);
-        assert_eq!(dec.decode().unwrap(), DlmsType::from_octet_string(vec![1, 2, 3]));
+        assert_eq!(
+            dec.decode().unwrap(),
+            DlmsType::from_octet_string(vec![1, 2, 3])
+        );
     }
 
     #[test]
@@ -336,14 +351,20 @@ mod tests {
     fn test_decode_array() {
         let mut dec = AxdrDecoder::new(&[0x01, 0x02, 0x11, 0x01, 0x11, 0x02]);
         let result = dec.decode().unwrap();
-        assert_eq!(result, DlmsType::Array(vec![DlmsType::from_u8(1), DlmsType::from_u8(2)]));
+        assert_eq!(
+            result,
+            DlmsType::Array(vec![DlmsType::from_u8(1), DlmsType::from_u8(2)])
+        );
     }
 
     #[test]
     fn test_decode_structure() {
         let mut dec = AxdrDecoder::new(&[0x02, 0x02, 0x03, 0x01, 0x12, 0x00, 0x64]);
         let result = dec.decode().unwrap();
-        assert_eq!(result, DlmsType::Structure(vec![DlmsType::from_bool(true), DlmsType::from_u16(100)]));
+        assert_eq!(
+            result,
+            DlmsType::Structure(vec![DlmsType::from_bool(true), DlmsType::from_u16(100)])
+        );
     }
 
     #[test]
@@ -373,8 +394,18 @@ mod tests {
     #[test]
     fn test_roundtrip_datetime() {
         let dt = CosemDateTime {
-            date: CosemDate { year: 2024, month: 6, day: 15, day_of_week: 6 },
-            time: CosemTime { hour: 14, minute: 30, second: 0, hundredths: 0 },
+            date: CosemDate {
+                year: 2024,
+                month: 6,
+                day: 15,
+                day_of_week: 6,
+            },
+            time: CosemTime {
+                hour: 14,
+                minute: 30,
+                second: 0,
+                hundredths: 0,
+            },
             deviation: 480,
             clock_status: 0,
         };

@@ -59,7 +59,7 @@ impl DemandRegister {
                 second: 0xFF,
                 hundredths: 0xFF,
             },
-            deviation: -32768,  // 0x8000 = not specified for i16
+            deviation: -32768, // 0x8000 = not specified for i16
             clock_status: 0,
         };
         Self {
@@ -199,12 +199,7 @@ mod tests {
 
     #[test]
     fn test_demand_register_reset() {
-        let mut reg = DemandRegister::new(
-            ObisCode::new(1, 0, 1, 6, 0, 255),
-            0,
-            Unit::Watt,
-            900,
-        );
+        let mut reg = DemandRegister::new(ObisCode::new(1, 0, 1, 6, 0, 255), 0, Unit::Watt, 900);
         reg.current_average_value = DlmsType::UInt32(1000);
         let result = reg.execute_method(1, DlmsType::Null).unwrap();
         assert_eq!(result, DlmsType::Null);
@@ -213,12 +208,7 @@ mod tests {
 
     #[test]
     fn test_demand_register_next_period() {
-        let mut reg = DemandRegister::new(
-            ObisCode::new(1, 0, 1, 6, 0, 255),
-            0,
-            Unit::Watt,
-            900,
-        );
+        let mut reg = DemandRegister::new(ObisCode::new(1, 0, 1, 6, 0, 255), 0, Unit::Watt, 900);
         reg.current_average_value = DlmsType::UInt32(1000);
         reg.last_average_value = DlmsType::UInt32(900);
 

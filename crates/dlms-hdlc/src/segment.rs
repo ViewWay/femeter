@@ -4,11 +4,11 @@
 //! HDLC frames have a maximum information field size.
 //! Long data must be segmented into multiple I-frames.
 
-use alloc::vec::Vec;
-use alloc::vec;
-use crate::frame::HdlcFrame;
 use crate::address::HdlcAddress;
 use crate::control::ControlField;
+use crate::frame::HdlcFrame;
+use alloc::vec;
+use alloc::vec::Vec;
 use dlms_core::errors::HdlcError;
 
 /// Segment a large payload into HDLC I-frames

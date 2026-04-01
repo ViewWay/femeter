@@ -5,12 +5,7 @@
 //!
 //! Disconnect Control manages the connection/disconnection of the meter.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// Disconnect control state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,10 +125,7 @@ mod tests {
 
     #[test]
     fn test_disconnect_control_class_id() {
-        let dc = DisconnectControl::new(
-            ObisCode::new(0, 0, 96, 3, 10, 255),
-            ControlMode::Direct,
-        );
+        let dc = DisconnectControl::new(ObisCode::new(0, 0, 96, 3, 10, 255), ControlMode::Direct);
         assert_eq!(DisconnectControl::CLASS_ID, 70);
         assert_eq!(DisconnectControl::VERSION, 1);
         assert_eq!(dc.get_control_state(), DisconnectState::Disconnected);
@@ -141,10 +133,8 @@ mod tests {
 
     #[test]
     fn test_disconnect_control_methods() {
-        let mut dc = DisconnectControl::new(
-            ObisCode::new(0, 0, 96, 3, 10, 255),
-            ControlMode::Direct,
-        );
+        let mut dc =
+            DisconnectControl::new(ObisCode::new(0, 0, 96, 3, 10, 255), ControlMode::Direct);
         dc.execute_method(2, DlmsType::Null).unwrap();
         assert!(!dc.output_state);
         assert_eq!(dc.control_state, DisconnectState::Disconnected);

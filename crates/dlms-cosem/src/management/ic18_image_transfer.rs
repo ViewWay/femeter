@@ -5,12 +5,7 @@
 //!
 //! Image Transfer manages firmware image transfer for over-the-air updates.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// Image transfer status
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,11 +51,7 @@ pub struct ImageTransfer {
 
 impl ImageTransfer {
     /// Create a new Image Transfer object
-    pub fn new(
-        logical_name: ObisCode,
-        image_size: u32,
-        image_identification: DlmsType,
-    ) -> Self {
+    pub fn new(logical_name: ObisCode, image_size: u32, image_identification: DlmsType) -> Self {
         Self {
             logical_name,
             image_size,

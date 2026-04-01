@@ -2,11 +2,11 @@
 //!
 //! Reference: Green Book Ed.9 §8.4.4
 
-use alloc::vec::Vec;
-use crate::frame::HdlcFrame;
 use crate::address::HdlcAddress;
-use crate::control::{ControlField, FrameType};
 use crate::config::HdlcConfig;
+use crate::control::{ControlField, FrameType};
+use crate::frame::HdlcFrame;
+use alloc::vec::Vec;
 use dlms_core::errors::HdlcError;
 
 /// HDLC connection state
@@ -49,11 +49,7 @@ impl HdlcConnection {
 
         // SNRM frame with configuration negotiation payload
         let info = self.config.encode_snrm_payload();
-        Ok(HdlcFrame::new(
-            self.address,
-            ControlField::snrm(true),
-            info,
-        ))
+        Ok(HdlcFrame::new(self.address, ControlField::snrm(true), info))
     }
 
     /// Handle UA response to SNRM

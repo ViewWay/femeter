@@ -1,9 +1,9 @@
 //! AARQ (Association Request) encode/decode
 
-use alloc::vec::Vec;
-use crate::ber::{BerEncoder, BerDecoder, BerTag, BerError};
+use crate::ber::{BerDecoder, BerEncoder, BerError, BerTag};
 use crate::context::ApplicationContextName;
-use crate::initiate::{InitiateRequest, encode_initiate_request, decode_initiate_request};
+use crate::initiate::{decode_initiate_request, encode_initiate_request, InitiateRequest};
+use alloc::vec::Vec;
 
 /// AARQ (Application Association Request)
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,7 +71,9 @@ impl Aarq {
                                 let b = oid_data[i];
                                 n = (n << 7) | ((b & 0x7F) as u64);
                                 i += 1;
-                                if (b & 0x80) == 0 { break; }
+                                if (b & 0x80) == 0 {
+                                    break;
+                                }
                             }
                             components.push(n);
                         }
@@ -121,7 +123,10 @@ mod tests {
         let aarq = Aarq::new_ln_no_cipher(req);
         let bytes = encode_aarq(&aarq);
         let decoded = decode_aarq(&bytes).unwrap();
-        assert_eq!(decoded.application_context_name.oid(), ApplicationContextName::LogicalNameNoCiphering.oid());
+        assert_eq!(
+            decoded.application_context_name.oid(),
+            ApplicationContextName::LogicalNameNoCiphering.oid()
+        );
         assert_eq!(decoded.user_information.proposed_max_pdu_size, 1024);
     }
 }

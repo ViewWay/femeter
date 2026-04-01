@@ -5,12 +5,7 @@
 //!
 //! Association SN manages short-name based connections between client and server.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 12: Association SN
 ///

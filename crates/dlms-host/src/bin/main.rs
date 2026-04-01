@@ -2,7 +2,10 @@
 //!
 //! Command-line interface for simulator, sniffer, and test runner.
 
-use dlms_host::{Cli, Commands, SimulatorApp, ProtocolSniffer, TestRunner, IntegrationTest, TestResult, MeterAppBuilder};
+use dlms_host::{
+    Cli, Commands, IntegrationTest, MeterAppBuilder, ProtocolSniffer, SimulatorApp, TestResult,
+    TestRunner,
+};
 use std::fs::File;
 use std::io::Write;
 use std::process::ExitCode;
@@ -15,15 +18,23 @@ fn main() -> ExitCode {
     }
 
     let result = match cli.command {
-        Commands::Simulate { objects, listen, port } => {
-            run_simulate(cli.verbose, objects, listen, port)
-        }
-        Commands::Sniff { output, decode, client_filter, duration } => {
-            run_sniff(cli.verbose, output, decode, client_filter, duration)
-        }
-        Commands::Test { pattern, keep_going, output, tests } => {
-            run_test(cli.verbose, pattern, keep_going, output, tests)
-        }
+        Commands::Simulate {
+            objects,
+            listen,
+            port,
+        } => run_simulate(cli.verbose, objects, listen, port),
+        Commands::Sniff {
+            output,
+            decode,
+            client_filter,
+            duration,
+        } => run_sniff(cli.verbose, output, decode, client_filter, duration),
+        Commands::Test {
+            pattern,
+            keep_going,
+            output,
+            tests,
+        } => run_test(cli.verbose, pattern, keep_going, output, tests),
     };
 
     match result {
@@ -65,10 +76,22 @@ fn run_simulate(
     // Show current values
     println!("\nCurrent values:");
     println!("  Total Power: {} W", simulator.total_power());
-    println!("  L1 Power: {} W", simulator.app.measurement.instant_power(0).unwrap_or(0));
-    println!("  L2 Power: {} W", simulator.app.measurement.instant_power(1).unwrap_or(0));
-    println!("  L3 Power: {} W", simulator.app.measurement.instant_power(2).unwrap_or(0));
-    println!("  Total Energy: {} Wh", simulator.app.measurement.total_energy_import());
+    println!(
+        "  L1 Power: {} W",
+        simulator.app.measurement.instant_power(0).unwrap_or(0)
+    );
+    println!(
+        "  L2 Power: {} W",
+        simulator.app.measurement.instant_power(1).unwrap_or(0)
+    );
+    println!(
+        "  L3 Power: {} W",
+        simulator.app.measurement.instant_power(2).unwrap_or(0)
+    );
+    println!(
+        "  Total Energy: {} Wh",
+        simulator.app.measurement.total_energy_import()
+    );
 
     if listen {
         println!("\nListening on TCP port {}...", port);

@@ -121,7 +121,13 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn test_semaphore_error_display() {
-        assert_eq!(alloc::format!("{}", super::SemaphoreError::Deleted), "Semaphore deleted");
-        assert_eq!(alloc::format!("{}", super::SemaphoreError::Timeout), "Timeout waiting for semaphore");
+        assert_eq!(
+            alloc::format!("{}", super::SemaphoreError::Deleted),
+            "Semaphore deleted"
+        );
+        assert_eq!(
+            alloc::format!("{}", super::SemaphoreError::Timeout),
+            "Timeout waiting for semaphore"
+        );
     }
 }

@@ -26,12 +26,7 @@ pub fn compute_auth_value(
     match ctx.security_level() {
         crate::SecurityLevel::HlsGmac => {
             let auth_key = ctx.get_auth_key()?;
-            let tag = compute_gmac(
-                auth_key,
-                ctx.system_title(),
-                ctx.frame_counter(),
-                challenge,
-            )?;
+            let tag = compute_gmac(auth_key, ctx.system_title(), ctx.frame_counter(), challenge)?;
             Ok(tag.to_vec())
         }
         crate::SecurityLevel::HlsSha256 => {
@@ -39,7 +34,9 @@ pub fn compute_auth_value(
             // This is a placeholder implementation
             compute_hmac_sha256_placeholder(ctx, challenge)
         }
-        _ => Err(SecurityError::InvalidSecurityLevel(ctx.security_level() as u8)),
+        _ => Err(SecurityError::InvalidSecurityLevel(
+            ctx.security_level() as u8
+        )),
     }
 }
 
@@ -109,17 +106,26 @@ fn compute_hmac_sha256_placeholder(
 
     // Mix in key
     for (i, &byte) in auth_key.iter().enumerate() {
-        hash = hash.wrapping_mul(31).wrapping_add(byte as u32).wrapping_add(i as u32);
+        hash = hash
+            .wrapping_mul(31)
+            .wrapping_add(byte as u32)
+            .wrapping_add(i as u32);
     }
 
     // Mix in challenge
     for (i, &byte) in challenge.iter().enumerate() {
-        hash = hash.wrapping_mul(31).wrapping_add(byte as u32).wrapping_add(i as u32);
+        hash = hash
+            .wrapping_mul(31)
+            .wrapping_add(byte as u32)
+            .wrapping_add(i as u32);
     }
 
     // Mix in system title
     for (i, &byte) in ctx.system_title().iter().enumerate() {
-        hash = hash.wrapping_mul(31).wrapping_add(byte as u32).wrapping_add(i as u32);
+        hash = hash
+            .wrapping_mul(31)
+            .wrapping_add(byte as u32)
+            .wrapping_add(i as u32);
     }
 
     // Mix in counter
@@ -127,7 +133,9 @@ fn compute_hmac_sha256_placeholder(
 
     // Expand to 16 bytes
     for (i, byte) in result.iter_mut().enumerate() {
-        let mixed = hash.wrapping_mul((i as u32).wrapping_add(1)).wrapping_add(0x9E3779B9);
+        let mixed = hash
+            .wrapping_mul((i as u32).wrapping_add(1))
+            .wrapping_add(0x9E3779B9);
         *byte = ((mixed >> (i % 4 * 8)) & 0xFF) as u8;
     }
 
@@ -153,8 +161,8 @@ mod tests {
     use super::*;
 
     const TEST_KEY: [u8; 16] = [
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D,
-        0x0E, 0x0F,
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+        0x0F,
     ];
     const TEST_SYSTEM_TITLE: [u8; 8] = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
 
@@ -267,8 +275,8 @@ mod tests {
 
     #[test]
     fn test_compute_auth_value_wrong_security_level() {
-        let ctx = crate::SecurityContext::new(TEST_SYSTEM_TITLE)
-            .with_level(crate::SecurityLevel::None);
+        let ctx =
+            crate::SecurityContext::new(TEST_SYSTEM_TITLE).with_level(crate::SecurityLevel::None);
 
         let result = compute_auth_value(&ctx, b"challenge");
         assert!(result.is_err());

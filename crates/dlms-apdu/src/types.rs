@@ -8,7 +8,7 @@ extern crate std;
 extern crate alloc;
 
 use alloc::vec::Vec;
-use dlms_core::{DlmsType, DataAccessError, ObisCode};
+use dlms_core::{DataAccessError, DlmsType, ObisCode};
 
 // ============================================================
 // APDU Tag Definitions (IEC 62056-53 §8.2)
@@ -178,7 +178,10 @@ pub struct CosemObjectId {
 
 impl CosemObjectId {
     pub const fn new(class_id: u16, logical_name: ObisCode) -> Self {
-        Self { class_id, logical_name }
+        Self {
+            class_id,
+            logical_name,
+        }
     }
 
     /// Size in bytes: 2 (class) + 6 (OBIS) = 8 bytes
@@ -197,7 +200,11 @@ pub struct AttributeDescriptor {
 
 impl AttributeDescriptor {
     pub const fn new(class_id: u16, instance: ObisCode, attribute_id: u8) -> Self {
-        Self { class_id, instance, attribute_id }
+        Self {
+            class_id,
+            instance,
+            attribute_id,
+        }
     }
 
     /// Encoded size: 2 + 6 + 1 = 9 bytes
@@ -216,7 +223,11 @@ pub struct MethodDescriptor {
 
 impl MethodDescriptor {
     pub const fn new(class_id: u16, instance: ObisCode, method_id: u8) -> Self {
-        Self { class_id, instance, method_id }
+        Self {
+            class_id,
+            instance,
+            method_id,
+        }
     }
 
     /// Encoded size: 2 + 6 + 1 = 9 bytes
@@ -243,11 +254,17 @@ pub struct AccessRequest {
 
 impl AccessRequest {
     pub const fn new(descriptor: AttributeDescriptor) -> Self {
-        Self { descriptor, access_selector: AccessSelector::None }
+        Self {
+            descriptor,
+            access_selector: AccessSelector::None,
+        }
     }
 
     pub fn with_selective_raw(descriptor: AttributeDescriptor, data: Vec<u8>) -> Self {
-        Self { descriptor, access_selector: AccessSelector::WithRawData(data) }
+        Self {
+            descriptor,
+            access_selector: AccessSelector::WithRawData(data),
+        }
     }
 }
 
@@ -280,21 +297,13 @@ mod tests {
 
     #[test]
     fn test_attribute_descriptor_size() {
-        let _desc = AttributeDescriptor::new(
-            3,
-            ObisCode::new(1, 0, 1, 8, 0, 255),
-            2,
-        );
+        let _desc = AttributeDescriptor::new(3, ObisCode::new(1, 0, 1, 8, 0, 255), 2);
         assert_eq!(AttributeDescriptor::encoded_size(), 9);
     }
 
     #[test]
     fn test_method_descriptor_size() {
-        let _desc = MethodDescriptor::new(
-            70,
-            ObisCode::new(0, 0, 96, 3, 10, 255),
-            1,
-        );
+        let _desc = MethodDescriptor::new(70, ObisCode::new(0, 0, 96, 3, 10, 255), 1);
         assert_eq!(MethodDescriptor::encoded_size(), 9);
     }
 }

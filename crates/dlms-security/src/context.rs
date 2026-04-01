@@ -4,8 +4,8 @@
 //! including keys, counters, and security level settings.
 
 use crate::{
-    key, system_title::SystemTitle, KeySelection, SecurityControl, SecuritySuite,
-    AUTH_KEY_SIZE, DEDICATED_KEY_SIZE, GLOBAL_KEY_SIZE,
+    key, system_title::SystemTitle, KeySelection, SecurityControl, SecuritySuite, AUTH_KEY_SIZE,
+    DEDICATED_KEY_SIZE, GLOBAL_KEY_SIZE,
 };
 use dlms_core::errors::SecurityError;
 
@@ -47,7 +47,10 @@ impl SecurityLevel {
 
     /// Check if authentication is required
     pub fn requires_authentication(&self) -> bool {
-        matches!(self, Self::Lls | Self::HlsGmac | Self::HlsSha256 | Self::AesGcm128)
+        matches!(
+            self,
+            Self::Lls | Self::HlsGmac | Self::HlsSha256 | Self::AesGcm128
+        )
     }
 
     /// Check if encryption is required
@@ -120,7 +123,10 @@ impl SecurityContext {
     ///
     /// Returns an error if the counter would overflow
     pub fn increment_counter(&mut self) -> Result<(), SecurityError> {
-        self.frame_counter = self.frame_counter.checked_add(1).ok_or(SecurityError::CounterOverflow)?;
+        self.frame_counter = self
+            .frame_counter
+            .checked_add(1)
+            .ok_or(SecurityError::CounterOverflow)?;
         Ok(())
     }
 
@@ -161,7 +167,10 @@ impl SecurityContext {
     pub fn get_key(&self, selection: KeySelection) -> Result<&[u8; 16], SecurityError> {
         match selection {
             KeySelection::Global => self.global_key.as_ref().ok_or(SecurityError::KeyNotFound),
-            KeySelection::Dedicated => self.dedicated_key.as_ref().ok_or(SecurityError::KeyNotFound),
+            KeySelection::Dedicated => self
+                .dedicated_key
+                .as_ref()
+                .ok_or(SecurityError::KeyNotFound),
             KeySelection::Reserved(_) => Err(SecurityError::KeyNotFound),
         }
     }
@@ -185,7 +194,12 @@ impl SecurityContext {
         let authenticated = self.security_level.requires_authentication();
         let encrypted = self.security_level.requires_encryption();
 
-        SecurityControl::new(SecuritySuite::AesGcm128, authenticated, encrypted, key_selection)
+        SecurityControl::new(
+            SecuritySuite::AesGcm128,
+            authenticated,
+            encrypted,
+            key_selection,
+        )
     }
 
     /// Check if the context is properly configured for the security level
@@ -223,8 +237,8 @@ mod tests {
     use super::*;
 
     const TEST_KEY: [u8; 16] = [
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D,
-        0x0E, 0x0F,
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+        0x0F,
     ];
 
     #[test]
@@ -293,8 +307,7 @@ mod tests {
 
     #[test]
     fn test_get_key() {
-        let ctx = SecurityContext::new([0u8; 8])
-            .with_global_key(TEST_KEY);
+        let ctx = SecurityContext::new([0u8; 8]).with_global_key(TEST_KEY);
 
         assert_eq!(ctx.get_key(KeySelection::Global), Ok(&TEST_KEY));
         assert!(ctx.get_key(KeySelection::Dedicated).is_err());
@@ -302,8 +315,7 @@ mod tests {
 
     #[test]
     fn test_has_key() {
-        let ctx = SecurityContext::new([0u8; 8])
-            .with_global_key(TEST_KEY);
+        let ctx = SecurityContext::new([0u8; 8]).with_global_key(TEST_KEY);
 
         assert!(ctx.has_key(KeySelection::Global));
         assert!(!ctx.has_key(KeySelection::Dedicated));
@@ -348,8 +360,7 @@ mod tests {
 
     #[test]
     fn test_security_control() {
-        let ctx = SecurityContext::new([0u8; 8])
-            .with_level(SecurityLevel::AesGcm128);
+        let ctx = SecurityContext::new([0u8; 8]).with_level(SecurityLevel::AesGcm128);
 
         let sc = ctx.security_control(KeySelection::Global);
         assert!(sc.is_authenticated());

@@ -7,15 +7,15 @@ extern crate std;
 
 extern crate alloc;
 
-use alloc::vec::Vec;
-#[allow(unused_imports)]
-use alloc::vec;
+use crate::codec::{ApduDecoder, ApduEncoder};
 use crate::types::{ApduError, InvokeId, TAG_GENERAL_BLOCK_TRANSFER};
 use crate::types::{
-    BTF_LAST_BLOCK, BTF_GET_REQUEST, BTF_GET_RESPONSE, BTF_SET_REQUEST,
-    BTF_SET_RESPONSE, BTF_ACTION_REQUEST, BTF_ACTION_RESPONSE,
+    BTF_ACTION_REQUEST, BTF_ACTION_RESPONSE, BTF_GET_REQUEST, BTF_GET_RESPONSE, BTF_LAST_BLOCK,
+    BTF_SET_REQUEST, BTF_SET_RESPONSE,
 };
-use crate::codec::{ApduEncoder, ApduDecoder};
+#[allow(unused_imports)]
+use alloc::vec;
+use alloc::vec::Vec;
 
 /// General Block Transfer PDU
 ///
@@ -139,8 +139,8 @@ impl BlockTransferCommand {
     pub fn decode(command: u8, data: &[u8]) -> Result<Self, ApduError> {
         match command {
             BTF_LAST_BLOCK => Ok(Self::LastBlockAcknowledged),
-            BTF_GET_REQUEST | BTF_GET_RESPONSE | BTF_SET_REQUEST |
-            BTF_SET_RESPONSE | BTF_ACTION_REQUEST | BTF_ACTION_RESPONSE => {
+            BTF_GET_REQUEST | BTF_GET_RESPONSE | BTF_SET_REQUEST | BTF_SET_RESPONSE
+            | BTF_ACTION_REQUEST | BTF_ACTION_RESPONSE => {
                 if data.len() < 4 {
                     return Err(ApduError::TooShort);
                 }
@@ -181,7 +181,7 @@ mod tests {
 
         assert_eq!(encoded[0], TAG_GENERAL_BLOCK_TRANSFER);
         assert_eq!(encoded[2], 1); // invoke_id
-        // Block control with last_block flag and command
+                                   // Block control with last_block flag and command
         assert_eq!(encoded[3], 0x80 | BTF_LAST_BLOCK);
     }
 
@@ -199,7 +199,7 @@ mod tests {
         assert_eq!(encoded[0], TAG_GENERAL_BLOCK_TRANSFER);
         assert_eq!(encoded[2], 1); // invoke_id
         assert_eq!(encoded[3], BTF_GET_REQUEST); // command without last_block flag
-        // Block number
+                                                 // Block number
         assert_eq!(&encoded[4..8], [0, 0, 0, 0]);
         // Data length
         assert_eq!(&encoded[8..12], [0, 0, 0, 5]);
@@ -232,7 +232,10 @@ mod tests {
 
     #[test]
     fn test_block_transfer_command_to_byte() {
-        assert_eq!(BlockTransferCommand::LastBlockAcknowledged.to_byte(), BTF_LAST_BLOCK);
+        assert_eq!(
+            BlockTransferCommand::LastBlockAcknowledged.to_byte(),
+            BTF_LAST_BLOCK
+        );
         assert_eq!(
             BlockTransferCommand::GetRequestBlock { data: vec![] }.to_byte(),
             BTF_GET_REQUEST

@@ -8,9 +8,9 @@
 
 extern crate alloc;
 
-use alloc::vec::Vec;
 #[allow(unused_imports)]
 use alloc::vec;
+use alloc::vec::Vec;
 use dlms_core::{errors::CosemError, types::DlmsType};
 
 use crate::common::{DemandConfig, PhaseEnergy, PowerQuality};
@@ -83,7 +83,7 @@ impl MeasurementEngine {
             },
             power_quality: PowerQuality::default(),
             energy_scaler: -3, // Wh (0.001 kWh)
-            power_scaler: 0,  // W
+            power_scaler: 0,   // W
         }
     }
 
@@ -104,8 +104,10 @@ impl MeasurementEngine {
                 self.total_energy.active_import =
                     self.total_energy.active_import.saturating_add(energy_wh);
             } else {
-                self.total_energy.active_export =
-                    self.total_energy.active_export.saturating_add(energy_wh.abs());
+                self.total_energy.active_export = self
+                    .total_energy
+                    .active_export
+                    .saturating_add(energy_wh.abs());
             }
         }
 
@@ -115,7 +117,14 @@ impl MeasurementEngine {
     }
 
     /// Update 3-phase power samples
-    pub fn process_3phase_power(&mut self, l1_w: i32, l2_w: i32, l3_w: i32, tariff: usize, interval_s: u32) {
+    pub fn process_3phase_power(
+        &mut self,
+        l1_w: i32,
+        l2_w: i32,
+        l3_w: i32,
+        tariff: usize,
+        interval_s: u32,
+    ) {
         self.instant_power[0] = l1_w;
         self.instant_power[1] = l2_w;
         self.instant_power[2] = l3_w;
@@ -169,7 +178,10 @@ impl MeasurementEngine {
             if count == 0 {
                 return 0;
             }
-            let sum: i64 = self.demand_state.samples[..count].iter().map(|&s| s as i64).sum();
+            let sum: i64 = self.demand_state.samples[..count]
+                .iter()
+                .map(|&s| s as i64)
+                .sum();
             (sum / count as i64) as i32
         }
     }
@@ -416,7 +428,7 @@ mod tests {
         let mut engine = MeasurementEngine::new();
 
         engine.update_voltage(0, 23050).unwrap(); // 230.50V
-        engine.update_current(0, 5000).unwrap();  // 5.000A
+        engine.update_current(0, 5000).unwrap(); // 5.000A
 
         assert_eq!(engine.voltage(0), Some(23050));
         assert_eq!(engine.current(0), Some(5000));

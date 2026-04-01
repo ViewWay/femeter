@@ -4,12 +4,7 @@
 //!
 //! Reference: IEC 62056-6-2 (Blue Book Part 2) §7.7.103
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// ZigBee SAS APS Fragmentation Interface Class (IC 103)
 ///
@@ -68,17 +63,19 @@ impl CosemClass for ZigbeeSasApsFragmentation {
                 Ok(())
             }
             3 => {
-                self.max_incoming_transfer_size = value.as_u16().ok_or(CosemError::TypeMismatch {
-                    expected: 18,
-                    got: value.tag(),
-                })?;
+                self.max_incoming_transfer_size =
+                    value.as_u16().ok_or(CosemError::TypeMismatch {
+                        expected: 18,
+                        got: value.tag(),
+                    })?;
                 Ok(())
             }
             4 => {
-                self.max_outgoing_transfer_size = value.as_u16().ok_or(CosemError::TypeMismatch {
-                    expected: 18,
-                    got: value.tag(),
-                })?;
+                self.max_outgoing_transfer_size =
+                    value.as_u16().ok_or(CosemError::TypeMismatch {
+                        expected: 18,
+                        got: value.tag(),
+                    })?;
                 Ok(())
             }
             _ => Err(CosemError::NoSuchAttribute(id)),

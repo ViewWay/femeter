@@ -2,7 +2,7 @@
 //!
 //! Provides encode/decode for COSEM date, time, datetime as raw bytes.
 
-use dlms_core::types::{CosemDate, CosemTime, CosemDateTime};
+use dlms_core::types::{CosemDate, CosemDateTime, CosemTime};
 
 /// Encode a CosemDate to 5 bytes
 pub fn encode_date(d: &CosemDate) -> [u8; 5] {
@@ -17,7 +17,9 @@ pub fn encode_date(d: &CosemDate) -> [u8; 5] {
 
 /// Decode a CosemDate from 5 bytes
 pub fn decode_date(b: &[u8]) -> Option<CosemDate> {
-    if b.len() < 5 { return None; }
+    if b.len() < 5 {
+        return None;
+    }
     Some(CosemDate {
         year: u16::from_be_bytes([b[0], b[1]]),
         month: b[2],
@@ -33,7 +35,9 @@ pub fn encode_time(t: &CosemTime) -> [u8; 4] {
 
 /// Decode a CosemTime from 4 bytes
 pub fn decode_time(b: &[u8]) -> Option<CosemTime> {
-    if b.len() < 4 { return None; }
+    if b.len() < 4 {
+        return None;
+    }
     Some(CosemTime {
         hour: b[0],
         minute: b[1],
@@ -62,7 +66,9 @@ pub fn encode_datetime(dt: &CosemDateTime) -> [u8; 12] {
 
 /// Decode a CosemDateTime from 12 bytes
 pub fn decode_datetime(b: &[u8]) -> Option<CosemDateTime> {
-    if b.len() < 12 { return None; }
+    if b.len() < 12 {
+        return None;
+    }
     Some(CosemDateTime {
         date: CosemDate {
             year: u16::from_be_bytes([b[0], b[1]]),
@@ -87,7 +93,12 @@ mod tests {
 
     #[test]
     fn test_date_roundtrip() {
-        let d = CosemDate { year: 2024, month: 6, day: 15, day_of_week: 6 };
+        let d = CosemDate {
+            year: 2024,
+            month: 6,
+            day: 15,
+            day_of_week: 6,
+        };
         let bytes = encode_date(&d);
         let decoded = decode_date(&bytes).unwrap();
         assert_eq!(decoded, d);
@@ -95,7 +106,12 @@ mod tests {
 
     #[test]
     fn test_time_roundtrip() {
-        let t = CosemTime { hour: 14, minute: 30, second: 45, hundredths: 50 };
+        let t = CosemTime {
+            hour: 14,
+            minute: 30,
+            second: 45,
+            hundredths: 50,
+        };
         let bytes = encode_time(&t);
         let decoded = decode_time(&bytes).unwrap();
         assert_eq!(decoded, t);
@@ -104,8 +120,18 @@ mod tests {
     #[test]
     fn test_datetime_roundtrip() {
         let dt = CosemDateTime {
-            date: CosemDate { year: 2024, month: 1, day: 1, day_of_week: 1 },
-            time: CosemTime { hour: 0, minute: 0, second: 0, hundredths: 0 },
+            date: CosemDate {
+                year: 2024,
+                month: 1,
+                day: 1,
+                day_of_week: 1,
+            },
+            time: CosemTime {
+                hour: 0,
+                minute: 0,
+                second: 0,
+                hundredths: 0,
+            },
             deviation: 480,
             clock_status: 0,
         };

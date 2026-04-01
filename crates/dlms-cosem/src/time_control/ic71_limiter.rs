@@ -5,12 +5,7 @@
 //!
 //! Limiter controls power consumption by limiting load.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// Limiter status
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

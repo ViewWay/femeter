@@ -9,12 +9,7 @@
 
 use alloc::vec::Vec;
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// Sort method for profile entries
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -230,7 +225,10 @@ mod tests {
         assert_eq!(pg.entries_in_use(), 0);
 
         // Add some entries
-        let entries = alloc::vec![DlmsType::Structure(alloc::vec![]), DlmsType::Structure(alloc::vec![])];
+        let entries = alloc::vec![
+            DlmsType::Structure(alloc::vec![]),
+            DlmsType::Structure(alloc::vec![])
+        ];
         pg.set_buffer(DlmsType::Array(entries));
         assert_eq!(pg.entries_in_use(), 2);
     }

@@ -7,12 +7,7 @@
 //! based connections between client and server, including the complete object
 //! list exposed by the meter.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 15: Association LN
 ///
@@ -60,9 +55,9 @@ impl AssociationLn {
             associated_partners_id: DlmsType::Structure(alloc::vec![]),
             application_context_name: DlmsType::OctetString(alloc::vec![]),
             xdlms_context_info: DlmsType::Structure(alloc::vec![
-                DlmsType::UInt8(0), // conformance (lower)
-                DlmsType::UInt8(0), // conformance (mid)
-                DlmsType::UInt8(0), // conformance (upper)
+                DlmsType::UInt8(0),  // conformance (lower)
+                DlmsType::UInt8(0),  // conformance (mid)
+                DlmsType::UInt8(0),  // conformance (upper)
                 DlmsType::UInt8(32), // max_receive_pdu_size
                 DlmsType::UInt8(32), // max_send_pdu_size
             ]),

@@ -4,12 +4,7 @@
 //!
 //! Reference: IEC 62056-6-2 (Blue Book Part 2) §7.7.160
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// G3-PLC Hybrid RF MAC Layer Counters Interface Class (IC 160)
 ///

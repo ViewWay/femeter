@@ -6,12 +6,7 @@
 //! Register Activation controls which register(s) are active for a specific
 //! tariff or billing period.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 6: Register Activation
 ///

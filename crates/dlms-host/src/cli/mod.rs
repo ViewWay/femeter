@@ -101,7 +101,6 @@ impl Cli {
     pub fn from_env() -> Self {
         Self::parse()
     }
-
 }
 
 #[cfg(test)]

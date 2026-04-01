@@ -2,9 +2,9 @@
 //!
 //! Unified interface for all 105 COSEM interface classes.
 
-use crate::types::DlmsType;
-use crate::obis::ObisCode;
 use crate::errors::CosemError;
+use crate::obis::ObisCode;
+use crate::types::DlmsType;
 
 /// Mandatory interface for all COSEM interface classes.
 ///

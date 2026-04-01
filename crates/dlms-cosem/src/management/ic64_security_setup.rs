@@ -5,12 +5,7 @@
 //!
 //! Security Setup manages security parameters including keys and encryption.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 64: Security Setup
 ///

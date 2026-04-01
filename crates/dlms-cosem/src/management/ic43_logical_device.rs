@@ -6,12 +6,7 @@
 //! Reference: IEC 62056-6-2 (Blue Book Part 2) §7.4.1
 
 use alloc::vec::Vec;
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// Information about a COSEM object instance
 #[derive(Debug, Clone)]
@@ -117,9 +112,8 @@ impl LogicalDevice {
     /// `true` if the object was found and removed, `false` otherwise
     pub fn remove_object(&mut self, class_id: u16, logical_name: ObisCode) -> bool {
         let original_len = self.object_list.len();
-        self.object_list.retain(|obj| {
-            !(obj.class_id == class_id && obj.logical_name == logical_name)
-        });
+        self.object_list
+            .retain(|obj| !(obj.class_id == class_id && obj.logical_name == logical_name));
         self.object_list.len() < original_len
     }
 

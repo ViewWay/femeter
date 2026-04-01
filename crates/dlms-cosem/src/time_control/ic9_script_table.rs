@@ -5,12 +5,7 @@
 //!
 //! Script Table stores and executes scripts (sequences of actions).
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// Script action
 #[derive(Debug, Clone)]

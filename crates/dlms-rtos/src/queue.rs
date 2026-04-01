@@ -135,6 +135,9 @@ mod tests {
     #[test]
     fn test_queue_error_display() {
         assert_eq!(alloc::format!("{}", super::QueueError::Full), "Queue full");
-        assert_eq!(alloc::format!("{}", super::QueueError::Empty), "Queue empty");
+        assert_eq!(
+            alloc::format!("{}", super::QueueError::Empty),
+            "Queue empty"
+        );
     }
 }

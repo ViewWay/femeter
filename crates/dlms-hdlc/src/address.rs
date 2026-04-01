@@ -3,8 +3,8 @@
 //! Reference: Green Book Ed.9 §8.4.2.2
 //! Extended addressing: bit0=0 means more bytes follow, bit0=1 = last byte
 
-use dlms_core::errors::HdlcError;
 use alloc::vec::Vec;
+use dlms_core::errors::HdlcError;
 
 /// HDLC address (client + server upper/lower)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,7 +19,11 @@ pub struct HdlcAddress {
 
 impl HdlcAddress {
     pub const fn new(client: u8, server_upper: u16, server_lower: u16) -> Self {
-        Self { client, server_upper, server_lower }
+        Self {
+            client,
+            server_upper,
+            server_lower,
+        }
     }
 
     /// Default meter address (client=1, logical device=1, physical=0)
@@ -59,7 +63,9 @@ pub fn encode_address(addr: &HdlcAddress) -> Vec<u8> {
 /// Decode HDLC address from bytes
 /// Returns (address, bytes_consumed)
 pub fn decode_address(data: &[u8]) -> Result<(HdlcAddress, usize), HdlcError> {
-    if data.len() < 2 { return Err(HdlcError::AddressError); }
+    if data.len() < 2 {
+        return Err(HdlcError::AddressError);
+    }
 
     // Client address (1 byte)
     let client = data[0] >> 1;
@@ -69,21 +75,32 @@ pub fn decode_address(data: &[u8]) -> Result<(HdlcAddress, usize), HdlcError> {
     let mut server: u32 = 0;
     let server_start = pos;
     loop {
-        if pos >= data.len() { return Err(HdlcError::AddressError); }
+        if pos >= data.len() {
+            return Err(HdlcError::AddressError);
+        }
         server = (server << 7) | ((data[pos] >> 1) as u32);
         if data[pos] & 0x01 != 0 {
             pos += 1;
             break;
         }
         pos += 1;
-        if pos - server_start > 4 { return Err(HdlcError::AddressError); }
+        if pos - server_start > 4 {
+            return Err(HdlcError::AddressError);
+        }
     }
 
     // Split server into upper (logical device) and lower (physical device)
     let server_upper = (server >> 16) as u16;
     let server_lower = (server & 0xFFFF) as u16;
 
-    Ok((HdlcAddress { client, server_upper, server_lower }, pos))
+    Ok((
+        HdlcAddress {
+            client,
+            server_upper,
+            server_lower,
+        },
+        pos,
+    ))
 }
 
 #[cfg(test)]

@@ -97,7 +97,10 @@ mod tests {
     #[test]
     fn test_obis_description() {
         let code = ObisCode::new(1, 0, 1, 8, 0, 255);
-        assert_eq!(obis_description(&code), Some("Total active energy import (kWh)"));
+        assert_eq!(
+            obis_description(&code),
+            Some("Total active energy import (kWh)")
+        );
 
         let code = ObisCode::new(7, 0, 1, 8, 0, 255);
         assert_eq!(obis_description(&code), Some("Total gas volume (m³)"));
@@ -108,9 +111,21 @@ mod tests {
 
     #[test]
     fn test_obis_group_all() {
-        assert_eq!(obis_group(&ObisCode::new(0, 0, 0, 0, 0, 0)), ObisGroup::Abstract);
-        assert_eq!(obis_group(&ObisCode::new(5, 0, 0, 0, 0, 0)), ObisGroup::ThermalEnergy);
-        assert_eq!(obis_group(&ObisCode::new(10, 0, 0, 0, 0, 0)), ObisGroup::HeatMeter);
-        assert_eq!(obis_group(&ObisCode::new(99, 0, 0, 0, 0, 0)), ObisGroup::Other(99));
+        assert_eq!(
+            obis_group(&ObisCode::new(0, 0, 0, 0, 0, 0)),
+            ObisGroup::Abstract
+        );
+        assert_eq!(
+            obis_group(&ObisCode::new(5, 0, 0, 0, 0, 0)),
+            ObisGroup::ThermalEnergy
+        );
+        assert_eq!(
+            obis_group(&ObisCode::new(10, 0, 0, 0, 0, 0)),
+            ObisGroup::HeatMeter
+        );
+        assert_eq!(
+            obis_group(&ObisCode::new(99, 0, 0, 0, 0, 0)),
+            ObisGroup::Other(99)
+        );
     }
 }

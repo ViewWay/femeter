@@ -182,7 +182,11 @@ mod tests {
         display.init().unwrap();
         display.write_string("123.45 kWh").unwrap();
         assert_eq!(
-            display.get_buffer().chars().take(10).collect::<std::string::String>(),
+            display
+                .get_buffer()
+                .chars()
+                .take(10)
+                .collect::<std::string::String>(),
             "123.45 kWh"
         );
     }

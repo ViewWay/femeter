@@ -6,12 +6,7 @@
 //! Status Mapping provides a mapping between internal status codes and
 //! their meanings/representations.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 63: Status Mapping
 ///

@@ -192,7 +192,13 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn test_mempool_error_display() {
-        assert_eq!(alloc::format!("{}", MemPoolError::OutOfMemory), "Pool out of memory");
-        assert_eq!(alloc::format!("{}", MemPoolError::DoubleFree), "Double free detected");
+        assert_eq!(
+            alloc::format!("{}", MemPoolError::OutOfMemory),
+            "Pool out of memory"
+        );
+        assert_eq!(
+            alloc::format!("{}", MemPoolError::DoubleFree),
+            "Double free detected"
+        );
     }
 }

@@ -5,12 +5,7 @@
 //!
 //! Credit manages credit amounts for prepaid meters.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// Credit status
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -178,12 +173,7 @@ mod tests {
 
     #[test]
     fn test_credit_class_id() {
-        let credit = Credit::new(
-            ObisCode::new(0, 0, 112, 0, 0, 255),
-            10,
-            0,
-            0,
-        );
+        let credit = Credit::new(ObisCode::new(0, 0, 112, 0, 0, 255), 10, 0, 0);
         assert_eq!(Credit::CLASS_ID, 112);
     }
 }

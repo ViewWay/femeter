@@ -6,8 +6,10 @@
 use super::*;
 use dlms_core::{
     errors::CosemError,
-    obis::{ObisCode, CLOCK, TOTAL_ACTIVE_ENERGY_IMPORT, VOLTAGE_L1, VOLTAGE_L2, VOLTAGE_L3,
-           CURRENT_L1, CURRENT_L2, CURRENT_L3, ACTIVE_POWER, REACTIVE_POWER},
+    obis::{
+        ObisCode, ACTIVE_POWER, CLOCK, CURRENT_L1, CURRENT_L2, CURRENT_L3, REACTIVE_POWER,
+        TOTAL_ACTIVE_ENERGY_IMPORT, VOLTAGE_L1, VOLTAGE_L2, VOLTAGE_L3,
+    },
     types::DlmsType,
 };
 
@@ -127,24 +129,32 @@ impl SimulatorApp {
             // Return clock time (using uptime as simplified proxy)
             Ok(DlmsType::from_i32(self.app.uptime() as i32))
         } else if *obis == TOTAL_ACTIVE_ENERGY_IMPORT {
-            Ok(DlmsType::from_i64(self.app.measurement.total_energy_import()))
+            Ok(DlmsType::from_i64(
+                self.app.measurement.total_energy_import(),
+            ))
         } else if *obis == VOLTAGE_L1 {
-            self.app.measurement.voltage(0)
+            self.app
+                .measurement
+                .voltage(0)
                 .map(|v| DlmsType::from_i32(v as i32))
                 .ok_or(CosemError::ObjectNotFound)
         } else if *obis == VOLTAGE_L2 {
-            self.app.measurement.voltage(1)
+            self.app
+                .measurement
+                .voltage(1)
                 .map(|v| DlmsType::from_i32(v as i32))
                 .ok_or(CosemError::ObjectNotFound)
         } else if *obis == VOLTAGE_L3 {
-            self.app.measurement.voltage(2)
+            self.app
+                .measurement
+                .voltage(2)
                 .map(|v| DlmsType::from_i32(v as i32))
                 .ok_or(CosemError::ObjectNotFound)
         } else if *obis == ACTIVE_POWER {
             // Sum all phase powers
-            let total = self.app.measurement.instant_power(0).unwrap_or(0) as i64 +
-                       self.app.measurement.instant_power(1).unwrap_or(0) as i64 +
-                       self.app.measurement.instant_power(2).unwrap_or(0) as i64;
+            let total = self.app.measurement.instant_power(0).unwrap_or(0) as i64
+                + self.app.measurement.instant_power(1).unwrap_or(0) as i64
+                + self.app.measurement.instant_power(2).unwrap_or(0) as i64;
             Ok(DlmsType::from_i64(total))
         } else if *obis == REACTIVE_POWER {
             Ok(DlmsType::from_i32(0)) // Simplified
@@ -154,7 +164,12 @@ impl SimulatorApp {
     }
 
     /// Write an attribute value
-    pub fn write_attribute(&mut self, obis: &ObisCode, attr_id: u8, _value: DlmsType) -> Result<(), CosemError> {
+    pub fn write_attribute(
+        &mut self,
+        obis: &ObisCode,
+        attr_id: u8,
+        _value: DlmsType,
+    ) -> Result<(), CosemError> {
         if attr_id != 2 {
             return Err(CosemError::NoSuchAttribute(attr_id));
         }
@@ -204,9 +219,9 @@ impl SimulatorApp {
 
     /// Get total power across all phases
     pub fn total_power(&self) -> i32 {
-        self.app.measurement.instant_power(0).unwrap_or(0) +
-        self.app.measurement.instant_power(1).unwrap_or(0) +
-        self.app.measurement.instant_power(2).unwrap_or(0)
+        self.app.measurement.instant_power(0).unwrap_or(0)
+            + self.app.measurement.instant_power(1).unwrap_or(0)
+            + self.app.measurement.instant_power(2).unwrap_or(0)
     }
 }
 

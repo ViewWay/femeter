@@ -7,12 +7,12 @@ extern crate std;
 
 extern crate alloc;
 
-use alloc::vec::Vec;
+use crate::codec::{ApduDecoder, ApduEncoder};
+use crate::types::{ApduError, PRIORITY_HIGH, PRIORITY_NORMAL, TAG_EVENT_NOTIFICATION};
 #[allow(unused_imports)]
 use alloc::vec;
+use alloc::vec::Vec;
 use dlms_core::DlmsType;
-use crate::types::{ApduError, TAG_EVENT_NOTIFICATION, PRIORITY_NORMAL, PRIORITY_HIGH};
-use crate::codec::{ApduEncoder, ApduDecoder};
 
 /// Event Notification PDU
 /// Sent from meter to client to notify about events
@@ -251,21 +251,27 @@ impl EventCode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dlms_core::{CosemDateTime, CosemDate, CosemTime};
+    use dlms_core::{CosemDate, CosemDateTime, CosemTime};
 
     #[test]
     fn test_event_notification_encode() {
         let dt = CosemDateTime {
-            date: CosemDate { year: 2024, month: 1, day: 1, day_of_week: 1 },
-            time: CosemTime { hour: 0, minute: 0, second: 0, hundredths: 0 },
+            date: CosemDate {
+                year: 2024,
+                month: 1,
+                day: 1,
+                day_of_week: 1,
+            },
+            time: CosemTime {
+                hour: 0,
+                minute: 0,
+                second: 0,
+                hundredths: 0,
+            },
             deviation: 0,
             clock_status: 0,
         };
-        let event = EventNotification::new(
-            1,
-            DlmsType::DateTime(dt),
-            EventCode::PowerFailure,
-        );
+        let event = EventNotification::new(1, DlmsType::DateTime(dt), EventCode::PowerFailure);
         let encoded = event.encode().unwrap();
 
         assert_eq!(encoded[0], TAG_EVENT_NOTIFICATION);
@@ -275,16 +281,22 @@ mod tests {
     #[test]
     fn test_event_notification_roundtrip() {
         let dt = CosemDateTime {
-            date: CosemDate { year: 2024, month: 1, day: 1, day_of_week: 1 },
-            time: CosemTime { hour: 0, minute: 0, second: 0, hundredths: 0 },
+            date: CosemDate {
+                year: 2024,
+                month: 1,
+                day: 1,
+                day_of_week: 1,
+            },
+            time: CosemTime {
+                hour: 0,
+                minute: 0,
+                second: 0,
+                hundredths: 0,
+            },
             deviation: 0,
             clock_status: 0,
         };
-        let event = EventNotification::new(
-            42,
-            DlmsType::DateTime(dt),
-            EventCode::BatteryWarning,
-        );
+        let event = EventNotification::new(42, DlmsType::DateTime(dt), EventCode::BatteryWarning);
         let encoded = event.encode().unwrap();
         let decoded = EventNotification::decode(&encoded).unwrap();
 

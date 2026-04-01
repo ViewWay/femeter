@@ -261,7 +261,10 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn test_task_error_display() {
-        assert_eq!(alloc::format!("{}", TaskError::TaskLimit), "Task limit reached");
+        assert_eq!(
+            alloc::format!("{}", TaskError::TaskLimit),
+            "Task limit reached"
+        );
         assert_eq!(alloc::format!("{}", TaskError::NotFound), "Task not found");
     }
 }

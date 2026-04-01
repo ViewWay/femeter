@@ -9,18 +9,18 @@ extern crate std;
 
 extern crate alloc;
 
-pub mod frame;
 pub mod address;
+pub mod config;
+pub mod connection;
 pub mod control;
 pub mod crc;
+pub mod frame;
 pub mod llc;
 pub mod segment;
-pub mod connection;
-pub mod config;
 
-pub use frame::HdlcFrame;
 pub use address::HdlcAddress;
+pub use config::HdlcConfig;
+pub use connection::{ConnectionState, HdlcConnection};
 pub use control::{ControlField, FrameType};
 pub use crc::crc16;
-pub use config::HdlcConfig;
-pub use connection::{HdlcConnection, ConnectionState};
+pub use frame::HdlcFrame;

@@ -307,7 +307,11 @@ impl HistoricalManager {
     /// Add a historical entry
     pub fn add_entry(&mut self, entry: HistoricalEntry) -> Result<(), CosemError> {
         // Check if we'd exceed max for this period
-        let period_count = self.entries.iter().filter(|e| e.period == entry.period).count();
+        let period_count = self
+            .entries
+            .iter()
+            .filter(|e| e.period == entry.period)
+            .count();
         if period_count >= self.max_per_period {
             return Err(CosemError::NotImplemented);
         }

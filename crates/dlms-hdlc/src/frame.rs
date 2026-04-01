@@ -2,12 +2,12 @@
 //!
 //! Reference: Green Book Ed.9 §8.4
 
-use alloc::vec::Vec;
-use alloc::vec;
-use dlms_core::errors::HdlcError;
-use crate::address::{HdlcAddress, decode_address};
+use crate::address::{decode_address, HdlcAddress};
 use crate::control::{ControlField, FrameType};
 use crate::crc::crc16;
+use alloc::vec;
+use alloc::vec::Vec;
+use dlms_core::errors::HdlcError;
 
 /// HDLC flag byte
 pub const HDLC_FLAG: u8 = 0x7E;
@@ -37,7 +37,13 @@ impl HdlcFrame {
     pub fn new(address: HdlcAddress, control: ControlField, information: Vec<u8>) -> Self {
         let hcs = 0; // calculated during encoding
         let fcs = 0; // calculated during encoding
-        Self { address, control, hcs, fcs, information }
+        Self {
+            address,
+            control,
+            hcs,
+            fcs,
+            information,
+        }
     }
 
     /// Check if this is an I-frame (carries data)
@@ -93,7 +99,9 @@ impl HdlcFrame {
     /// Decode a frame from bytes (with flags and byte unstuffing)
     pub fn decode(data: &[u8]) -> Result<Self, HdlcError> {
         // Remove flags
-        if data.len() < 4 { return Err(HdlcError::InvalidFrameFormat); }
+        if data.len() < 4 {
+            return Err(HdlcError::InvalidFrameFormat);
+        }
         if data[0] != HDLC_FLAG || data[data.len() - 1] != HDLC_FLAG {
             return Err(HdlcError::InvalidFlag);
         }
@@ -101,9 +109,12 @@ impl HdlcFrame {
         // Remove byte stuffing
         let mut raw = Vec::new();
         let mut i = 1; // skip opening flag
-        while i < data.len() - 1 { // skip closing flag
+        while i < data.len() - 1 {
+            // skip closing flag
             if data[i] == HDLC_ESCAPE {
-                if i + 1 >= data.len() - 1 { return Err(HdlcError::InvalidFrameFormat); }
+                if i + 1 >= data.len() - 1 {
+                    return Err(HdlcError::InvalidFrameFormat);
+                }
                 raw.push(data[i + 1] ^ HDLC_ESCAPE_MASK);
                 i += 2;
             } else if data[i] == HDLC_FLAG {
@@ -114,7 +125,9 @@ impl HdlcFrame {
             }
         }
 
-        if raw.len() < 5 { return Err(HdlcError::InvalidFrameFormat); }
+        if raw.len() < 5 {
+            return Err(HdlcError::InvalidFrameFormat);
+        }
 
         // Verify FCS
         let payload_len = raw.len() - 2;
@@ -132,7 +145,9 @@ impl HdlcFrame {
 
         // Parse HCS (2 bytes after address + control)
         let hcs_start = addr_consumed + 1;
-        if hcs_start + 2 > payload_len { return Err(HdlcError::InvalidFrameFormat); }
+        if hcs_start + 2 > payload_len {
+            return Err(HdlcError::InvalidFrameFormat);
+        }
         let hcs = u16::from_le_bytes([raw[hcs_start], raw[hcs_start + 1]]);
 
         // Verify HCS
@@ -150,7 +165,13 @@ impl HdlcFrame {
             Vec::new()
         };
 
-        Ok(Self { address, control, hcs, fcs, information })
+        Ok(Self {
+            address,
+            control,
+            hcs,
+            fcs,
+            information,
+        })
     }
 }
 

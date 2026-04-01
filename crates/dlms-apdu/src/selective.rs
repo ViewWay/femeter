@@ -7,11 +7,11 @@ extern crate std;
 
 extern crate alloc;
 
-use alloc::vec::Vec;
+use crate::types::{ApduError, SELECTIVE_ACCESS_BY_ENTRY, SELECTIVE_ACCESS_BY_RANGE};
 #[allow(unused_imports)]
 use alloc::vec;
+use alloc::vec::Vec;
 use dlms_core::DlmsType;
-use crate::types::{ApduError, SELECTIVE_ACCESS_BY_RANGE, SELECTIVE_ACCESS_BY_ENTRY};
 
 /// Selective access descriptor for reading partial data from arrays/profiles
 #[derive(Debug, Clone, PartialEq)]
@@ -122,9 +122,11 @@ impl SelectiveAccess {
                     return Err(ApduError::TooShort);
                 }
 
-                let from = u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]);
+                let from =
+                    u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]);
                 pos += 4;
-                let to = u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]);
+                let to =
+                    u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]);
                 pos += 4;
                 let _param_count = data[pos]; // should be 2
 
@@ -144,7 +146,12 @@ impl SelectiveAccess {
 
                 let mut indices = Vec::with_capacity(count);
                 for _ in 0..count {
-                    let idx = u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]);
+                    let idx = u32::from_be_bytes([
+                        data[pos],
+                        data[pos + 1],
+                        data[pos + 2],
+                        data[pos + 3],
+                    ]);
                     pos += 4;
                     indices.push(idx);
                 }
@@ -157,7 +164,10 @@ impl SelectiveAccess {
 }
 
 /// Apply selective access to an array data, returning the selected elements
-pub fn apply_selective_access(data: &[DlmsType], selective: &SelectiveAccess) -> Result<Vec<DlmsType>, ApduError> {
+pub fn apply_selective_access(
+    data: &[DlmsType],
+    selective: &SelectiveAccess,
+) -> Result<Vec<DlmsType>, ApduError> {
     let result = match selective {
         SelectiveAccess::ByRange { from, to } => {
             let from_idx = *from as usize;

@@ -133,10 +133,7 @@ mod tests {
     #[test]
     fn test_watchdog_get_timeout_without_start() {
         let mut wdt = MockWatchdog::new();
-        assert_eq!(
-            wdt.get_timeout().unwrap_err(),
-            HalError::NotInitialized
-        );
+        assert_eq!(wdt.get_timeout().unwrap_err(), HalError::NotInitialized);
     }
 
     #[test]
@@ -153,8 +150,7 @@ mod tests {
 
     #[test]
     fn test_watchdog_object_safe() {
-        let mut wdt: std::boxed::Box<dyn WatchdogHal> =
-            std::boxed::Box::new(MockWatchdog::new());
+        let mut wdt: std::boxed::Box<dyn WatchdogHal> = std::boxed::Box::new(MockWatchdog::new());
         wdt.start(500).unwrap();
         assert!(wdt.is_running().unwrap());
         wdt.feed().unwrap();

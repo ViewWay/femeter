@@ -5,12 +5,7 @@
 //!
 //! Reference: IEC 62056-6-2 (Blue Book Part 2) §7.6.24
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM Display Interface Class (IC 24)
 ///

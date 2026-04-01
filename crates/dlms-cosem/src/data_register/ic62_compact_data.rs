@@ -5,12 +5,7 @@
 //!
 //! Compact Data provides space-efficient storage for regularly captured data.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 62: Compact Data
 ///
@@ -40,11 +35,7 @@ pub struct CompactData {
 
 impl CompactData {
     /// Create a new Compact Data object
-    pub fn new(
-        logical_name: ObisCode,
-        capture_objects: DlmsType,
-        template_id: u8,
-    ) -> Self {
+    pub fn new(logical_name: ObisCode, capture_objects: DlmsType, template_id: u8) -> Self {
         Self {
             logical_name,
             buffer: DlmsType::OctetString(alloc::vec![]),

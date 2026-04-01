@@ -8,9 +8,9 @@
 
 extern crate alloc;
 
-use alloc::vec::Vec;
 #[allow(unused_imports)]
 use alloc::vec;
+use alloc::vec::Vec;
 use dlms_core::{errors::CosemError, obis::ObisCode};
 
 /// Communication port type
@@ -507,9 +507,18 @@ mod tests {
 
     #[test]
     fn test_connection_state_conversion() {
-        assert_eq!(ConnectionState::from_u8(0), Some(ConnectionState::Disconnected));
-        assert_eq!(ConnectionState::from_u8(1), Some(ConnectionState::Connecting));
-        assert_eq!(ConnectionState::from_u8(2), Some(ConnectionState::Connected));
+        assert_eq!(
+            ConnectionState::from_u8(0),
+            Some(ConnectionState::Disconnected)
+        );
+        assert_eq!(
+            ConnectionState::from_u8(1),
+            Some(ConnectionState::Connecting)
+        );
+        assert_eq!(
+            ConnectionState::from_u8(2),
+            Some(ConnectionState::Connected)
+        );
 
         assert!(ConnectionState::Connected.is_active());
         assert!(ConnectionState::Connecting.is_active());

@@ -5,12 +5,7 @@
 //!
 //! Charge defines charging rates and periods for prepaid meters.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 113: Charge
 ///
@@ -173,12 +168,7 @@ mod tests {
 
     #[test]
     fn test_charge_class_id() {
-        let charge = Charge::new(
-            ObisCode::new(0, 0, 113, 0, 0, 255),
-            1,
-            0,
-            100,
-        );
+        let charge = Charge::new(ObisCode::new(0, 0, 113, 0, 0, 255), 1, 0, 100);
         assert_eq!(Charge::CLASS_ID, 113);
         assert_eq!(charge.get_charge_per_unit(), 100);
     }

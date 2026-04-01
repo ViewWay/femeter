@@ -31,13 +31,13 @@
 
 extern crate alloc;
 
-pub use task::{RtosTask, TaskHandle, TaskState, Priority, TaskId};
-pub use timer::{RtosTimer, TimerHandle, TimerConfig, TimerMode};
-pub use mutex::{RtosMutex, MutexGuard};
+pub use interrupt::{InterruptState, RtosInterrupt};
+pub use mempool::{MemPoolHandle, PoolConfig, RtosMemPool};
+pub use mutex::{MutexGuard, RtosMutex};
+pub use queue::{QueueHandle, RtosQueue};
 pub use semaphore::{RtosSemaphore, SemaphoreHandle};
-pub use queue::{RtosQueue, QueueHandle};
-pub use mempool::{RtosMemPool, MemPoolHandle, PoolConfig};
-pub use interrupt::{RtosInterrupt, InterruptState};
+pub use task::{Priority, RtosTask, TaskHandle, TaskId, TaskState};
+pub use timer::{RtosTimer, TimerConfig, TimerHandle, TimerMode};
 
 /// System tick type (milliseconds since boot)
 pub type Tick = u64;
@@ -60,19 +60,21 @@ pub type Tick = u64;
 ///     // ... delegate to FreeRTOS APIs
 /// }
 /// ```
-pub trait Rtos: RtosTask + RtosTimer + RtosMutex + RtosSemaphore + RtosQueue + RtosMemPool + RtosInterrupt {
+pub trait Rtos:
+    RtosTask + RtosTimer + RtosMutex + RtosSemaphore + RtosQueue + RtosMemPool + RtosInterrupt
+{
     /// Get system tick count in milliseconds
     fn system_tick(&self) -> Tick;
 }
 
 // Include sub-modules
+mod interrupt;
+mod mempool;
+mod mutex;
+mod queue;
+mod semaphore;
 mod task;
 mod timer;
-mod mutex;
-mod semaphore;
-mod queue;
-mod mempool;
-mod interrupt;
 
 // std implementation for testing
 #[cfg(feature = "std")]

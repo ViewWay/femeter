@@ -5,12 +5,7 @@
 //!
 //! Sensor Manager manages sensor inputs and readings.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 67: Sensor Manager
 ///

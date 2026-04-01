@@ -7,14 +7,14 @@ extern crate std;
 
 extern crate alloc;
 
-use alloc::vec::Vec;
-use dlms_core::{DlmsType, DataAccessError};
+use crate::codec::{ApduDecoder, ApduEncoder};
 use crate::types::{
-    ApduError, InvokeId, AttributeDescriptor, AccessResult,
-    TAG_SET_REQUEST, TAG_SET_RESPONSE, TAG_SUBTYPE_NORMAL, TAG_SUBTYPE_WITH_LIST,
-    TAG_SUBTYPE_DATA, TAG_SUBTYPE_BLOCK, TAG_SUBTYPE_DATA_ACCESS_ERROR,
+    AccessResult, ApduError, AttributeDescriptor, InvokeId, TAG_SET_REQUEST, TAG_SET_RESPONSE,
+    TAG_SUBTYPE_BLOCK, TAG_SUBTYPE_DATA, TAG_SUBTYPE_DATA_ACCESS_ERROR, TAG_SUBTYPE_NORMAL,
+    TAG_SUBTYPE_WITH_LIST,
 };
-use crate::codec::{ApduEncoder, ApduDecoder};
+use alloc::vec::Vec;
+use dlms_core::{DataAccessError, DlmsType};
 
 // ============================================================
 // Set-Request PDUs
@@ -241,8 +241,7 @@ impl SetResponseNormal {
             AccessResult::Success(value)
         } else {
             // Error
-            let error = DataAccessError::from_code(result_byte)
-                .ok_or(ApduError::InvalidData)?;
+            let error = DataAccessError::from_code(result_byte).ok_or(ApduError::InvalidData)?;
             AccessResult::Error(error)
         };
 
@@ -341,8 +340,7 @@ impl SetResponseError {
 
         let invoke_id = dec.read_invoke_id()?;
         let error_code = dec.read_byte()?;
-        let error = DataAccessError::from_code(error_code)
-            .ok_or(ApduError::InvalidData)?;
+        let error = DataAccessError::from_code(error_code).ok_or(ApduError::InvalidData)?;
 
         Ok(Self { invoke_id, error })
     }
@@ -382,7 +380,9 @@ impl SetResponse {
         match subtype {
             TAG_SUBTYPE_DATA => Ok(Self::Data(SetResponseNormal::decode(data)?)),
             TAG_SUBTYPE_BLOCK => Ok(Self::Block(SetResponseBlock::decode(data)?)),
-            TAG_SUBTYPE_DATA_ACCESS_ERROR => Ok(Self::DataAccessError(SetResponseError::decode(data)?)),
+            TAG_SUBTYPE_DATA_ACCESS_ERROR => {
+                Ok(Self::DataAccessError(SetResponseError::decode(data)?))
+            }
             _ => Err(ApduError::InvalidTag(subtype)),
         }
     }
@@ -440,10 +440,7 @@ mod tests {
 
     #[test]
     fn test_set_response_normal_success() {
-        let resp = SetResponseNormal::success(
-            InvokeId::new(1),
-            DlmsType::from_u32(0),
-        );
+        let resp = SetResponseNormal::success(InvokeId::new(1), DlmsType::from_u32(0));
         let encoded = resp.encode().unwrap();
 
         assert_eq!(encoded[0], TAG_SET_RESPONSE);
@@ -454,10 +451,7 @@ mod tests {
 
     #[test]
     fn test_set_response_normal_error() {
-        let resp = SetResponseNormal::error(
-            InvokeId::new(1),
-            DataAccessError::ReadWriteDenied,
-        );
+        let resp = SetResponseNormal::error(InvokeId::new(1), DataAccessError::ReadWriteDenied);
         let encoded = resp.encode().unwrap();
 
         assert_eq!(encoded[0], TAG_SET_RESPONSE);
@@ -468,10 +462,7 @@ mod tests {
 
     #[test]
     fn test_set_response_normal_roundtrip() {
-        let resp = SetResponseNormal::success(
-            InvokeId::new(42),
-            DlmsType::Null,
-        );
+        let resp = SetResponseNormal::success(InvokeId::new(42), DlmsType::Null);
         let encoded = resp.encode().unwrap();
         let decoded = SetResponseNormal::decode(&encoded).unwrap();
 
@@ -491,7 +482,7 @@ mod tests {
         assert_eq!(encoded[0], TAG_SET_RESPONSE);
         assert_eq!(encoded[1], TAG_SUBTYPE_BLOCK);
         assert_eq!(encoded[2], 1); // invoke_id
-        // Status with last_block flag set
+                                   // Status with last_block flag set
         assert_eq!(encoded[7], 0x80);
     }
 
@@ -523,10 +514,7 @@ mod tests {
 
     #[test]
     fn test_set_response_decode() {
-        let resp = SetResponseNormal::success(
-            InvokeId::new(1),
-            DlmsType::Null,
-        );
+        let resp = SetResponseNormal::success(InvokeId::new(1), DlmsType::Null);
         let encoded = resp.encode().unwrap();
 
         let decoded = SetResponse::decode(&encoded).unwrap();

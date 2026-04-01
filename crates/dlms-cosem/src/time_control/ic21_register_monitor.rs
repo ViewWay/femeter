@@ -5,12 +5,7 @@
 //!
 //! Register Monitor monitors register values and triggers actions on thresholds.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 21: Register Monitor
 ///

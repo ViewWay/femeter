@@ -119,7 +119,7 @@ jobs:
         with:
           toolchain: ${{ env.TOOLCHAIN }}
           targets: thumbv6m-none-eabi
-      - run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+      - run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi && cargo install flip-link
 
       - name: Build firmware
         working-directory: firmware

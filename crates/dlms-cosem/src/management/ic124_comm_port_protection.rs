@@ -6,12 +6,7 @@
 //! Communication Port Protection protects communication ports from
 //! unauthorized access.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 124: Communication Port Protection
 ///

@@ -132,7 +132,11 @@ pub trait RtosInterrupt: Sized {
     ///
     /// Returns 0 if not in ISR, 1 for single-level ISR, etc.
     fn isr_nesting_depth(&self) -> u32 {
-        if self.is_in_isr() { 1 } else { 0 }
+        if self.is_in_isr() {
+            1
+        } else {
+            0
+        }
     }
 }
 

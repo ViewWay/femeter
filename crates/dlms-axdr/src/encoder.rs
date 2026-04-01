@@ -1,9 +1,9 @@
 //! A-XDR encoder
 
+use crate::AxdrError;
 use alloc::vec::Vec;
 use dlms_core::types::*;
 use dlms_core::DlmsType;
-use crate::AxdrError;
 
 /// A-XDR encoder - writes COSEM data types to a byte buffer
 pub struct AxdrEncoder {
@@ -16,7 +16,9 @@ impl AxdrEncoder {
     }
 
     pub fn with_capacity(cap: usize) -> Self {
-        Self { buf: Vec::with_capacity(cap) }
+        Self {
+            buf: Vec::with_capacity(cap),
+        }
     }
 
     /// Encode a DlmsType value
@@ -35,9 +37,11 @@ impl AxdrEncoder {
             DlmsType::Int16(v) => self.encode_int16(*v),
             DlmsType::UInt8(v) => self.encode_uint8(*v),
             DlmsType::UInt16(v) => self.encode_uint16(*v),
-            DlmsType::CompactArray { element_type, element_count, data } => {
-                self.encode_compact_array(*element_type, *element_count, data)
-            }
+            DlmsType::CompactArray {
+                element_type,
+                element_count,
+                data,
+            } => self.encode_compact_array(*element_type, *element_count, data),
             DlmsType::Int64(v) => self.encode_int64(*v),
             DlmsType::UInt64(v) => self.encode_uint64(*v),
             DlmsType::Enum(v) => self.encode_enum(*v),
@@ -215,7 +219,12 @@ impl AxdrEncoder {
         Ok(())
     }
 
-    fn encode_compact_array(&mut self, element_type: u8, count: u32, data: &[u8]) -> Result<(), AxdrError> {
+    fn encode_compact_array(
+        &mut self,
+        element_type: u8,
+        count: u32,
+        data: &[u8],
+    ) -> Result<(), AxdrError> {
         self.buf.push(TAG_COMPACT_ARRAY);
         // Element type description
         self.buf.push(element_type);
@@ -387,14 +396,16 @@ mod tests {
     #[test]
     fn test_encode_octet_string() {
         let mut enc = AxdrEncoder::new();
-        enc.encode(&DlmsType::from_octet_string(vec![0x01, 0x02, 0x03])).unwrap();
+        enc.encode(&DlmsType::from_octet_string(vec![0x01, 0x02, 0x03]))
+            .unwrap();
         assert_eq!(enc.to_bytes(), &[0x09, 0x03, 0x01, 0x02, 0x03]);
     }
 
     #[test]
     fn test_encode_visible_string() {
         let mut enc = AxdrEncoder::new();
-        enc.encode(&DlmsType::from_visible_string(b"AB".to_vec())).unwrap();
+        enc.encode(&DlmsType::from_visible_string(b"AB".to_vec()))
+            .unwrap();
         assert_eq!(enc.to_bytes(), &[0x0A, 0x02, 0x41, 0x42]);
     }
 
@@ -425,8 +436,18 @@ mod tests {
     fn test_encode_datetime() {
         let mut enc = AxdrEncoder::new();
         let dt = CosemDateTime {
-            date: CosemDate { year: 2024, month: 3, day: 15, day_of_week: 5 },
-            time: CosemTime { hour: 10, minute: 30, second: 45, hundredths: 0 },
+            date: CosemDate {
+                year: 2024,
+                month: 3,
+                day: 15,
+                day_of_week: 5,
+            },
+            time: CosemTime {
+                hour: 10,
+                minute: 30,
+                second: 45,
+                hundredths: 0,
+            },
             deviation: 480, // UTC+8
             clock_status: 0,
         };

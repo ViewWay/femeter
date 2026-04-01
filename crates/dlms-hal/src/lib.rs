@@ -21,28 +21,28 @@ extern crate std;
 
 // Modules for each peripheral
 mod adc;
-mod gpio;
-mod uart;
-mod spi;
-mod i2c;
-mod rtc;
-mod flash;
 mod display;
-mod relay;
+mod flash;
+mod gpio;
+mod i2c;
 mod modem;
+mod relay;
+mod rtc;
+mod spi;
+mod uart;
 mod watchdog;
 
 // Re-export all traits
 pub use adc::AdcHal;
-pub use gpio::{GpioDirection, GpioHal};
-pub use uart::UartHal;
-pub use spi::SpiHal;
-pub use i2c::I2cHal;
-pub use rtc::{DateTime, RtcHal};
-pub use flash::FlashHal;
 pub use display::DisplayHal;
-pub use relay::RelayHal;
+pub use flash::FlashHal;
+pub use gpio::{GpioDirection, GpioHal};
+pub use i2c::I2cHal;
 pub use modem::ModemHal;
+pub use relay::RelayHal;
+pub use rtc::{DateTime, RtcHal};
+pub use spi::SpiHal;
+pub use uart::UartHal;
 pub use watchdog::WatchdogHal;
 
 pub use error::{HalError, HalResult};
@@ -159,10 +159,16 @@ mod tests {
     fn test_hal_error_display() {
         use std::format;
 
-        assert_eq!(format!("{}", HalError::NotInitialized), "Peripheral not initialized");
+        assert_eq!(
+            format!("{}", HalError::NotInitialized),
+            "Peripheral not initialized"
+        );
         assert_eq!(format!("{}", HalError::InvalidParam), "Invalid parameter");
         assert_eq!(format!("{}", HalError::Timeout), "Operation timed out");
         assert_eq!(format!("{}", HalError::HardwareFault), "Hardware fault");
-        assert_eq!(format!("{}", HalError::NotImplemented), "Feature not implemented");
+        assert_eq!(
+            format!("{}", HalError::NotImplemented),
+            "Feature not implemented"
+        );
     }
 }

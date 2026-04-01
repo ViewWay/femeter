@@ -5,12 +5,7 @@
 //!
 //! Data Protection manages protected data access control.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 30: COSEM Data Protection
 ///

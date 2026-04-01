@@ -23,7 +23,9 @@ pub fn crc16(data: &[u8]) -> u16 {
 /// Verify CRC-16 of an HDLC frame (excluding flags)
 /// The last 2 bytes before the closing flag should be the FCS
 pub fn verify_crc(data: &[u8]) -> bool {
-    if data.len() < 3 { return false; }
+    if data.len() < 3 {
+        return false;
+    }
     let payload_len = data.len() - 2;
     let expected = u16::from_le_bytes([data[payload_len], data[payload_len + 1]]);
     crc16(&data[..payload_len]) == expected

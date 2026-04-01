@@ -40,7 +40,7 @@ impl ChipType {
     /// 获取精度因子 (用于模拟噪声范围)
     pub fn precision_factor(&self) -> f64 {
         match self {
-            ChipType::ATT7022E => 0.001,  // ±0.1%
+            ChipType::ATT7022E => 0.001, // ±0.1%
             ChipType::RN8302B => 0.0001, // ±0.01%
         }
     }
@@ -87,8 +87,7 @@ impl PhaseData {
 
     /// 计算功率因数 PF = cos(φ)
     pub fn power_factor(&self) -> f64 {
-        let angle_rad = self.angle * PI / 180.0
-        ;
+        let angle_rad = self.angle * PI / 180.0;
         angle_rad.cos()
     }
 }
@@ -357,7 +356,11 @@ impl VirtualMeter {
         let p_total = p_a + p_b + p_c;
         let q_total = q_a + q_b + q_c;
         let s_total = s_a + s_b + s_c;
-        let pf_total = if s_total > 0.0 { p_total / s_total } else { 0.0 };
+        let pf_total = if s_total > 0.0 {
+            p_total / s_total
+        } else {
+            0.0
+        };
 
         MeterSnapshot {
             timestamp: Utc::now(),
@@ -367,10 +370,22 @@ impl VirtualMeter {
             phase_b: self.phase_b.clone(),
             phase_c: self.phase_c.clone(),
             computed: ComputedValues {
-                p_a, p_b, p_c, p_total,
-                q_a, q_b, q_c, q_total,
-                s_a, s_b, s_c, s_total,
-                pf_a, pf_b, pf_c, pf_total,
+                p_a,
+                p_b,
+                p_c,
+                p_total,
+                q_a,
+                q_b,
+                q_c,
+                q_total,
+                s_a,
+                s_b,
+                s_c,
+                s_total,
+                pf_a,
+                pf_b,
+                pf_c,
+                pf_total,
             },
             energy: self.energy.clone(),
         }
@@ -414,7 +429,7 @@ impl VirtualMeter {
 
         // 根据芯片类型截断位数
         let mask = match self.config.chip {
-            ChipType::ATT7022E => 0x7FFFF,  // 19-bit
+            ChipType::ATT7022E => 0x7FFFF, // 19-bit
             ChipType::RN8302B => 0xFFFFFF, // 24-bit
         };
 

@@ -4,12 +4,7 @@
 //!
 //! Reference: IEC 62056-6-2 (Blue Book Part 2) §7.7.56
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// S-FSK Reporting System List Interface Class (IC 56)
 ///
@@ -92,11 +87,12 @@ impl CosemClass for SfskReportingSystemList {
                         if let DlmsType::Structure(fields) = item {
                             if fields.len() >= 2 {
                                 let system_id = fields[0].as_u16().unwrap_or(0);
-                                let system_name = if let DlmsType::OctetString(ref bytes) = fields[1] {
-                                    alloc::string::String::from_utf8_lossy(bytes).into_owned()
-                                } else {
-                                    alloc::string::String::new()
-                                };
+                                let system_name =
+                                    if let DlmsType::OctetString(ref bytes) = fields[1] {
+                                        alloc::string::String::from_utf8_lossy(bytes).into_owned()
+                                    } else {
+                                        alloc::string::String::new()
+                                    };
                                 self.reporting_system_list.push(SfskReportingSystem {
                                     system_id,
                                     system_name,

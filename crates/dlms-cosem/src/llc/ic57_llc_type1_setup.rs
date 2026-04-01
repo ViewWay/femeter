@@ -4,12 +4,7 @@
 //!
 //! Reference: IEC 62056-6-2 (Blue Book Part 2) §7.7.57
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// ISO/IEC 8802-2 LLC Type 1 Setup Interface Class (IC 57)
 ///
@@ -53,10 +48,11 @@ impl CosemClass for LlcType1Setup {
     fn set_attribute(&mut self, id: u8, value: DlmsType) -> Result<(), CosemError> {
         match id {
             2 => {
-                self.max_num_unconfirmed_frames = value.as_u8().ok_or(CosemError::TypeMismatch {
-                    expected: 17,
-                    got: value.tag(),
-                })?;
+                self.max_num_unconfirmed_frames =
+                    value.as_u8().ok_or(CosemError::TypeMismatch {
+                        expected: 17,
+                        got: value.tag(),
+                    })?;
                 Ok(())
             }
             _ => Err(CosemError::NoSuchAttribute(id)),

@@ -38,28 +38,30 @@
 extern crate alloc;
 
 // Public modules
-pub mod common;
-pub mod measurement;
-pub mod tariff;
-pub mod profile;
 pub mod alarm;
-pub mod control;
-pub mod firmware;
 pub mod clock;
 pub mod comm;
+pub mod common;
+pub mod control;
+pub mod firmware;
+pub mod measurement;
 pub mod meter_app;
+pub mod profile;
+pub mod tariff;
 
 // Re-exports
+pub use alarm::{AlarmCallback, AlarmManager, AlarmRecord, AlarmState};
+pub use clock::{ClockManager, ClockStats, DstMode, SyncStatus, Timezone};
+pub use comm::{CommManager, CommStats, ConnectionState, PortType, PushConfig, PushTrigger};
 pub use common::{
     AlarmThreshold, AlarmType, BillingPeriod, BillingStatus, DemandConfig, DisplayEntry,
     DisplayFormat, PhaseEnergy, PowerQuality, TariffSchedule,
 };
-pub use measurement::{MeasurementEngine, Phase, MAX_TARIFFS};
-pub use tariff::{DayOfWeek, Season, TariffManager};
-pub use profile::{ProfileColumn, ProfileEntry, ProfileManager, HistoricalManager, HistoricalEntry};
-pub use alarm::{AlarmManager, AlarmRecord, AlarmState, AlarmCallback};
-pub use control::{RelayControl, RelayState, ControlMode, OutputState};
+pub use control::{ControlMode, OutputState, RelayControl, RelayState};
 pub use firmware::{FirmwareManager, ImageInfo, TransferState, TransferStats};
-pub use clock::{ClockManager, Timezone, DstMode, SyncStatus, ClockStats};
-pub use comm::{CommManager, PortType, ConnectionState, PushConfig, PushTrigger, CommStats};
-pub use meter_app::{MeterApp, MeterAppState, MeterConfig, MeterData, BillingData, AlarmEvent};
+pub use measurement::{MeasurementEngine, Phase, MAX_TARIFFS};
+pub use meter_app::{AlarmEvent, BillingData, MeterApp, MeterAppState, MeterConfig, MeterData};
+pub use profile::{
+    HistoricalEntry, HistoricalManager, ProfileColumn, ProfileEntry, ProfileManager,
+};
+pub use tariff::{DayOfWeek, Season, TariffManager};

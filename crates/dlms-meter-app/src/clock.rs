@@ -8,7 +8,7 @@
 
 extern crate alloc;
 
-use dlms_core::{errors::CosemError, types::CosemDateTime, types::clock_status};
+use dlms_core::{errors::CosemError, types::clock_status, types::CosemDateTime};
 
 /// DST (Daylight Saving Time) mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -390,7 +390,14 @@ mod tests {
     use super::*;
     use dlms_core::types::{CosemDate, CosemTime};
 
-    fn make_datetime(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8) -> CosemDateTime {
+    fn make_datetime(
+        year: u16,
+        month: u8,
+        day: u8,
+        hour: u8,
+        minute: u8,
+        second: u8,
+    ) -> CosemDateTime {
         CosemDateTime {
             date: CosemDate {
                 year,
@@ -467,7 +474,10 @@ mod tests {
 
         manager.set_dst(true);
         assert!(manager.is_dst_active());
-        assert_eq!(manager.current_time.clock_status & clock_status::DST_ACTIVE, clock_status::DST_ACTIVE);
+        assert_eq!(
+            manager.current_time.clock_status & clock_status::DST_ACTIVE,
+            clock_status::DST_ACTIVE
+        );
 
         manager.set_dst(false);
         assert!(!manager.is_dst_active());
@@ -503,7 +513,9 @@ mod tests {
         assert!(manager.needs_sync(0));
 
         // Sync and check
-        manager.sync(make_datetime(2024, 6, 15, 12, 0, 0), 100).unwrap();
+        manager
+            .sync(make_datetime(2024, 6, 15, 12, 0, 0), 100)
+            .unwrap();
         assert!(!manager.needs_sync(100)); // Just synced
         assert!(!manager.needs_sync(3000)); // Within interval
         assert!(manager.needs_sync(4000)); // After interval
@@ -512,7 +524,9 @@ mod tests {
     #[test]
     fn test_tick() {
         let mut manager = ClockManager::new();
-        manager.set_time(make_datetime(2024, 6, 15, 12, 0, 0)).unwrap();
+        manager
+            .set_time(make_datetime(2024, 6, 15, 12, 0, 0))
+            .unwrap();
 
         manager.tick(90); // Add 90 seconds
         assert_eq!(manager.current_time.time.minute, 1);

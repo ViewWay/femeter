@@ -10,7 +10,7 @@ extern crate std;
 extern crate alloc;
 
 pub mod codes;
-pub mod parser;
 pub mod lookup;
+pub mod parser;
 
 pub use lookup::{obis_description, obis_group, ObisGroup};

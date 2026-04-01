@@ -106,9 +106,7 @@ mod tests {
             if !self.initialized {
                 return Err(HalError::NotInitialized);
             }
-            self.rx_buffer
-                .pop_front()
-                .ok_or(HalError::Timeout)
+            self.rx_buffer.pop_front().ok_or(HalError::Timeout)
         }
 
         fn write(&mut self, byte: u8) -> HalResult<()> {

@@ -5,12 +5,7 @@
 //!
 //! Reference: IEC 62056-6-2 (Blue Book Part 2) §7.4.2
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM Physical Device Interface Class (IC 44)
 ///
@@ -110,12 +105,12 @@ impl CosemClass for PhysicalDevice {
     fn get_attribute(&self, id: u8) -> Result<DlmsType, CosemError> {
         match id {
             1 => Ok(DlmsType::OctetString(self.logical_name.to_bytes().to_vec())),
-            2 => Ok(DlmsType::OctetString(
-                self.manufacturer.as_bytes().to_vec(),
-            )),
+            2 => Ok(DlmsType::OctetString(self.manufacturer.as_bytes().to_vec())),
             3 => Ok(DlmsType::OctetString(self.model.as_bytes().to_vec())),
             4 => Ok(DlmsType::OctetString(self.version.as_bytes().to_vec())),
-            5 => Ok(DlmsType::OctetString(self.serial_number.as_bytes().to_vec())),
+            5 => Ok(DlmsType::OctetString(
+                self.serial_number.as_bytes().to_vec(),
+            )),
             _ => Err(CosemError::NotImplemented),
         }
     }

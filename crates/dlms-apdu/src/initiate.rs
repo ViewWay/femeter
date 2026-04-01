@@ -10,9 +10,9 @@ extern crate std;
 
 extern crate alloc;
 
-use alloc::vec::Vec;
+use crate::codec::{ApduDecoder, ApduEncoder};
 use crate::types::{ApduError, InvokeId};
-use crate::codec::{ApduEncoder, ApduDecoder};
+use alloc::vec::Vec;
 
 /// Initiate Request PDU
 ///
@@ -261,12 +261,7 @@ mod tests {
 
     #[test]
     fn test_initiate_request_encode() {
-        let req = InitiateRequest::new(
-            InvokeId::new(1),
-            conformance::standard_meter(),
-            2048,
-            2048,
-        );
+        let req = InitiateRequest::new(InvokeId::new(1), conformance::standard_meter(), 2048, 2048);
         let encoded = req.encode();
 
         assert_eq!(encoded[0], 0xFF); // Initiate tag
@@ -287,18 +282,20 @@ mod tests {
 
         assert_eq!(decoded.invoke_id, req.invoke_id);
         assert_eq!(decoded.negotiated_conformance, req.negotiated_conformance);
-        assert_eq!(decoded.client_max_receive_pdu_size, req.client_max_receive_pdu_size);
-        assert_eq!(decoded.server_max_receive_pdu_size, req.server_max_receive_pdu_size);
+        assert_eq!(
+            decoded.client_max_receive_pdu_size,
+            req.client_max_receive_pdu_size
+        );
+        assert_eq!(
+            decoded.server_max_receive_pdu_size,
+            req.server_max_receive_pdu_size
+        );
     }
 
     #[test]
     fn test_initiate_response_encode() {
-        let resp = InitiateResponse::new(
-            InvokeId::new(1),
-            conformance::standard_meter(),
-            2048,
-            1024,
-        );
+        let resp =
+            InitiateResponse::new(InvokeId::new(1), conformance::standard_meter(), 2048, 1024);
         let encoded = resp.encode();
 
         assert_eq!(encoded[0], 0xFF); // Initiate tag
@@ -319,8 +316,14 @@ mod tests {
 
         assert_eq!(decoded.invoke_id, resp.invoke_id);
         assert_eq!(decoded.negotiated_conformance, resp.negotiated_conformance);
-        assert_eq!(decoded.server_max_receive_pdu_size, resp.server_max_receive_pdu_size);
-        assert_eq!(decoded.client_max_receive_pdu_size, resp.client_max_receive_pdu_size);
+        assert_eq!(
+            decoded.server_max_receive_pdu_size,
+            resp.server_max_receive_pdu_size
+        );
+        assert_eq!(
+            decoded.client_max_receive_pdu_size,
+            resp.client_max_receive_pdu_size
+        );
     }
 
     #[test]
@@ -337,8 +340,14 @@ mod tests {
         assert!(conformance::has_feature(conf, conformance::GET));
         assert!(conformance::has_feature(conf, conformance::SET));
         assert!(conformance::has_feature(conf, conformance::ACTION));
-        assert!(conformance::has_feature(conf, conformance::EVENT_NOTIFICATION));
-        assert!(conformance::has_feature(conf, conformance::GENERAL_PROTECTION));
+        assert!(conformance::has_feature(
+            conf,
+            conformance::EVENT_NOTIFICATION
+        ));
+        assert!(conformance::has_feature(
+            conf,
+            conformance::GENERAL_PROTECTION
+        ));
     }
 
     #[test]
@@ -347,7 +356,13 @@ mod tests {
         assert!(conformance::has_feature(conf, conformance::GET));
         assert!(conformance::has_feature(conf, conformance::SET));
         assert!(conformance::has_feature(conf, conformance::ACTION));
-        assert!(conformance::has_feature(conf, conformance::GENERAL_BLOCK_TRANSFER));
-        assert!(conformance::has_feature(conf, conformance::SELECTIVE_ACCESS));
+        assert!(conformance::has_feature(
+            conf,
+            conformance::GENERAL_BLOCK_TRANSFER
+        ));
+        assert!(conformance::has_feature(
+            conf,
+            conformance::SELECTIVE_ACCESS
+        ));
     }
 }

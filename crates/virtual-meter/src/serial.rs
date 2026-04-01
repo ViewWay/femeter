@@ -104,7 +104,10 @@ impl SerialService {
             }
 
             // 如果串口打开失败，提示用户使用 socat 创建虚拟串口
-            eprintln!("Note: Could not open {}. For virtual serial port, try:", port_name);
+            eprintln!(
+                "Note: Could not open {}. For virtual serial port, try:",
+                port_name
+            );
             eprintln!("  socat -d -d pty,link=/tmp/vmeter0,raw pty,link=/tmp/vmeter1,raw");
             eprintln!("Then connect to /tmp/vmeter0");
         }
@@ -162,7 +165,7 @@ impl SerialService {
                         line_buf.clear();
                     }
                 }
-                Ok(_) => continue,  // 读取到多个字节或其他情况
+                Ok(_) => continue, // 读取到多个字节或其他情况
                 Err(ref e) if e.kind() == io::ErrorKind::TimedOut => continue,
                 Err(e) => {
                     eprintln!("Serial read error: {}", e);

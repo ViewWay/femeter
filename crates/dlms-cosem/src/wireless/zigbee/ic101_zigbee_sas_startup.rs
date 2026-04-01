@@ -4,12 +4,7 @@
 //!
 //! Reference: IEC 62056-6-2 (Blue Book Part 2) §7.7.101
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// ZigBee SAS Startup Interface Class (IC 101)
 ///
@@ -53,7 +48,9 @@ impl CosemClass for ZigbeeSasStartup {
             1 => Ok(DlmsType::OctetString(self.logical_name.to_bytes().to_vec())),
             2 => Ok(DlmsType::Enum(self.startup_control)),
             3 => Ok(DlmsType::UInt8(self.startup_stack_profile)),
-            4 => Ok(DlmsType::OctetString(self.startup_zigbee_network_key.clone())),
+            4 => Ok(DlmsType::OctetString(
+                self.startup_zigbee_network_key.clone(),
+            )),
             _ => Err(CosemError::NoSuchAttribute(id)),
         }
     }

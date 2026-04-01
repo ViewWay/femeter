@@ -60,7 +60,10 @@ pub trait RtosMutex: Sized {
     type MutexPtr<T: Send>: MutexPtr<T>;
 
     /// Guard type returned by lock operations
-    type Guard<'a, T: Send>: MutexGuard<'a, T> where T: 'a, Self: 'a;
+    type Guard<'a, T: Send>: MutexGuard<'a, T>
+    where
+        T: 'a,
+        Self: 'a;
 
     /// Create a new mutex
     ///
@@ -98,7 +101,13 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn test_mutex_error_display() {
-        assert_eq!(alloc::format!("{}", super::MutexError::WouldBlock), "Would block");
-        assert_eq!(alloc::format!("{}", super::MutexError::Poisoned), "Mutex poisoned");
+        assert_eq!(
+            alloc::format!("{}", super::MutexError::WouldBlock),
+            "Would block"
+        );
+        assert_eq!(
+            alloc::format!("{}", super::MutexError::Poisoned),
+            "Mutex poisoned"
+        );
     }
 }

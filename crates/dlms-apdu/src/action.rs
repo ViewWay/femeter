@@ -7,14 +7,13 @@ extern crate std;
 
 extern crate alloc;
 
-use alloc::vec::Vec;
-use dlms_core::{DlmsType, DataAccessError};
+use crate::codec::{ApduDecoder, ApduEncoder};
 use crate::types::{
     ApduError, InvokeId, MethodDescriptor, TAG_ACTION_REQUEST, TAG_ACTION_RESPONSE,
-    TAG_SUBTYPE_NORMAL, TAG_SUBTYPE_WITH_LIST, TAG_SUBTYPE_NEXT,
-    TAG_SUBTYPE_BLOCK,
+    TAG_SUBTYPE_BLOCK, TAG_SUBTYPE_NEXT, TAG_SUBTYPE_NORMAL, TAG_SUBTYPE_WITH_LIST,
 };
-use crate::codec::{ApduEncoder, ApduDecoder};
+use alloc::vec::Vec;
+use dlms_core::{DataAccessError, DlmsType};
 
 // ============================================================
 // Action-Request PDUs
@@ -37,7 +36,11 @@ impl ActionRequestNormal {
         }
     }
 
-    pub fn with_parameters(invoke_id: InvokeId, method: MethodDescriptor, parameters: DlmsType) -> Self {
+    pub fn with_parameters(
+        invoke_id: InvokeId,
+        method: MethodDescriptor,
+        parameters: DlmsType,
+    ) -> Self {
         Self {
             invoke_id,
             method,
@@ -197,7 +200,10 @@ pub struct ActionRequestNext {
 
 impl ActionRequestNext {
     pub fn new(invoke_id: InvokeId, block_number: u32) -> Self {
-        Self { invoke_id, block_number }
+        Self {
+            invoke_id,
+            block_number,
+        }
     }
 
     pub fn encode(&self) -> Vec<u8> {
@@ -219,7 +225,10 @@ impl ActionRequestNext {
         let invoke_id = dec.read_invoke_id()?;
         let block_number = dec.read_u32()?;
 
-        Ok(Self { invoke_id, block_number })
+        Ok(Self {
+            invoke_id,
+            block_number,
+        })
     }
 }
 
@@ -326,8 +335,7 @@ impl ActionResponseNormal {
             Ok(value)
         } else {
             // Error
-            let error = DataAccessError::from_code(result_byte)
-                .ok_or(ApduError::InvalidData)?;
+            let error = DataAccessError::from_code(result_byte).ok_or(ApduError::InvalidData)?;
             Err(error)
         };
 
@@ -412,8 +420,8 @@ impl ActionResponseWithList {
                 let value = dec.read_dlms_value()?;
                 Ok(value)
             } else {
-                let error = DataAccessError::from_code(result_byte)
-                    .ok_or(ApduError::InvalidData)?;
+                let error =
+                    DataAccessError::from_code(result_byte).ok_or(ApduError::InvalidData)?;
                 Err(error)
             };
             items.push(ActionResponseListItem { result });
@@ -566,10 +574,7 @@ mod tests {
 
     #[test]
     fn test_action_response_normal_success() {
-        let resp = ActionResponseNormal::success(
-            InvokeId::new(1),
-            DlmsType::Null,
-        );
+        let resp = ActionResponseNormal::success(InvokeId::new(1), DlmsType::Null);
         let encoded = resp.encode().unwrap();
 
         assert_eq!(encoded[0], TAG_ACTION_RESPONSE);
@@ -580,10 +585,7 @@ mod tests {
 
     #[test]
     fn test_action_response_normal_error() {
-        let resp = ActionResponseNormal::error(
-            InvokeId::new(1),
-            DataAccessError::ReadWriteDenied,
-        );
+        let resp = ActionResponseNormal::error(InvokeId::new(1), DataAccessError::ReadWriteDenied);
         let encoded = resp.encode().unwrap();
 
         assert_eq!(encoded[0], TAG_ACTION_RESPONSE);
@@ -594,10 +596,7 @@ mod tests {
 
     #[test]
     fn test_action_response_normal_roundtrip() {
-        let resp = ActionResponseNormal::success(
-            InvokeId::new(42),
-            DlmsType::from_u16(100),
-        );
+        let resp = ActionResponseNormal::success(InvokeId::new(42), DlmsType::from_u16(100));
         let encoded = resp.encode().unwrap();
         let decoded = ActionResponseNormal::decode(&encoded).unwrap();
 
@@ -613,15 +612,19 @@ mod tests {
         assert_eq!(encoded[0], TAG_ACTION_REQUEST);
         assert_eq!(encoded[1], TAG_SUBTYPE_NEXT);
         assert_eq!(encoded[2], 1); // invoke_id
-        // Block number should be 5 (big-endian u32)
+                                   // Block number should be 5 (big-endian u32)
         assert_eq!(encoded[3..7], [0, 0, 0, 5]);
     }
 
     #[test]
     fn test_action_response_with_list_encode() {
         let items = vec![
-            ActionResponseListItem { result: Ok(DlmsType::Null) },
-            ActionResponseListItem { result: Ok(DlmsType::from_u8(42)) },
+            ActionResponseListItem {
+                result: Ok(DlmsType::Null),
+            },
+            ActionResponseListItem {
+                result: Ok(DlmsType::from_u8(42)),
+            },
         ];
         let resp = ActionResponseWithList::new(InvokeId::new(1), items);
         let encoded = resp.encode().unwrap();
@@ -649,10 +652,7 @@ mod tests {
 
     #[test]
     fn test_action_response_decode() {
-        let resp = ActionResponseNormal::success(
-            InvokeId::new(1),
-            DlmsType::Null,
-        );
+        let resp = ActionResponseNormal::success(InvokeId::new(1), DlmsType::Null);
         let encoded = resp.encode().unwrap();
 
         let decoded = ActionResponse::decode(&encoded).unwrap();

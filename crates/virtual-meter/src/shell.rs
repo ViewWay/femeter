@@ -7,7 +7,7 @@ use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal::{self, ClearType};
 use crossterm::{cursor, queue, style};
-use std::io::{self, Write,};
+use std::io::{self, Write};
 
 use std::io::IsTerminal;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -93,11 +93,7 @@ impl Shell {
             }
 
             // 打印提示符
-            queue!(
-                stdout,
-                style::Print("\n\rlightning> "),
-                cursor::Show
-            )?;
+            queue!(stdout, style::Print("\n\rlightning> "), cursor::Show)?;
             stdout.flush()?;
 
             input.clear();
@@ -118,7 +114,11 @@ impl Shell {
                         KeyCode::Backspace => {
                             if !input.is_empty() {
                                 input.pop();
-                                queue!(stdout, cursor::MoveLeft(1), terminal::Clear(ClearType::UntilNewLine))?;
+                                queue!(
+                                    stdout,
+                                    cursor::MoveLeft(1),
+                                    terminal::Clear(ClearType::UntilNewLine)
+                                )?;
                                 stdout.flush()?;
                             }
                         }
@@ -151,7 +151,8 @@ impl Shell {
             }
 
             // 保存历史
-            if !input.is_empty() && (history.is_empty() || history.last() != Some(&input.to_string()))
+            if !input.is_empty()
+                && (history.is_empty() || history.last() != Some(&input.to_string()))
             {
                 history.push(input.to_string());
                 history_index = history.len();
@@ -302,11 +303,26 @@ impl Shell {
             config.chip.bits(),
             snapshot.freq,
             if config.noise_enabled { "开" } else { "关" },
-            snapshot.phase_a.voltage, snapshot.phase_a.current, snapshot.phase_a.angle, snapshot.computed.pf_a,
-            snapshot.phase_b.voltage, snapshot.phase_b.current, snapshot.phase_b.angle, snapshot.computed.pf_b,
-            snapshot.phase_c.voltage, snapshot.phase_c.current, snapshot.phase_c.angle, snapshot.computed.pf_c,
-            snapshot.computed.p_a, snapshot.computed.p_b, snapshot.computed.p_c, snapshot.computed.p_total,
-            snapshot.computed.q_a, snapshot.computed.q_b, snapshot.computed.q_c, snapshot.computed.q_total,
+            snapshot.phase_a.voltage,
+            snapshot.phase_a.current,
+            snapshot.phase_a.angle,
+            snapshot.computed.pf_a,
+            snapshot.phase_b.voltage,
+            snapshot.phase_b.current,
+            snapshot.phase_b.angle,
+            snapshot.computed.pf_b,
+            snapshot.phase_c.voltage,
+            snapshot.phase_c.current,
+            snapshot.phase_c.angle,
+            snapshot.computed.pf_c,
+            snapshot.computed.p_a,
+            snapshot.computed.p_b,
+            snapshot.computed.p_c,
+            snapshot.computed.p_total,
+            snapshot.computed.q_a,
+            snapshot.computed.q_b,
+            snapshot.computed.q_c,
+            snapshot.computed.q_total,
             snapshot.computed.s_total,
             snapshot.computed.pf_total,
         );
@@ -410,23 +426,23 @@ impl Shell {
                 }
             }
             "noise" => {
-                let enabled = value_str.to_lowercase() == "on" || value_str == "1" || value_str.to_lowercase() == "true";
+                let enabled = value_str.to_lowercase() == "on"
+                    || value_str == "1"
+                    || value_str.to_lowercase() == "true";
                 meter.set_noise(enabled);
                 format!("噪声模拟 {}", if enabled { "已开启" } else { "已关闭" })
             }
-            "chip" => {
-                match value_str.to_lowercase().as_str() {
-                    "att7022e" | "att7022" => {
-                        meter.set_chip(ChipType::ATT7022E);
-                        "已切换到 ATT7022E 模式".to_string()
-                    }
-                    "rn8302b" | "rn8302" => {
-                        meter.set_chip(ChipType::RN8302B);
-                        "已切换到 RN8302B 模式".to_string()
-                    }
-                    _ => format!("未知芯片类型: {} (支持: att7022e, rn8302b)", value_str),
+            "chip" => match value_str.to_lowercase().as_str() {
+                "att7022e" | "att7022" => {
+                    meter.set_chip(ChipType::ATT7022E);
+                    "已切换到 ATT7022E 模式".to_string()
                 }
-            }
+                "rn8302b" | "rn8302" => {
+                    meter.set_chip(ChipType::RN8302B);
+                    "已切换到 RN8302B 模式".to_string()
+                }
+                _ => format!("未知芯片类型: {} (支持: att7022e, rn8302b)", value_str),
+            },
             _ => format!("未知参数: {}", param),
         };
 
@@ -458,8 +474,14 @@ impl Shell {
     总计: {:>12.3}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 "#,
-            energy.wh_a, energy.wh_b, energy.wh_c, energy.wh_total,
-            energy.varh_a, energy.varh_b, energy.varh_c, energy.varh_total,
+            energy.wh_a,
+            energy.wh_b,
+            energy.wh_c,
+            energy.wh_total,
+            energy.varh_a,
+            energy.varh_b,
+            energy.varh_c,
+            energy.varh_total,
         );
 
         queue!(stdout, style::Print(result))?;
@@ -491,7 +513,10 @@ impl Shell {
     /// 串口命令
     fn cmd_serial(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
         if args.is_empty() {
-            queue!(stdout, style::Print("用法: serial <list|start|stop|status>\n\r"))?;
+            queue!(
+                stdout,
+                style::Print("用法: serial <list|start|stop|status>\n\r")
+            )?;
             stdout.flush()?;
             return Ok(());
         }
@@ -513,7 +538,10 @@ impl Shell {
                     queue!(stdout, style::Print("用法: serial start <port>\n\r"))?;
                 } else {
                     let port_name = args[1];
-                    queue!(stdout, style::Print(format!("正在启动串口 {} ...\n\r", port_name)))?;
+                    queue!(
+                        stdout,
+                        style::Print(format!("正在启动串口 {} ...\n\r", port_name))
+                    )?;
                     stdout.flush()?;
 
                     // 这里需要 mutable borrow，但我们在 &self 上
@@ -525,10 +553,16 @@ impl Shell {
                 queue!(stdout, style::Print("提示: 串口服务需要在主函数中停止\n\r"))?;
             }
             "status" => {
-                queue!(stdout, style::Print("提示: 使用 'serial list' 查看可用串口\n\r"))?;
+                queue!(
+                    stdout,
+                    style::Print("提示: 使用 'serial list' 查看可用串口\n\r")
+                )?;
             }
             _ => {
-                queue!(stdout, style::Print(format!("未知串口命令: {}\n\r", args[0])))?;
+                queue!(
+                    stdout,
+                    style::Print(format!("未知串口命令: {}\n\r", args[0]))
+                )?;
             }
         }
 

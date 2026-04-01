@@ -4,12 +4,7 @@
 //!
 //! Reference: IEC 62056-6-2 (Blue Book Part 2) §7.7.51
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// S-FSK Active Initiator Interface Class (IC 51)
 ///
@@ -116,11 +111,8 @@ mod tests {
 
     #[test]
     fn test_creation() {
-        let initiator = SfskActiveInitiator::with_addresses(
-            ObisCode::new(0, 0, 51, 0, 0, 255),
-            100,
-            200,
-        );
+        let initiator =
+            SfskActiveInitiator::with_addresses(ObisCode::new(0, 0, 51, 0, 0, 255), 100, 200);
         assert_eq!(initiator.primary_address(), 100);
         assert_eq!(initiator.secondary_address(), 200);
     }

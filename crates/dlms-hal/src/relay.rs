@@ -126,10 +126,7 @@ mod tests {
     #[test]
     fn test_relay_not_initialized() {
         let mut relay = MockRelay::uninitialized();
-        assert_eq!(
-            relay.is_closed().unwrap_err(),
-            HalError::NotInitialized
-        );
+        assert_eq!(relay.is_closed().unwrap_err(), HalError::NotInitialized);
         assert_eq!(relay.close().unwrap_err(), HalError::NotInitialized);
         assert_eq!(relay.open().unwrap_err(), HalError::NotInitialized);
     }

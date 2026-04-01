@@ -65,10 +65,7 @@ impl SystemTitle {
     #[cfg(feature = "std")]
     pub fn to_hex_string(&self) -> alloc::string::String {
         use alloc::format;
-        self.bytes
-            .iter()
-            .map(|b| format!("{:02X}", b))
-            .collect()
+        self.bytes.iter().map(|b| format!("{:02X}", b)).collect()
     }
 
     /// Create from u64 value (big-endian encoding)
@@ -104,7 +101,9 @@ impl SystemTitle {
 
 impl Default for SystemTitle {
     fn default() -> Self {
-        Self { bytes: [0u8; SYSTEM_TITLE_LEN] }
+        Self {
+            bytes: [0u8; SYSTEM_TITLE_LEN],
+        }
     }
 }
 
@@ -135,9 +134,18 @@ impl AsRef<[u8]> for SystemTitle {
 #[cfg(feature = "std")]
 impl fmt::Display for SystemTitle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
-            self.bytes[0], self.bytes[1], self.bytes[2], self.bytes[3],
-            self.bytes[4], self.bytes[5], self.bytes[6], self.bytes[7])
+        write!(
+            f,
+            "{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
+            self.bytes[0],
+            self.bytes[1],
+            self.bytes[2],
+            self.bytes[3],
+            self.bytes[4],
+            self.bytes[5],
+            self.bytes[6],
+            self.bytes[7]
+        )
     }
 }
 
@@ -174,7 +182,10 @@ mod tests {
     fn test_system_title_from_u64() {
         let value = 0x0102030405060708u64;
         let st = SystemTitle::from_u64(value);
-        assert_eq!(st.as_bytes(), &[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
+        assert_eq!(
+            st.as_bytes(),
+            &[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]
+        );
     }
 
     #[test]

@@ -6,12 +6,7 @@
 //! The Data interface class is the simplest COSEM object, storing a single
 //! value that can be of any DLMS data type (CHOICE).
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 1: Data
 ///
@@ -71,7 +66,7 @@ impl CosemClass for Data {
 
     fn set_attribute(&mut self, id: u8, value: DlmsType) -> Result<(), CosemError> {
         match id {
-            1 => Err(CosemError::ReadOnly),  // logical_name is read-only
+            1 => Err(CosemError::ReadOnly), // logical_name is read-only
             2 => {
                 self.value = value;
                 Ok(())
@@ -100,7 +95,10 @@ mod tests {
 
         // Test logical_name
         let attr1 = data.get_attribute(1).unwrap();
-        assert_eq!(attr1, DlmsType::OctetString(alloc::vec![1, 0, 1, 8, 0, 255]));
+        assert_eq!(
+            attr1,
+            DlmsType::OctetString(alloc::vec![1, 0, 1, 8, 0, 255])
+        );
 
         // Test value
         let attr2 = data.get_attribute(2).unwrap();

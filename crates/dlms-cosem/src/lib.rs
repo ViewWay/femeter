@@ -33,11 +33,7 @@
 
 extern crate alloc;
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, types::DlmsType};
 
 // Base module with common utilities
 mod base;

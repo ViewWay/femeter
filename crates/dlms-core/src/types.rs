@@ -55,10 +55,10 @@ pub struct CosemDate {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt-log", derive(defmt::Format))]
 pub struct CosemTime {
-    pub hour: u8,        // 0-23, 0xFF=not specified
-    pub minute: u8,      // 0-59, 0xFF=not specified
-    pub second: u8,      // 0-59, 0xFF=not specified
-    pub hundredths: u8,  // 0-99, 0xFF=not specified
+    pub hour: u8,       // 0-23, 0xFF=not specified
+    pub minute: u8,     // 0-59, 0xFF=not specified
+    pub second: u8,     // 0-59, 0xFF=not specified
+    pub hundredths: u8, // 0-99, 0xFF=not specified
 }
 
 /// COSEM date-time type (OCTET STRING SIZE(12))
@@ -230,46 +230,164 @@ impl DlmsType {
     }
 
     // Convenience constructors
-    pub fn zero() -> Self { Self::Null }
-    pub fn from_bool(v: bool) -> Self { Self::Boolean(v) }
-    pub fn from_u8(v: u8) -> Self { Self::UInt8(v) }
-    pub fn from_u16(v: u16) -> Self { Self::UInt16(v) }
-    pub fn from_u32(v: u32) -> Self { Self::UInt32(v) }
-    pub fn from_u64(v: u64) -> Self { Self::UInt64(v) }
-    pub fn from_i8(v: i8) -> Self { Self::Int8(v) }
-    pub fn from_i16(v: i16) -> Self { Self::Int16(v) }
-    pub fn from_i32(v: i32) -> Self { Self::Int32(v) }
-    pub fn from_i64(v: i64) -> Self { Self::Int64(v) }
-    pub fn from_f32(v: f32) -> Self { Self::Float32(v) }
-    pub fn from_f64(v: f64) -> Self { Self::Float64(v) }
-    pub fn from_enum(v: u8) -> Self { Self::Enum(v) }
-    pub fn from_octet_string(v: Vec<u8>) -> Self { Self::OctetString(v) }
-    pub fn from_visible_string(v: Vec<u8>) -> Self { Self::VisibleString(v) }
+    pub fn zero() -> Self {
+        Self::Null
+    }
+    pub fn from_bool(v: bool) -> Self {
+        Self::Boolean(v)
+    }
+    pub fn from_u8(v: u8) -> Self {
+        Self::UInt8(v)
+    }
+    pub fn from_u16(v: u16) -> Self {
+        Self::UInt16(v)
+    }
+    pub fn from_u32(v: u32) -> Self {
+        Self::UInt32(v)
+    }
+    pub fn from_u64(v: u64) -> Self {
+        Self::UInt64(v)
+    }
+    pub fn from_i8(v: i8) -> Self {
+        Self::Int8(v)
+    }
+    pub fn from_i16(v: i16) -> Self {
+        Self::Int16(v)
+    }
+    pub fn from_i32(v: i32) -> Self {
+        Self::Int32(v)
+    }
+    pub fn from_i64(v: i64) -> Self {
+        Self::Int64(v)
+    }
+    pub fn from_f32(v: f32) -> Self {
+        Self::Float32(v)
+    }
+    pub fn from_f64(v: f64) -> Self {
+        Self::Float64(v)
+    }
+    pub fn from_enum(v: u8) -> Self {
+        Self::Enum(v)
+    }
+    pub fn from_octet_string(v: Vec<u8>) -> Self {
+        Self::OctetString(v)
+    }
+    pub fn from_visible_string(v: Vec<u8>) -> Self {
+        Self::VisibleString(v)
+    }
 
     // Value extractors with type checking
-    pub fn as_bool(&self) -> Option<bool> { match self { Self::Boolean(v) => Some(*v), _ => None } }
-    pub fn as_u8(&self) -> Option<u8> { match self { Self::UInt8(v) => Some(*v), _ => None } }
-    pub fn as_u16(&self) -> Option<u16> { match self { Self::UInt16(v) => Some(*v), _ => None } }
-    pub fn as_u32(&self) -> Option<u32> { match self { Self::UInt32(v) => Some(*v), _ => None } }
-    pub fn as_u64(&self) -> Option<u64> { match self { Self::UInt64(v) => Some(*v), _ => None } }
-    pub fn as_i8(&self) -> Option<i8> { match self { Self::Int8(v) => Some(*v), _ => None } }
-    pub fn as_i16(&self) -> Option<i16> { match self { Self::Int16(v) => Some(*v), _ => None } }
-    pub fn as_i32(&self) -> Option<i32> { match self { Self::Int32(v) => Some(*v), _ => None } }
-    pub fn as_i64(&self) -> Option<i64> { match self { Self::Int64(v) => Some(*v), _ => None } }
-    pub fn as_f32(&self) -> Option<f32> { match self { Self::Float32(v) => Some(*v), _ => None } }
-    pub fn as_f64(&self) -> Option<f64> { match self { Self::Float64(v) => Some(*v), _ => None } }
-    pub fn as_enum(&self) -> Option<u8> { match self { Self::Enum(v) => Some(*v), _ => None } }
-    pub fn as_octet_string(&self) -> Option<&[u8]> { match self { Self::OctetString(v) => Some(v), _ => None } }
-    pub fn as_visible_string(&self) -> Option<&[u8]> { match self { Self::VisibleString(v) => Some(v), _ => None } }
-    pub fn as_array(&self) -> Option<&[DlmsType]> { match self { Self::Array(v) => Some(v), _ => None } }
-    pub fn as_structure(&self) -> Option<&[DlmsType]> { match self { Self::Structure(v) => Some(v), _ => None } }
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Self::Boolean(v) => Some(*v),
+            _ => None,
+        }
+    }
+    pub fn as_u8(&self) -> Option<u8> {
+        match self {
+            Self::UInt8(v) => Some(*v),
+            _ => None,
+        }
+    }
+    pub fn as_u16(&self) -> Option<u16> {
+        match self {
+            Self::UInt16(v) => Some(*v),
+            _ => None,
+        }
+    }
+    pub fn as_u32(&self) -> Option<u32> {
+        match self {
+            Self::UInt32(v) => Some(*v),
+            _ => None,
+        }
+    }
+    pub fn as_u64(&self) -> Option<u64> {
+        match self {
+            Self::UInt64(v) => Some(*v),
+            _ => None,
+        }
+    }
+    pub fn as_i8(&self) -> Option<i8> {
+        match self {
+            Self::Int8(v) => Some(*v),
+            _ => None,
+        }
+    }
+    pub fn as_i16(&self) -> Option<i16> {
+        match self {
+            Self::Int16(v) => Some(*v),
+            _ => None,
+        }
+    }
+    pub fn as_i32(&self) -> Option<i32> {
+        match self {
+            Self::Int32(v) => Some(*v),
+            _ => None,
+        }
+    }
+    pub fn as_i64(&self) -> Option<i64> {
+        match self {
+            Self::Int64(v) => Some(*v),
+            _ => None,
+        }
+    }
+    pub fn as_f32(&self) -> Option<f32> {
+        match self {
+            Self::Float32(v) => Some(*v),
+            _ => None,
+        }
+    }
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            Self::Float64(v) => Some(*v),
+            _ => None,
+        }
+    }
+    pub fn as_enum(&self) -> Option<u8> {
+        match self {
+            Self::Enum(v) => Some(*v),
+            _ => None,
+        }
+    }
+    pub fn as_octet_string(&self) -> Option<&[u8]> {
+        match self {
+            Self::OctetString(v) => Some(v),
+            _ => None,
+        }
+    }
+    pub fn as_visible_string(&self) -> Option<&[u8]> {
+        match self {
+            Self::VisibleString(v) => Some(v),
+            _ => None,
+        }
+    }
+    pub fn as_array(&self) -> Option<&[DlmsType]> {
+        match self {
+            Self::Array(v) => Some(v),
+            _ => None,
+        }
+    }
+    pub fn as_structure(&self) -> Option<&[DlmsType]> {
+        match self {
+            Self::Structure(v) => Some(v),
+            _ => None,
+        }
+    }
 
     /// Check if this is a numeric type
     pub fn is_numeric(&self) -> bool {
-        matches!(self,
-            Self::Int8(_) | Self::Int16(_) | Self::Int32(_) | Self::Int64(_)
-            | Self::UInt8(_) | Self::UInt16(_) | Self::UInt32(_) | Self::UInt64(_)
-            | Self::Float32(_) | Self::Float64(_)
+        matches!(
+            self,
+            Self::Int8(_)
+                | Self::Int16(_)
+                | Self::Int32(_)
+                | Self::Int64(_)
+                | Self::UInt8(_)
+                | Self::UInt16(_)
+                | Self::UInt32(_)
+                | Self::UInt64(_)
+                | Self::Float32(_)
+                | Self::Float64(_)
         )
     }
 
@@ -307,7 +425,9 @@ impl fmt::Display for DlmsType {
             Self::Float64(v) => write!(f, "{}", v),
             Self::OctetString(v) => {
                 write!(f, "0x")?;
-                for b in v { write!(f, "{:02X}", b)?; }
+                for b in v {
+                    write!(f, "{:02X}", b)?;
+                }
                 Ok(())
             }
             _ => write!(f, "{:?}", self),

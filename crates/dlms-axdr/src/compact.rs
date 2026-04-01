@@ -29,8 +29,7 @@ impl CompactArrayCodec {
 
     /// Validate compact array data against element type and count
     pub fn validate(tag: u8, count: u32, data: &[u8]) -> Result<(), AxdrError> {
-        let elem_size = Self::element_size(tag)
-            .ok_or(AxdrError::InvalidTag(tag))?;
+        let elem_size = Self::element_size(tag).ok_or(AxdrError::InvalidTag(tag))?;
         let expected = elem_size * (count as usize);
         if data.len() < expected {
             return Err(AxdrError::BufferTooShort);

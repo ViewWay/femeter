@@ -1,7 +1,7 @@
 //! Application context name for DLMS/COSEM
 
+use crate::ber::{BerDecoder, BerEncoder, BerError, BerTag};
 use alloc::vec::Vec;
-use crate::ber::{BerEncoder, BerDecoder, BerTag, BerError};
 
 /// DLMS/COSEM application context name
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,16 +62,24 @@ impl ApplicationContextName {
                 let b = value[i];
                 n = (n << 7) | ((b & 0x7F) as u64);
                 i += 1;
-                if (b & 0x80) == 0 { break; }
+                if (b & 0x80) == 0 {
+                    break;
+                }
             }
             components.push(n);
         }
 
-        if components[..] == Self::OID_LN_NO_CIPHER { Ok(Self::LogicalNameNoCiphering) }
-        else if components[..] == Self::OID_LN_WITH_CIPHER { Ok(Self::LogicalNameWithCiphering) }
-        else if components[..] == Self::OID_SN_NO_CIPHER { Ok(Self::ShortNameNoCiphering) }
-        else if components[..] == Self::OID_SN_WITH_CIPHER { Ok(Self::ShortNameWithCiphering) }
-        else { Ok(Self::Custom(components)) }
+        if components[..] == Self::OID_LN_NO_CIPHER {
+            Ok(Self::LogicalNameNoCiphering)
+        } else if components[..] == Self::OID_LN_WITH_CIPHER {
+            Ok(Self::LogicalNameWithCiphering)
+        } else if components[..] == Self::OID_SN_NO_CIPHER {
+            Ok(Self::ShortNameNoCiphering)
+        } else if components[..] == Self::OID_SN_WITH_CIPHER {
+            Ok(Self::ShortNameWithCiphering)
+        } else {
+            Ok(Self::Custom(components))
+        }
     }
 }
 

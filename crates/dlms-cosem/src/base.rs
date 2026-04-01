@@ -4,11 +4,7 @@
 //! This module provides helper types and functions used across multiple
 //! interface classes.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, types::DlmsType};
 
 /// Common attribute IDs for COSEM objects
 pub mod attr {
@@ -78,7 +74,11 @@ pub fn default_set_attribute(id: u8, _value: DlmsType, count: u8) -> Result<(), 
 
 /// Default execute_method implementation for unimplemented methods
 #[allow(dead_code)]
-pub fn default_execute_method(id: u8, _params: DlmsType, count: u8) -> Result<DlmsType, CosemError> {
+pub fn default_execute_method(
+    id: u8,
+    _params: DlmsType,
+    count: u8,
+) -> Result<DlmsType, CosemError> {
     validate_method(id, count)?;
     Err(CosemError::NotImplemented)
 }
@@ -99,6 +99,9 @@ mod tests {
     fn test_get_logical_name() {
         let obis = ObisCode::new(1, 0, 1, 8, 0, 255);
         let result = get_logical_name(&obis).unwrap();
-        assert_eq!(result, DlmsType::OctetString(alloc::vec![1, 0, 1, 8, 0, 255]));
+        assert_eq!(
+            result,
+            DlmsType::OctetString(alloc::vec![1, 0, 1, 8, 0, 255])
+        );
     }
 }

@@ -102,7 +102,12 @@ pub struct SecurityControl {
 
 impl SecurityControl {
     /// Create a new SecurityControl
-    pub fn new(suite: SecuritySuite, authenticated: bool, encrypted: bool, key_selection: KeySelection) -> Self {
+    pub fn new(
+        suite: SecuritySuite,
+        authenticated: bool,
+        encrypted: bool,
+        key_selection: KeySelection,
+    ) -> Self {
         Self {
             suite,
             authenticated,
@@ -229,7 +234,12 @@ mod tests {
         let sc = SecurityControl::new(SecuritySuite::AesGcm128, true, true, KeySelection::Global);
         assert_eq!(sc.as_byte(), 0b00110000);
 
-        let sc = SecurityControl::new(SecuritySuite::AesGcm128, false, false, KeySelection::Dedicated);
+        let sc = SecurityControl::new(
+            SecuritySuite::AesGcm128,
+            false,
+            false,
+            KeySelection::Dedicated,
+        );
         assert_eq!(sc.as_byte(), 0b00000001);
     }
 
@@ -274,7 +284,12 @@ mod tests {
             let sc = SecurityControl::from_byte(byte);
             // Bit 3 (reserved) should be zero in output
             let expected = byte & 0b11110111;
-            assert_eq!(sc.as_byte(), expected, "Roundtrip failed for byte: {:#04x}", byte);
+            assert_eq!(
+                sc.as_byte(),
+                expected,
+                "Roundtrip failed for byte: {:#04x}",
+                byte
+            );
         }
     }
 

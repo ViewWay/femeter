@@ -1,7 +1,7 @@
 //! RLRQ (Release Request) / RLRE (Release Response) encode/decode
 
+use crate::ber::{BerDecoder, BerEncoder, BerError, BerTag};
 use alloc::vec::Vec;
-use crate::ber::{BerEncoder, BerDecoder, BerTag, BerError};
 
 /// Release request reason
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,7 +20,9 @@ pub struct Rlrq {
 
 impl Rlrq {
     pub fn normal() -> Self {
-        Self { reason: ReleaseReason::Normal }
+        Self {
+            reason: ReleaseReason::Normal,
+        }
     }
 
     pub fn encode(&self, enc: &mut BerEncoder) {
@@ -63,7 +65,9 @@ pub struct Rlre {
 
 impl Rlre {
     pub fn normal() -> Self {
-        Self { reason: ReleaseReason::Normal }
+        Self {
+            reason: ReleaseReason::Normal,
+        }
     }
 
     pub fn encode(&self, enc: &mut BerEncoder) {
@@ -142,7 +146,9 @@ mod tests {
 
     #[test]
     fn test_rlrq_urgent() {
-        let rlrq = Rlrq { reason: ReleaseReason::Urgent };
+        let rlrq = Rlrq {
+            reason: ReleaseReason::Urgent,
+        };
         let bytes = encode_rlrq(&rlrq);
         let decoded = decode_rlrq(&bytes).unwrap();
         assert_eq!(decoded.reason, ReleaseReason::Urgent);

@@ -5,12 +5,7 @@
 //!
 //! Account manages the prepaid account balance and status.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// Account status
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

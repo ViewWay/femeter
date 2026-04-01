@@ -26,11 +26,16 @@ impl ObisCode {
     #[cfg(feature = "std")]
     pub fn parse(s: &str) -> Option<Self> {
         use alloc::vec::Vec;
-        let parts: Vec<u8> = s.split('.')
+        let parts: Vec<u8> = s
+            .split('.')
             .map(|p| p.parse::<u8>().ok())
             .collect::<Option<Vec<_>>>()?;
-        if parts.len() != 6 { return None; }
-        Some(Self::new(parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]))
+        if parts.len() != 6 {
+            return None;
+        }
+        Some(Self::new(
+            parts[0], parts[1], parts[2], parts[3], parts[4], parts[5],
+        ))
     }
 
     /// To byte representation (6 bytes)
@@ -61,7 +66,11 @@ impl ObisCode {
 
 impl fmt::Display for ObisCode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}.{}.{}.{}.{}", self.a, self.b, self.c, self.d, self.e, self.f)
+        write!(
+            f,
+            "{}.{}.{}.{}.{}.{}",
+            self.a, self.b, self.c, self.d, self.e, self.f
+        )
     }
 }
 

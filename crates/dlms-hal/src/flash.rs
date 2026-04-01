@@ -236,10 +236,7 @@ mod tests {
     #[test]
     fn test_flash_invalid_sector() {
         let mut flash = MockFlash::new();
-        assert_eq!(
-            flash.erase_sector(99).unwrap_err(),
-            HalError::InvalidParam
-        );
+        assert_eq!(flash.erase_sector(99).unwrap_err(), HalError::InvalidParam);
     }
 
     #[test]
@@ -248,7 +245,9 @@ mod tests {
         let mut buffer = [0u8; 1000];
 
         assert_eq!(
-            flash.read(FLASH_SIZE as u32 - 100, &mut buffer).unwrap_err(),
+            flash
+                .read(FLASH_SIZE as u32 - 100, &mut buffer)
+                .unwrap_err(),
             HalError::InvalidParam
         );
     }

@@ -6,12 +6,7 @@
 //! Utility Tables provides tabular data storage for various utility-related
 //! lookup tables and configuration data.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 26: Utility Tables
 ///

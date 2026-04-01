@@ -5,12 +5,7 @@
 //!
 //! The Register Table provides tabular storage for multiple related register values.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 61: Register Table
 ///

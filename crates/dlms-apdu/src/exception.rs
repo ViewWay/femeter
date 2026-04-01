@@ -7,9 +7,9 @@ extern crate std;
 
 extern crate alloc;
 
+use crate::codec::{ApduDecoder, ApduEncoder};
+use crate::types::{ApduError, InvokeId, ServiceError, TAG_EXCEPTION_RESPONSE};
 use alloc::vec::Vec;
-use crate::types::{ApduError, InvokeId, TAG_EXCEPTION_RESPONSE, ServiceError};
-use crate::codec::{ApduEncoder, ApduDecoder};
 
 /// Exception Response PDU
 ///
@@ -67,8 +67,7 @@ impl ExceptionResponse {
 
         let invoke_id = dec.read_invoke_id()?;
         let error_code = dec.read_byte()?;
-        let error = ServiceError::from_code(error_code)
-            .ok_or(ApduError::InvalidData)?;
+        let error = ServiceError::from_code(error_code).ok_or(ApduError::InvalidData)?;
 
         Ok(Self { invoke_id, error })
     }

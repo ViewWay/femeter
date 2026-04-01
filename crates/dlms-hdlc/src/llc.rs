@@ -27,10 +27,16 @@ pub fn add_llc_header(client_to_server: bool, payload: &[u8]) -> Vec<u8> {
 
 /// Strip LLC header and return payload
 pub fn strip_llc_header(data: &[u8]) -> Option<&[u8]> {
-    if data.len() < 3 { return None; }
+    if data.len() < 3 {
+        return None;
+    }
     // Validate LLC header
-    if data[0] != 0xE6 { return None; }
-    if data[1] != 0xE6 && data[1] != 0xE7 { return None; }
+    if data[0] != 0xE6 {
+        return None;
+    }
+    if data[1] != 0xE6 && data[1] != 0xE7 {
+        return None;
+    }
     Some(&data[3..])
 }
 

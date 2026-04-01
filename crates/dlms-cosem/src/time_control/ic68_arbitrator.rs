@@ -5,12 +5,7 @@
 //!
 //! Arbitrator manages arbitration between competing control sources.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 68: Arbitrator
 ///

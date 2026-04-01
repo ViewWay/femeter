@@ -7,11 +7,16 @@ use dlms_core::ObisCode;
 /// Parse OBIS code from "A.B.C.D.E.F" format
 pub fn parse_obis(s: &str) -> Option<ObisCode> {
     use alloc::vec::Vec;
-    let parts: Vec<u8> = s.split('.')
+    let parts: Vec<u8> = s
+        .split('.')
         .map(|p| p.parse::<u8>().ok())
         .collect::<Option<Vec<_>>>()?;
-    if parts.len() != 6 { return None; }
-    Some(ObisCode::new(parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]))
+    if parts.len() != 6 {
+        return None;
+    }
+    Some(ObisCode::new(
+        parts[0], parts[1], parts[2], parts[3], parts[4], parts[5],
+    ))
 }
 
 #[cfg(test)]

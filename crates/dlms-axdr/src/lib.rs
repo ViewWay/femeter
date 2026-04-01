@@ -9,14 +9,14 @@ extern crate std;
 
 extern crate alloc;
 
-pub mod encoder;
-pub mod decoder;
 pub mod compact;
 pub mod datetime_codec;
+pub mod decoder;
+pub mod encoder;
 
-pub use encoder::AxdrEncoder;
-pub use decoder::AxdrDecoder;
 pub use compact::CompactArrayCodec;
+pub use decoder::AxdrDecoder;
+pub use encoder::AxdrEncoder;
 
 /// A-XDR encode/decode error
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

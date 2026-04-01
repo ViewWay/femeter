@@ -6,12 +6,7 @@
 //! Push Setup manages the push (event notification) configuration for
 //! proactive data transmission from meter to head-end system.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// Push object (destination for push messages)
 #[derive(Debug, Clone)]

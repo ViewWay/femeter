@@ -1,31 +1,51 @@
 //! BER TLV encoder/decoder base
 
-use alloc::vec::Vec;
 use alloc::vec;
+use alloc::vec::Vec;
 
 /// BER Tag wrapper
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BerTag {
-    pub class: u8,   // 0=universal, 1=application, 2=context, 3=private
+    pub class: u8, // 0=universal, 1=application, 2=context, 3=private
     pub constructed: bool,
     pub number: u32,
 }
 
 impl BerTag {
     pub const fn universal(number: u32) -> Self {
-        Self { class: 0, constructed: false, number }
+        Self {
+            class: 0,
+            constructed: false,
+            number,
+        }
     }
     pub const fn application(number: u32) -> Self {
-        Self { class: 1, constructed: false, number }
+        Self {
+            class: 1,
+            constructed: false,
+            number,
+        }
     }
     pub const fn context(number: u32) -> Self {
-        Self { class: 2, constructed: false, number }
+        Self {
+            class: 2,
+            constructed: false,
+            number,
+        }
     }
     pub const fn context_constructed(number: u32) -> Self {
-        Self { class: 2, constructed: true, number }
+        Self {
+            class: 2,
+            constructed: true,
+            number,
+        }
     }
     pub const fn application_constructed(number: u32) -> Self {
-        Self { class: 1, constructed: true, number }
+        Self {
+            class: 1,
+            constructed: true,
+            number,
+        }
     }
 
     /// Encode tag to bytes
@@ -56,7 +76,9 @@ impl BerTag {
 
     /// Decode tag from bytes, returns (tag, bytes_consumed)
     pub fn decode(data: &[u8]) -> Result<(Self, usize), BerError> {
-        if data.is_empty() { return Err(BerError::UnexpectedEnd); }
+        if data.is_empty() {
+            return Err(BerError::UnexpectedEnd);
+        }
         let first = data[0];
         let class = (first >> 6) & 0x03;
         let constructed = (first & 0x20) != 0;
@@ -64,19 +86,37 @@ impl BerTag {
 
         if (first & 0x1F) < 31 {
             number = (first & 0x1F) as u32;
-            Ok((Self { class, constructed, number }, 1))
+            Ok((
+                Self {
+                    class,
+                    constructed,
+                    number,
+                },
+                1,
+            ))
         } else {
             let mut n: u32 = 0;
             let mut i = 1;
             loop {
-                if i >= data.len() { return Err(BerError::UnexpectedEnd); }
+                if i >= data.len() {
+                    return Err(BerError::UnexpectedEnd);
+                }
                 let b = data[i];
                 n = (n << 7) | (b & 0x7F) as u32;
                 i += 1;
-                if (b & 0x80) == 0 { break; }
+                if (b & 0x80) == 0 {
+                    break;
+                }
             }
             number = n;
-            Ok((Self { class, constructed, number }, i))
+            Ok((
+                Self {
+                    class,
+                    constructed,
+                    number,
+                },
+                i,
+            ))
         }
     }
 }
@@ -102,7 +142,9 @@ impl BerEncoder {
     }
 
     pub fn with_capacity(cap: usize) -> Self {
-        Self { buf: Vec::with_capacity(cap) }
+        Self {
+            buf: Vec::with_capacity(cap),
+        }
     }
 
     /// Write a TLV (tag-length-value)
@@ -114,7 +156,8 @@ impl BerEncoder {
 
     /// Write a constructed TLV with a closure to fill the content
     pub fn write_constructed<F>(&mut self, tag: BerTag, f: F)
-    where F: FnOnce(&mut BerEncoder)
+    where
+        F: FnOnce(&mut BerEncoder),
     {
         let mut inner = BerEncoder::new();
         f(&mut inner);
@@ -163,7 +206,9 @@ impl BerEncoder {
 
     /// Write an object identifier (universal tag 0x06)
     pub fn write_oid(&mut self, components: &[u64]) {
-        if components.len() < 2 { return; }
+        if components.len() < 2 {
+            return;
+        }
         let mut encoded = Vec::new();
         // First two components encoded as 40*first + second
         encoded.push((40 * components[0] + components[1]) as u8);
@@ -244,7 +289,9 @@ impl BerEncoder {
 }
 
 impl Default for BerEncoder {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// BER TLV decoder
@@ -258,8 +305,12 @@ impl<'a> BerDecoder<'a> {
         Self { buf, pos: 0 }
     }
 
-    pub fn position(&self) -> usize { self.pos }
-    pub fn remaining(&self) -> usize { self.buf.len().saturating_sub(self.pos) }
+    pub fn position(&self) -> usize {
+        self.pos
+    }
+    pub fn remaining(&self) -> usize {
+        self.buf.len().saturating_sub(self.pos)
+    }
 
     /// Read one TLV, returns (tag, value_slice)
     pub fn read_tlv(&mut self) -> Result<(BerTag, &'a [u8]), BerError> {
@@ -295,7 +346,9 @@ impl<'a> BerDecoder<'a> {
         if tag != BerTag::universal(0x02) {
             return Err(BerError::InvalidTag);
         }
-        if value.is_empty() { return Ok(0); }
+        if value.is_empty() {
+            return Ok(0);
+        }
         // Sign-extend from the first byte
         let mut result: i64 = 0;
         let negative = value[0] & 0x80 != 0;
@@ -328,18 +381,24 @@ impl<'a> BerDecoder<'a> {
     }
 
     fn decode_length(&mut self) -> Result<usize, BerError> {
-        if self.pos >= self.buf.len() { return Err(BerError::UnexpectedEnd); }
+        if self.pos >= self.buf.len() {
+            return Err(BerError::UnexpectedEnd);
+        }
         let first = self.buf[self.pos];
         self.pos += 1;
         if first < 128 {
             Ok(first as usize)
         } else if first == 0x81 {
-            if self.pos >= self.buf.len() { return Err(BerError::UnexpectedEnd); }
+            if self.pos >= self.buf.len() {
+                return Err(BerError::UnexpectedEnd);
+            }
             let len = self.buf[self.pos] as usize;
             self.pos += 1;
             Ok(len)
         } else if first == 0x82 {
-            if self.pos + 1 >= self.buf.len() { return Err(BerError::UnexpectedEnd); }
+            if self.pos + 1 >= self.buf.len() {
+                return Err(BerError::UnexpectedEnd);
+            }
             let len = ((self.buf[self.pos] as usize) << 8) | (self.buf[self.pos + 1] as usize);
             self.pos += 2;
             Ok(len)
@@ -445,7 +504,7 @@ mod tests {
         enc.write_oid(&[2, 16, 776, 1, 1]);
         let bytes = enc.into_bytes();
         assert_eq!(bytes[0], 0x06); // OID tag
-        // Decode it back
+                                    // Decode it back
         let mut dec = BerDecoder::new(&bytes);
         let (tag, value) = dec.read_tlv().unwrap();
         assert_eq!(tag.number, 0x06);

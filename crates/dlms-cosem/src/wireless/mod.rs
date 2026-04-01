@@ -28,22 +28,16 @@
 //! - IC 132: ISO/IEC 14908 Protocol Status
 //! - IC 133: ISO/IEC 14908 Diagnostic
 
-pub mod zigbee;
-pub mod wisun;
-pub mod lpwan;
 pub mod lon;
+pub mod lpwan;
+pub mod wisun;
+pub mod zigbee;
 
 // Re-export commonly used types
+pub use lon::{LonDiagnostic, LonIdentification, LonProtocolSetup, LonProtocolStatus};
+pub use lpwan::{LorawanDiagnostic, LorawanSetup, SchcLpwanDiagnostic, SchcLpwanSetup};
+pub use wisun::{MplDiagnostic, RplDiagnostic, WisunDiagnostic, WisunSetup};
 pub use zigbee::{
-    ZigbeeSasStartup, ZigbeeSasJoin, ZigbeeSasApsFragmentation,
-    ZigbeeNetworkControl, ZigbeeTunnelSetup,
-};
-pub use wisun::{
-    WisunSetup, WisunDiagnostic, RplDiagnostic, MplDiagnostic,
-};
-pub use lpwan::{
-    SchcLpwanSetup, SchcLpwanDiagnostic, LorawanSetup, LorawanDiagnostic,
-};
-pub use lon::{
-    LonIdentification, LonProtocolSetup, LonProtocolStatus, LonDiagnostic,
+    ZigbeeNetworkControl, ZigbeeSasApsFragmentation, ZigbeeSasJoin, ZigbeeSasStartup,
+    ZigbeeTunnelSetup,
 };

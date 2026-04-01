@@ -6,12 +6,7 @@
 //! IEC 62055-41 defines attributes for standard transfer specification (STS)
 //! token-based prepaid systems.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 116: IEC 62055-41 Attributes
 ///

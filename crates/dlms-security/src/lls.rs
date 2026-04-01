@@ -26,12 +26,17 @@ pub fn hash_password(password: &[u8]) -> Vec<u8> {
     let mut acc: u32 = 0x67452301;
 
     for (i, &byte) in password.iter().enumerate() {
-        acc = acc.wrapping_mul(31).wrapping_add(byte as u32).wrapping_add(i as u32);
+        acc = acc
+            .wrapping_mul(31)
+            .wrapping_add(byte as u32)
+            .wrapping_add(i as u32);
     }
 
     // Expand to 16 bytes using simple mixing
     for i in 0..16 {
-        let mixed = acc.wrapping_mul((i as u32).wrapping_add(1)).wrapping_add(0x9E3779B9);
+        let mixed = acc
+            .wrapping_mul((i as u32).wrapping_add(1))
+            .wrapping_add(0x9E3779B9);
         hash.push(((mixed >> (i % 4 * 8)) & 0xFF) as u8);
     }
 

@@ -5,12 +5,7 @@
 //!
 //! Array Manager manages array attributes of other COSEM objects.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 123: Array Manager
 ///

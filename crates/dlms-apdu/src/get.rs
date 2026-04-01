@@ -7,14 +7,14 @@ extern crate std;
 
 extern crate alloc;
 
-use alloc::vec::Vec;
-use dlms_core::{DlmsType, DataAccessError};
+use crate::codec::{ApduDecoder, ApduEncoder};
 use crate::types::{
-    ApduError, InvokeId, AttributeDescriptor, AccessRequest, AccessResult,
-    TAG_GET_REQUEST, TAG_GET_RESPONSE, TAG_SUBTYPE_NORMAL, TAG_SUBTYPE_NEXT,
-    TAG_SUBTYPE_WITH_LIST, TAG_SUBTYPE_DATA, TAG_SUBTYPE_BLOCK, TAG_SUBTYPE_DATA_ACCESS_ERROR,
+    AccessRequest, AccessResult, ApduError, AttributeDescriptor, InvokeId, TAG_GET_REQUEST,
+    TAG_GET_RESPONSE, TAG_SUBTYPE_BLOCK, TAG_SUBTYPE_DATA, TAG_SUBTYPE_DATA_ACCESS_ERROR,
+    TAG_SUBTYPE_NEXT, TAG_SUBTYPE_NORMAL, TAG_SUBTYPE_WITH_LIST,
 };
-use crate::codec::{ApduEncoder, ApduDecoder};
+use alloc::vec::Vec;
+use dlms_core::{DataAccessError, DlmsType};
 
 // ============================================================
 // Get-Request PDUs
@@ -110,7 +110,10 @@ pub struct GetRequestNext {
 
 impl GetRequestNext {
     pub fn new(invoke_id: InvokeId, block_number: u32) -> Self {
-        Self { invoke_id, block_number }
+        Self {
+            invoke_id,
+            block_number,
+        }
     }
 
     pub fn encode(&self) -> Vec<u8> {
@@ -132,7 +135,10 @@ impl GetRequestNext {
         let invoke_id = dec.read_invoke_id()?;
         let block_number = dec.read_u32()?;
 
-        Ok(Self { invoke_id, block_number })
+        Ok(Self {
+            invoke_id,
+            block_number,
+        })
     }
 }
 
@@ -152,7 +158,10 @@ pub struct GetRequestWithList {
 
 impl GetRequestWithList {
     pub fn new(invoke_id: InvokeId, requests: Vec<GetRequestListItem>) -> Self {
-        Self { invoke_id, requests }
+        Self {
+            invoke_id,
+            requests,
+        }
     }
 
     pub fn encode(&self) -> Result<Vec<u8>, ApduError> {
@@ -220,10 +229,16 @@ impl GetRequestWithList {
                 }
                 _ => return Err(ApduError::InvalidData),
             };
-            requests.push(GetRequestListItem { descriptor, access_selector });
+            requests.push(GetRequestListItem {
+                descriptor,
+                access_selector,
+            });
         }
 
-        Ok(Self { invoke_id, requests })
+        Ok(Self {
+            invoke_id,
+            requests,
+        })
     }
 }
 
@@ -330,8 +345,7 @@ impl GetResponseNormal {
             AccessResult::Success(value)
         } else {
             // Error
-            let error = DataAccessError::from_code(result_byte)
-                .ok_or(ApduError::InvalidData)?;
+            let error = DataAccessError::from_code(result_byte).ok_or(ApduError::InvalidData)?;
             AccessResult::Error(error)
         };
 
@@ -430,8 +444,7 @@ impl GetResponseError {
 
         let invoke_id = dec.read_invoke_id()?;
         let error_code = dec.read_byte()?;
-        let error = DataAccessError::from_code(error_code)
-            .ok_or(ApduError::InvalidData)?;
+        let error = DataAccessError::from_code(error_code).ok_or(ApduError::InvalidData)?;
 
         Ok(Self { invoke_id, error })
     }
@@ -471,7 +484,9 @@ impl GetResponse {
         match subtype {
             TAG_SUBTYPE_DATA => Ok(Self::Data(GetResponseNormal::decode(data)?)),
             TAG_SUBTYPE_BLOCK => Ok(Self::Block(GetResponseBlock::decode(data)?)),
-            TAG_SUBTYPE_DATA_ACCESS_ERROR => Ok(Self::DataAccessError(GetResponseError::decode(data)?)),
+            TAG_SUBTYPE_DATA_ACCESS_ERROR => {
+                Ok(Self::DataAccessError(GetResponseError::decode(data)?))
+            }
             _ => Err(ApduError::InvalidTag(subtype)),
         }
     }
@@ -513,7 +528,7 @@ mod tests {
         assert_eq!(encoded[0], TAG_GET_REQUEST);
         assert_eq!(encoded[1], TAG_SUBTYPE_NEXT);
         assert_eq!(encoded[2], 1); // invoke_id
-        // Block number should be 5 (big-endian u32)
+                                   // Block number should be 5 (big-endian u32)
         assert_eq!(encoded[3..7], [0, 0, 0, 5]);
     }
 
@@ -529,10 +544,7 @@ mod tests {
 
     #[test]
     fn test_get_response_normal_success() {
-        let resp = GetResponseNormal::success(
-            InvokeId::new(1),
-            DlmsType::from_u32(12345),
-        );
+        let resp = GetResponseNormal::success(InvokeId::new(1), DlmsType::from_u32(12345));
         let encoded = resp.encode().unwrap();
 
         assert_eq!(encoded[0], TAG_GET_RESPONSE);
@@ -543,10 +555,7 @@ mod tests {
 
     #[test]
     fn test_get_response_normal_error() {
-        let resp = GetResponseNormal::error(
-            InvokeId::new(1),
-            DataAccessError::ReadWriteDenied,
-        );
+        let resp = GetResponseNormal::error(InvokeId::new(1), DataAccessError::ReadWriteDenied);
         let encoded = resp.encode().unwrap();
 
         assert_eq!(encoded[0], TAG_GET_RESPONSE);
@@ -557,10 +566,7 @@ mod tests {
 
     #[test]
     fn test_get_response_normal_roundtrip() {
-        let resp = GetResponseNormal::success(
-            InvokeId::new(42),
-            DlmsType::from_u16(100),
-        );
+        let resp = GetResponseNormal::success(InvokeId::new(42), DlmsType::from_u16(100));
         let encoded = resp.encode().unwrap();
         let decoded = GetResponseNormal::decode(&encoded).unwrap();
 
@@ -580,7 +586,7 @@ mod tests {
         assert_eq!(encoded[0], TAG_GET_RESPONSE);
         assert_eq!(encoded[1], TAG_SUBTYPE_BLOCK);
         assert_eq!(encoded[2], 1); // invoke_id
-        // Status with last_block flag set
+                                   // Status with last_block flag set
         assert_eq!(encoded[7], 0x80);
     }
 
@@ -625,10 +631,7 @@ mod tests {
 
     #[test]
     fn test_get_response_decode() {
-        let resp = GetResponseNormal::success(
-            InvokeId::new(1),
-            DlmsType::from_u8(42),
-        );
+        let resp = GetResponseNormal::success(InvokeId::new(1), DlmsType::from_u8(42));
         let encoded = resp.encode().unwrap();
 
         let decoded = GetResponse::decode(&encoded).unwrap();

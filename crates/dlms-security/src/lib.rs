@@ -12,8 +12,8 @@
 extern crate alloc;
 
 mod aes_gcm;
-mod control;
 mod context;
+mod control;
 mod hls;
 mod key;
 mod lls;
@@ -21,11 +21,11 @@ mod system_title;
 
 // Re-exports
 pub use aes_gcm::{decrypt, encrypt};
-pub use control::{
-    KeySelection, SecurityControl, SecurityControlInfo, SecuritySuite, AUTHENTICATED,
-    ENCRYPTED, SECURITY_SUITE_MASK,
-};
 pub use context::{SecurityContext, SecurityLevel};
+pub use control::{
+    KeySelection, SecurityControl, SecurityControlInfo, SecuritySuite, AUTHENTICATED, ENCRYPTED,
+    SECURITY_SUITE_MASK,
+};
 pub use hls::compute_auth_value;
 pub use key::generate_key;
 pub use lls::verify_password;
@@ -69,16 +69,16 @@ mod tests {
     // Test vectors - known values for validation
     const TEST_SYSTEM_TITLE: [u8; 8] = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
     const TEST_GLOBAL_KEY: [u8; 16] = [
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D,
-        0x0E, 0x0F,
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+        0x0F,
     ];
     const TEST_DEDICATED_KEY: [u8; 16] = [
-        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D,
-        0x1E, 0x1F,
+        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E,
+        0x1F,
     ];
     const TEST_AUTH_KEY: [u8; 16] = [
-        0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D,
-        0x2E, 0x2F,
+        0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E,
+        0x2F,
     ];
 
     fn create_test_context() -> SecurityContext {
@@ -164,7 +164,12 @@ mod tests {
         let sc = SecurityControl::new(SecuritySuite::AesGcm128, true, true, KeySelection::Global);
         assert_eq!(sc.as_byte(), 0b00110000);
 
-        let sc = SecurityControl::new(SecuritySuite::AesGcm128, false, false, KeySelection::Dedicated);
+        let sc = SecurityControl::new(
+            SecuritySuite::AesGcm128,
+            false,
+            false,
+            KeySelection::Dedicated,
+        );
         assert_eq!(sc.as_byte(), 0b00000001);
     }
 
@@ -221,7 +226,8 @@ mod tests {
         assert_eq!(key, &TEST_DEDICATED_KEY);
 
         // Test missing dedicated key
-        let ctx_no_dedicated = SecurityContext::new(TEST_SYSTEM_TITLE).with_global_key(TEST_GLOBAL_KEY);
+        let ctx_no_dedicated =
+            SecurityContext::new(TEST_SYSTEM_TITLE).with_global_key(TEST_GLOBAL_KEY);
         assert!(ctx_no_dedicated.get_key(KeySelection::Dedicated).is_err());
     }
 

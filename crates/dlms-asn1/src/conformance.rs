@@ -34,25 +34,59 @@ impl ConformanceBlock {
     }
 
     // Named feature flags
-    pub fn general_protection(&self) -> bool { self.get_bit(0, 7) }
-    pub fn general_block_transfer(&self) -> bool { self.get_bit(0, 6) }
-    pub fn delta_value_encoding(&self) -> bool { self.get_bit(0, 5) }
-    pub fn attribute_0_supported(&self) -> bool { self.get_bit(0, 4) }
+    pub fn general_protection(&self) -> bool {
+        self.get_bit(0, 7)
+    }
+    pub fn general_block_transfer(&self) -> bool {
+        self.get_bit(0, 6)
+    }
+    pub fn delta_value_encoding(&self) -> bool {
+        self.get_bit(0, 5)
+    }
+    pub fn attribute_0_supported(&self) -> bool {
+        self.get_bit(0, 4)
+    }
 
-    pub fn priority_management(&self) -> bool { self.get_bit(1, 7) }
-    pub fn attribute_and_method(&self) -> bool { self.get_bit(1, 6) }
-    pub fn block_transfer_with_action(&self) -> bool { self.get_bit(1, 5) }
-    pub fn block_transfer_with_set(&self) -> bool { self.get_bit(1, 4) }
-    pub fn block_transfer_with_get(&self) -> bool { self.get_bit(1, 3) }
+    pub fn priority_management(&self) -> bool {
+        self.get_bit(1, 7)
+    }
+    pub fn attribute_and_method(&self) -> bool {
+        self.get_bit(1, 6)
+    }
+    pub fn block_transfer_with_action(&self) -> bool {
+        self.get_bit(1, 5)
+    }
+    pub fn block_transfer_with_set(&self) -> bool {
+        self.get_bit(1, 4)
+    }
+    pub fn block_transfer_with_get(&self) -> bool {
+        self.get_bit(1, 3)
+    }
 
-    pub fn multiple_references(&self) -> bool { self.get_bit(2, 7) }
-    pub fn data_notification(&self) -> bool { self.get_bit(2, 6) }
-    pub fn access(&self) -> bool { self.get_bit(2, 5) }
-    pub fn get(&self) -> bool { self.get_bit(2, 4) }
-    pub fn set(&self) -> bool { self.get_bit(2, 3) }
-    pub fn selective_access(&self) -> bool { self.get_bit(2, 2) }
-    pub fn event_notification(&self) -> bool { self.get_bit(2, 1) }
-    pub fn action(&self) -> bool { self.get_bit(2, 0) }
+    pub fn multiple_references(&self) -> bool {
+        self.get_bit(2, 7)
+    }
+    pub fn data_notification(&self) -> bool {
+        self.get_bit(2, 6)
+    }
+    pub fn access(&self) -> bool {
+        self.get_bit(2, 5)
+    }
+    pub fn get(&self) -> bool {
+        self.get_bit(2, 4)
+    }
+    pub fn set(&self) -> bool {
+        self.get_bit(2, 3)
+    }
+    pub fn selective_access(&self) -> bool {
+        self.get_bit(2, 2)
+    }
+    pub fn event_notification(&self) -> bool {
+        self.get_bit(2, 1)
+    }
+    pub fn action(&self) -> bool {
+        self.get_bit(2, 0)
+    }
 
     /// Standard conformance for a typical meter
     pub fn standard_meter() -> Self {
@@ -79,8 +113,12 @@ impl ConformanceBlock {
 
     /// Decode from raw bytes
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() < 3 { return None; }
-        Some(Self { bits: [bytes[0], bytes[1], bytes[2]] })
+        if bytes.len() < 3 {
+            return None;
+        }
+        Some(Self {
+            bits: [bytes[0], bytes[1], bytes[2]],
+        })
     }
 }
 

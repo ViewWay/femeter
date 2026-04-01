@@ -3,11 +3,11 @@
 //! Implements AES-GCM-128 encryption for DLMS/COSEM.
 //! Reference: IEC 62056-6-2 §8.6
 
-use alloc::vec::Vec;
 use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes128Gcm, Nonce,
 };
+use alloc::vec::Vec;
 use dlms_core::errors::SecurityError;
 
 use crate::{NONCE_SIZE, TAG_SIZE};
@@ -37,7 +37,13 @@ pub fn encrypt(
     associated_data: Option<&[u8]>,
 ) -> Result<Vec<u8>, SecurityError> {
     let key = ctx.global_key().ok_or(SecurityError::KeyNotFound)?;
-    encrypt_with_key(key, ctx.system_title(), ctx.frame_counter(), plaintext, associated_data)
+    encrypt_with_key(
+        key,
+        ctx.system_title(),
+        ctx.frame_counter(),
+        plaintext,
+        associated_data,
+    )
 }
 
 /// Decrypt data using AES-GCM-128
@@ -55,7 +61,13 @@ pub fn decrypt(
     associated_data: Option<&[u8]>,
 ) -> Result<Vec<u8>, SecurityError> {
     let key = ctx.global_key().ok_or(SecurityError::KeyNotFound)?;
-    decrypt_with_key(key, ctx.system_title(), ctx.frame_counter(), ciphertext, associated_data)
+    decrypt_with_key(
+        key,
+        ctx.system_title(),
+        ctx.frame_counter(),
+        ciphertext,
+        associated_data,
+    )
 }
 
 /// Encrypt with explicit key
@@ -83,13 +95,22 @@ pub fn encrypt_with_key(
     // Encrypt with optional AAD
     let ciphertext = match associated_data {
         Some(aad) => cipher
-            .encrypt(nonce, aes_gcm::aead::Payload { msg: plaintext, aad })
+            .encrypt(
+                nonce,
+                aes_gcm::aead::Payload {
+                    msg: plaintext,
+                    aad,
+                },
+            )
             .map_err(|_| SecurityError::EncryptionFailed)?,
         None => cipher
-            .encrypt(nonce, aes_gcm::aead::Payload {
-                msg: plaintext,
-                aad: b"",
-            })
+            .encrypt(
+                nonce,
+                aes_gcm::aead::Payload {
+                    msg: plaintext,
+                    aad: b"",
+                },
+            )
             .map_err(|_| SecurityError::EncryptionFailed)?,
     };
 
@@ -126,13 +147,22 @@ pub fn decrypt_with_key(
     // Decrypt with optional AAD
     let plaintext = match associated_data {
         Some(aad) => cipher
-            .decrypt(nonce, aes_gcm::aead::Payload { msg: ciphertext, aad })
+            .decrypt(
+                nonce,
+                aes_gcm::aead::Payload {
+                    msg: ciphertext,
+                    aad,
+                },
+            )
             .map_err(|_| SecurityError::DecryptionFailed)?,
         None => cipher
-            .decrypt(nonce, aes_gcm::aead::Payload {
-                msg: ciphertext,
-                aad: b"",
-            })
+            .decrypt(
+                nonce,
+                aes_gcm::aead::Payload {
+                    msg: ciphertext,
+                    aad: b"",
+                },
+            )
             .map_err(|_| SecurityError::DecryptionFailed)?,
     };
 
@@ -162,7 +192,13 @@ pub fn compute_gmac(
 
     // GMAC is AES-GCM with empty plaintext
     let tag = cipher
-        .encrypt(nonce, aes_gcm::aead::Payload { msg: &[], aad: data })
+        .encrypt(
+            nonce,
+            aes_gcm::aead::Payload {
+                msg: &[],
+                aad: data,
+            },
+        )
         .map_err(|_| SecurityError::EncryptionFailed)?;
 
     let mut result = [0u8; TAG_SIZE];
@@ -177,7 +213,10 @@ pub fn compute_gmac(
 #[allow(dead_code)]
 pub fn generate_random_key() -> [u8; 16] {
     // Simple deterministic key for testing - in production use proper RNG
-    [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F]
+    [
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+        0x0F,
+    ]
 }
 
 #[cfg(test)]
@@ -185,8 +224,8 @@ mod tests {
     use super::*;
 
     const TEST_KEY: [u8; 16] = [
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D,
-        0x0E, 0x0F,
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+        0x0F,
     ];
     const TEST_SYSTEM_TITLE: [u8; 8] = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
 
@@ -253,8 +292,7 @@ mod tests {
         let ciphertext =
             encrypt_with_key(&TEST_KEY, &TEST_SYSTEM_TITLE, 0, plaintext, Some(aad1)).unwrap();
 
-        let result =
-            decrypt_with_key(&TEST_KEY, &TEST_SYSTEM_TITLE, 0, &ciphertext, Some(aad2));
+        let result = decrypt_with_key(&TEST_KEY, &TEST_SYSTEM_TITLE, 0, &ciphertext, Some(aad2));
         assert!(result.is_err());
     }
 

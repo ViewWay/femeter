@@ -216,10 +216,7 @@ mod tests {
         let mut buffer = [0u8; 20];
         let len = modem.get_imei(&mut buffer).unwrap();
         assert_eq!(len, 15);
-        assert_eq!(
-            String::from_utf8_lossy(&buffer[..len]),
-            "123456789012345"
-        );
+        assert_eq!(String::from_utf8_lossy(&buffer[..len]), "123456789012345");
     }
 
     #[test]
@@ -231,10 +228,7 @@ mod tests {
             initialized: false,
         };
 
-        assert_eq!(
-            modem.is_connected().unwrap_err(),
-            HalError::NotInitialized
-        );
+        assert_eq!(modem.is_connected().unwrap_err(), HalError::NotInitialized);
         assert_eq!(modem.connect().unwrap_err(), HalError::NotInitialized);
     }
 
@@ -247,8 +241,7 @@ mod tests {
 
     #[test]
     fn test_modem_object_safe() {
-        let mut modem: std::boxed::Box<dyn ModemHal> =
-            std::boxed::Box::new(MockModem::new());
+        let mut modem: std::boxed::Box<dyn ModemHal> = std::boxed::Box::new(MockModem::new());
         let mut buffer = [0u8; 64];
         let len = modem.send_at_command("AT", &mut buffer).unwrap();
         assert!(len > 0);

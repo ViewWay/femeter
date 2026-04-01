@@ -6,12 +6,7 @@
 //! SAP Assignment manages the mapping between SAP (Service Access Point) and
 //! the COSEM objects.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 17: SAP Assignment
 ///
@@ -32,7 +27,10 @@ pub struct SapAssignment {
 impl SapAssignment {
     /// Create a new SAP Assignment object
     pub const fn new(logical_name: ObisCode, sap_id: u8) -> Self {
-        Self { logical_name, sap_id }
+        Self {
+            logical_name,
+            sap_id,
+        }
     }
 
     pub const fn get_sap_id(&self) -> u8 {

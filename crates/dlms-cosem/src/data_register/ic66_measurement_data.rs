@@ -5,12 +5,7 @@
 //!
 //! Measurement Data provides monitoring of measurement values and their status.
 
-use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-};
+use dlms_core::{errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType};
 
 /// COSEM IC 66: Measurement Data Monitoring Objects
 ///
