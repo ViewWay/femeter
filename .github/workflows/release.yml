@@ -27,36 +27,175 @@ jobs:
           sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
           cargo install flip-link
 
+      # ── 主固件 (FreeRTOS) ──
       - name: Build firmware (FreeRTOS)
         working-directory: firmware
-        run: cargo build --release --target thumbv6m-none-eabi --bin femeter --features freertos
+        run: cargo build --release --target thumbv6m-none-eabi --bin femeter --features freertos,att7022e
 
+      # ── Bootloader ──
       - name: Build bootloader
         working-directory: firmware
         run: cargo build --release --target thumbv6m-none-eabi --bin femeter-boot
 
+      # ── 裸机固件 (备用) ──
+      - name: Build firmware (bare metal)
+        working-directory: firmware
+        run: cargo build --release --target thumbv6m-none-eabi --bin femeter --no-default-features --features bare,att7022e
+
+      # ── 收集产物 ──
       - name: Collect artifacts
         working-directory: firmware
         run: |
           mkdir -p artifacts
+
+          # 主固件
           cp target/thumbv6m-none-eabi/release/femeter artifacts/femeter-freertos.bin
           cp target/thumbv6m-none-eabi/release/femeter artifacts/femeter-freertos.elf
+          arm-none-eabi-objcopy -O ihex target/thumbv6m-none-eabi/release/femeter artifacts/femeter-freertos.hex
+
+          # 裸机固件
+          cp target/thumbv6m-none-eabi/release/femeter artifacts/femeter-bare.bin
+          cp target/thumbv6m-none-eabi/release/femeter artifacts/femeter-bare.elf
+          arm-none-eabi-objcopy -O ihex target/thumbv6m-none-eabi/release/femeter artifacts/femeter-bare.hex
+
+          # Bootloader
           cp target/thumbv6m-none-eabi/release/femeter-boot artifacts/femeter-boot.bin
           cp target/thumbv6m-none-eabi/release/femeter-boot artifacts/femeter-boot.elf
-
-          # Generate size report
-          echo "## Firmware Size Report" > artifacts/SIZE.md
-          echo '```' >> artifacts/SIZE.md
-          echo "=== femeter (FreeRTOS) ===" >> artifacts/SIZE.md
-          arm-none-eabi-size target/thumbv6m-none-eabi/release/femeter >> artifacts/SIZE.md
-          echo "" >> artifacts/SIZE.md
-          echo "=== femeter-boot ===" >> artifacts/SIZE.md
-          arm-none-eabi-size target/thumbv6m-none-eabi/release/femeter-boot >> artifacts/SIZE.md
-          echo '```' >> artifacts/SIZE.md
-
-          # Generate hex files for flashing
-          arm-none-eabi-objcopy -O ihex target/thumbv6m-none-eabi/release/femeter artifacts/femeter-freertos.hex
           arm-none-eabi-objcopy -O ihex target/thumbv6m-none-eabi/release/femeter-boot artifacts/femeter-boot.hex
+
+      # ── OTA 打包 (双 Bank) ──
+      - name: Package OTA images
+        working-directory: firmware
+        run: |
+          python3 << 'PYEOF'
+          import struct, hashlib, os, datetime
+
+          def pack_ota(input_bin, output_path, version_str, bank=1, source=0):
+              """Pack firmware binary with OTA header for dual-bank upgrade."""
+              with open(input_bin, 'rb') as f:
+                  firmware = f.read()
+
+              # Parse version
+              parts = version_str.lstrip('v').split('.')
+              major = int(parts[0]) if len(parts) > 0 else 0
+              minor = int(parts[1]) if len(parts) > 1 else 0
+              patch = int(parts[2]) if len(parts) > 2 else 0
+              build = int(parts[3]) if len(parts) > 3 else 0
+
+              # CRC32
+              crc = binascii.crc32(firmware) & 0xFFFFFFFF
+
+              # Timestamp (seconds since 2000-01-01)
+              epoch2000 = datetime.datetime(2000, 1, 1)
+              now = datetime.datetime.utcnow()
+              timestamp = int((now - epoch2000).total_seconds())
+
+              # Header: magic(4) + version(4) + size(4) + crc32(4) + bank(1) + flags(1) + timestamp(4) + prev_version(4) + reserved(16) = 42 bytes
+              header = struct.pack('<I4sIIbBI4s16s',
+                  0x464D5441,           # magic "FMTA"
+                  struct.pack('BBBB', major, minor, patch, build),  # version
+                  len(firmware),         # firmware size
+                  crc,                   # CRC32
+                  bank,                  # target bank
+                  0x01,                  # flags: needs install
+                  timestamp,
+                  struct.pack('BBBB', major, minor, patch, build),  # prev version (same for first release)
+                  b'\x00' * 16,          # reserved
+              )
+
+              with open(output_path, 'wb') as f:
+                  f.write(header)
+                  f.write(firmware)
+
+              print(f"  OTA {output_path}: {len(header)+len(firmware)} bytes (header={len(header)}, fw={len(firmware)}, crc32=0x{crc:08X})")
+
+          import binascii
+
+          version = os.environ['GITHUB_REF_NAME'].lstrip('v')
+
+          # Bank 1 (主升级包)
+          pack_ota('artifacts/femeter-freertos.bin', 'artifacts/femeter-ota-bank1.bin', version, bank=1, source=4)
+          arm-none-eabi-objcopy -O ihex artifacts/femeter-ota-bank1.bin artifacts/femeter-ota-bank1.hex
+
+          # Bank 2 (备用升级包)
+          pack_ota('artifacts/femeter-freertos.bin', 'artifacts/femeter-ota-bank2.bin', version, bank=2, source=4)
+          arm-none-eabi-objcopy -O ihex artifacts/femeter-ota-bank2.bin artifacts/femeter-ota-bank2.hex
+
+          # 完整烧录包 (boot + app1, 合并为一个 hex)
+          arm-none-eabi-objcopy --change-address 0x0000 \
+            --input-target binary --output-target ihex \
+            artifacts/femeter-boot.bin artifacts/boot_temp.hex
+          arm-none-eabi-objcopy --change-address 0x1000 \
+            --input-target binary --output-target ihex \
+            artifacts/femeter-freertos.bin artifacts/app_temp.hex
+          # Merge hex files
+          objcopy --input-target ihex --output-target ihex \
+            artifacts/boot_temp.hex artifacts/femeter-complete.hex
+          # Note: srec_cat would be better but may not be available
+          # For now, provide separate boot + app files
+
+          PYEOF
+
+      # ── 生成版本报告 ──
+      - name: Generate version report
+        working-directory: firmware
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          DATE=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          COMMIT="${GITHUB_SHA:0:8}"
+
+          cat > artifacts/RELEASE_NOTES.md << EOF
+          # FeMeter Firmware ${VERSION}
+
+          **构建时间**: ${DATE}  
+          **提交**: ${GITHUB_SHA}  
+          **目标**: FM33A068EV (Cortex-M0+ @ 64MHz)
+
+          ## 文件清单
+
+          | 文件 | 说明 | 用途 |
+          |------|------|------|
+          | femeter-freertos.bin/.hex | 主固件 (FreeRTOS) | J-Link 烧录到 0x1000 |
+          | femeter-freertos.elf | 调试符号 | GDB 调试 |
+          | femeter-bare.bin/.hex | 裸机固件 (无RTOS) | 备用 |
+          | femeter-boot.bin/.hex | Bootloader | 烧录到 0x0000 |
+          | femeter-ota-bank1.bin | OTA 升级包 (Bank 1) | DLMS 远程升级 |
+          | femeter-ota-bank2.bin | OTA 升级包 (Bank 2) | DLMS 远程升级 |
+
+          ## 烧录方式
+
+          ### 首次烧录
+          1. 烧录 Bootloader: \`openocd -f openocd/fm33a068ev.cfg -c "program artifacts/femeter-boot.bin 0x0 verify reset exit"\`
+          2. 烧录主固件: \`openocd -f openocd/fm33a068ev.cfg -c "program artifacts/femeter-freertos.bin 0x1000 verify reset exit"\`
+
+          ### OTA 远程升级
+          通过 DLMS/COSEM 的固件升级 COSEM 接口类 (ID 1, OBIS 0.0.44.0.0.255) 发送 OTA bin 文件
+
+          ## Flash 布局
+
+          \`\`\`
+          0x000000 ┌──────────────┐
+                   │  Bootloader  │ 4KB
+          0x001000 ├──────────────┤
+                   │   App Bank 1 │ 252KB (当前版本)
+          0x040000 ├──────────────┤
+                   │   App Bank 2 │ 256KB (升级版本)
+          0x080000 ├──────────────┤
+                   │  OTA Data    │ 512KB (暂存区)
+          0x100000 ├──────────────┤
+                   │   Reserved   │ 512KB
+          0x200000 └──────────────┘
+          \`\`\`
+
+          ## 版本大小
+          EOF
+
+          echo '```' >> artifacts/RELEASE_NOTES.md
+          arm-none-eabi-size artifacts/femeter-freertos.bin
+          echo "" >> artifacts/RELEASE_NOTES.md
+          echo "=== Bootloader ===" >> artifacts/RELEASE_NOTES.md
+          arm-none-eabi-size artifacts/femeter-boot.bin
+          echo '```' >> artifacts/RELEASE_NOTES.md
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -71,7 +210,13 @@ jobs:
             firmware/artifacts/femeter-freertos.bin
             firmware/artifacts/femeter-freertos.hex
             firmware/artifacts/femeter-freertos.elf
+            firmware/artifacts/femeter-bare.bin
+            firmware/artifacts/femeter-bare.hex
             firmware/artifacts/femeter-boot.bin
             firmware/artifacts/femeter-boot.hex
             firmware/artifacts/femeter-boot.elf
-          body_path: firmware/artifacts/SIZE.md
+            firmware/artifacts/femeter-ota-bank1.bin
+            firmware/artifacts/femeter-ota-bank1.hex
+            firmware/artifacts/femeter-ota-bank2.bin
+            firmware/artifacts/femeter-ota-bank2.hex
+          body_path: firmware/artifacts/RELEASE_NOTES.md

@@ -75,11 +75,47 @@ femeter/
 | CH2 | UART2 + ASR6601 | LoRaWAN | AT指令, 38400 |
 | CH3 | UART3 | 调试 | defmt/日志 |
 
-## 构建
+## Flash 布局 (双 Bank OTA)
+
+```
+0x000000 ┌──────────────┐
+         │  Bootloader  │ 4KB
+0x001000 ├──────────────┤
+         │   App Bank 1 │ 252KB (当前运行)
+0x040000 ├──────────────┤
+         │   App Bank 2 │ 256KB (升级暂存)
+0x080000 ├──────────────┤
+         │  OTA Data    │ 512KB (接收区)
+0x100000 ├──────────────┤
+         │   Reserved   │ 512KB
+0x200000 └──────────────┘
+```
+
+### OTA 升级流程
+1. 通过 RS485/LoRaWAN/蜂窝接收新固件 → OTA Data 区
+2. CRC32 校验 + 版本号验证
+3. 擦除目标 Bank (非活动 Bank)
+4. 拷贝固件到目标 Bank
+5. 设置 Bootloader 启动标志
+6. 系统复位，Bootloader 从新 Bank 启动
+7. 记录升级历史（最近 8 次）
+
+## 烧录
+
+```bash
+# 首次烧录 (Bootloader + 固件)
+./scripts/flash.sh boot    # 烧录 Bootloader 到 0x0
+./scripts/flash.sh            # 烧录主固件到 0x1000
+
+# OTA 远程升级 (通过 DLMS/COSEM)
+# 或手动：将 OTA bin 写入 OTA 区后重启
+
+# 调试
+./scripts/debug.sh
+```
 
 ```bash
 # 主固件 (FreeRTOS)
-cd firmware
 cargo build --release --target thumbv6m-none-eabi --bin femeter
 
 # 纯裸机 (无 RTOS)
