@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-release:
+    name: Build Release Binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv6m-none-eabi
+
+      - name: Install ARM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+
+      - name: Build firmware (FreeRTOS)
+        working-directory: firmware
+        run: cargo build --release --target thumbv6m-none-eabi --bin femeter --features freertos
+
+      - name: Build bootloader
+        working-directory: firmware
+        run: cargo build --release --target thumbv6m-none-eabi --bin femeter-boot
+
+      - name: Collect artifacts
+        working-directory: firmware
+        run: |
+          mkdir -p artifacts
+          cp target/thumbv6m-none-eabi/release/femeter artifacts/femeter-freertos.bin
+          cp target/thumbv6m-none-eabi/release/femeter artifacts/femeter-freertos.elf
+          cp target/thumbv6m-none-eabi/release/femeter-boot artifacts/femeter-boot.bin
+          cp target/thumbv6m-none-eabi/release/femeter-boot artifacts/femeter-boot.elf
+
+          # Generate size report
+          echo "## Firmware Size Report" > artifacts/SIZE.md
+          echo '```' >> artifacts/SIZE.md
+          echo "=== femeter (FreeRTOS) ===" >> artifacts/SIZE.md
+          arm-none-eabi-size target/thumbv6m-none-eabi/release/femeter >> artifacts/SIZE.md
+          echo "" >> artifacts/SIZE.md
+          echo "=== femeter-boot ===" >> artifacts/SIZE.md
+          arm-none-eabi-size target/thumbv6m-none-eabi/release/femeter-boot >> artifacts/SIZE.md
+          echo '```' >> artifacts/SIZE.md
+
+          # Generate hex files for flashing
+          arm-none-eabi-objcopy -O ihex target/thumbv6m-none-eabi/release/femeter artifacts/femeter-freertos.hex
+          arm-none-eabi-objcopy -O ihex target/thumbv6m-none-eabi/release/femeter-boot artifacts/femeter-boot.hex
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: femeter-${{ github.ref_name }}
+          path: firmware/artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            firmware/artifacts/femeter-freertos.bin
+            firmware/artifacts/femeter-freertos.hex
+            firmware/artifacts/femeter-freertos.elf
+            firmware/artifacts/femeter-boot.bin
+            firmware/artifacts/femeter-boot.hex
+            firmware/artifacts/femeter-boot.elf
+          body_path: firmware/artifacts/SIZE.md

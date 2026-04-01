@@ -1,0 +1,150 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  TOOLCHAIN: 1.85.0
+
+jobs:
+  # ── Host: DLMS 协议栈编译 + 测试 ──
+  host-build-test:
+    name: Host Build & Test (DLMS crates)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.TOOLCHAIN }}
+          components: clippy, rustfmt
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: host-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: host-${{ runner.os }}-cargo-
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Build workspace
+        run: cargo build --workspace
+
+      - name: Run tests
+        run: cargo test --workspace
+
+  # ── Embedded: 固件交叉编译 ──
+  firmware-build:
+    name: Firmware Cross-Compile (thumbv6m-none-eabi)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - name: femeter
+            features: "freertos"
+          - name: femeter-boot
+            features: ""
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.TOOLCHAIN }}
+          targets: thumbv6m-none-eabi
+
+      - name: Install ARM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            firmware/target
+          key: fw-${{ matrix.target.name }}-${{ hashFiles('firmware/Cargo.lock') }}
+          restore-keys: fw-${{ matrix.target.name }}-
+
+      - name: Build firmware
+        working-directory: firmware
+        run: |
+          if [ -n "${{ matrix.target.features }}" ]; then
+            cargo build --release --target thumbv6m-none-eabi --bin ${{ matrix.target.name }} --features "${{ matrix.target.features }}"
+          else
+            cargo build --release --target thumbv6m-none-eabi --bin ${{ matrix.target.name }}
+          fi
+
+      - name: Check binary size
+        working-directory: firmware
+        run: |
+          arm-none-eabi-size target/thumbv6m-none-eabi/release/${{ matrix.target.name }}
+          echo "### Binary size" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          arm-none-eabi-size target/thumbv6m-none-eabi/release/${{ matrix.target.name }} >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  # ── Size gate: Flash < 400KB, RAM < 72KB ──
+  size-check:
+    name: Size Gate
+    needs: firmware-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust + ARM toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.TOOLCHAIN }}
+          targets: thumbv6m-none-eabi
+      - run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+
+      - name: Build firmware
+        working-directory: firmware
+        run: cargo build --release --target thumbv6m-none-eabi --bin femeter --features freertos
+
+      - name: Check size limits
+        working-directory: firmware
+        run: |
+          SIZE=$(arm-none-eabi-size target/thumbv6m-none-eabi/release/femeter)
+          TEXT=$(echo "$SIZE" | tail -1 | awk '{print $1}')
+          BSS=$(echo "$SIZE" | tail -1 | awk '{print $3}')
+          TOTAL=$((TEXT + BSS))
+
+          echo "text=$TEXT bss=$BSS total=$TOTAL"
+
+          FLASH_LIMIT=$((400 * 1024))
+          RAM_LIMIT=$((72 * 1024))
+
+          if [ "$TEXT" -gt "$FLASH_LIMIT" ]; then
+            echo "::error::Flash usage ${TEXT}B exceeds ${FLASH_LIMIT}B limit"
+            exit 1
+          fi
+          if [ "$BSS" -gt "$RAM_LIMIT" ]; then
+            echo "::error::RAM usage ${BSS}B exceeds ${RAM_LIMIT}B limit"
+            exit 1
+          fi
+
+          echo "✅ Flash ${TEXT}B / ${FLASH_LIMIT}B ($(( TEXT * 100 / FLASH_LIMIT ))%)"
+          echo "✅ RAM ${BSS}B / ${RAM_LIMIT}B ($(( BSS * 100 / RAM_LIMIT ))%)"
