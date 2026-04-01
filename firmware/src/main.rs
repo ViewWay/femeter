@@ -58,6 +58,11 @@ mod freertos;
 #[cfg(feature = "freertos")]
 mod freertos_hooks;
 
+/* ── 事件检测 & 存储 ── */
+mod event_detect;
+#[cfg(feature = "ext-flash")]
+mod storage;
+
 /* ── FreeRTOS interrupt handlers provided by portasm.c ── */
 /* SVC_Handler, PendSV_Handler, vStartFirstTask are all in portasm.c */
 
@@ -98,6 +103,7 @@ struct SharedState<M: hal::MeteringChip> {
     pulse_constant_reactive: u32,
     active_energy_accum: u32,
     reactive_energy_accum: u32,
+    event_detector: event_detect::EventDetector,
 }
 
 #[cfg(feature = "freertos")]
@@ -173,6 +179,13 @@ unsafe extern "C" fn task_metering_entry(_arg: *mut c_void) {
         (*state).lcd_content.reactive_power = data.reactive_power_total;
         (*state).lcd_content.power_factor = data.power_factor_total;
         (*state).lcd_content.frequency = data.frequency;
+
+        // 事件检测
+        let new_events = (*state).event_detector.check(&data);
+        if new_events != 0 {
+            defmt::info!("Events: {:#010x}", new_events);
+        }
+
         unlock_state(mtx);
 
         let ev = EventGroup::from_raw(SYS_EVENTS);
@@ -347,6 +360,7 @@ fn main() -> ! {
         pulse_constant_reactive: 6400,
         active_energy_accum: 0,
         reactive_energy_accum: 0,
+        event_detector: event_detect::EventDetector::new(),
     };
 
     unsafe {
