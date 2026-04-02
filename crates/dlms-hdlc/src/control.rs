@@ -139,10 +139,8 @@ impl ControlField {
                 0x63 | ((self.poll_final as u8) << 4)
             }
             FrameType::DISC => {
-                // 1100 P 0010 → 0x43 | (P<<4)  — wait: DISC = 0x53 normally
-                // Actually DISC = 0100 0010 in some refs. Let me use standard:
-                // DISC: 1 1 0 0 P 0 1 0 = 0x42 | (P<<4)
-                0x42 | ((self.poll_final as u8) << 4)
+                // DISC: 1 1 0 0 P 0 1 0 = 0x43 | (P<<4)
+                0x43 | ((self.poll_final as u8) << 4)
             }
             FrameType::DM => {
                 // 1 1 0 0 P 1 1 1 = 0x0F | (P<<4)  — DM = 0001 1111
@@ -191,7 +189,7 @@ impl ControlField {
                 // mask out P/F bit
                 0x83 => FrameType::SNRM,
                 0x63 => FrameType::UA,
-                0x42 => FrameType::DISC,
+                0x43 => FrameType::DISC,
                 0x0F => FrameType::DM,
                 0x03 => FrameType::UI,
                 0x87 => FrameType::FRMR,

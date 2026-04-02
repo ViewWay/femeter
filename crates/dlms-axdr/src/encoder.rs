@@ -523,7 +523,8 @@ mod tests {
     #[test]
     fn test_empty_octet_string() {
         let mut enc = AxdrEncoder::new();
-        enc.encode(&DlmsType::from_octet_string(alloc::vec![])).unwrap();
+        enc.encode(&DlmsType::from_octet_string(alloc::vec![]))
+            .unwrap();
         let bytes = enc.to_bytes();
         assert_eq!(bytes[0], 9); // octet-string tag
         assert_eq!(bytes[1], 0); // length = 0
@@ -598,7 +599,8 @@ mod tests {
         let mut enc = AxdrEncoder::new();
         enc.encode(&DlmsType::BitString(alloc::vec![])).unwrap();
         enc.encode(&DlmsType::BitString(alloc::vec![0xFF])).unwrap();
-        enc.encode(&DlmsType::BitString(alloc::vec![0x00; 100])).unwrap();
+        enc.encode(&DlmsType::BitString(alloc::vec![0x00; 100]))
+            .unwrap();
         assert!(!enc.to_bytes().is_empty());
     }
 
@@ -606,10 +608,11 @@ mod tests {
     fn test_large_octet_string() {
         let data = alloc::vec![0xAA; 500];
         let mut enc = AxdrEncoder::new();
-        enc.encode(&DlmsType::from_octet_string(data.clone())).unwrap();
+        enc.encode(&DlmsType::from_octet_string(data.clone()))
+            .unwrap();
         let bytes = enc.to_bytes();
         assert_eq!(bytes[0], 9); // octet-string tag
-        // Should use 2-byte length for 500 bytes
+                                 // Should use 2-byte length for 500 bytes
         assert_eq!(bytes[1], 0x82); // 2-byte length
     }
 }

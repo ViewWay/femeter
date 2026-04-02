@@ -297,11 +297,17 @@ mod tests {
 
     #[test]
     fn test_get_request_with_list() {
-        use crate::get::{GetRequestWithList, GetRequestListItem};
-        use crate::types::{AttributeDescriptor, AccessSelector};
+        use crate::get::{GetRequestListItem, GetRequestWithList};
+        use crate::types::{AccessSelector, AttributeDescriptor};
         let descs = alloc::vec![
-            GetRequestListItem { descriptor: AttributeDescriptor::new(3, ObisCode::new(1, 0, 1, 8, 0, 255), 2), access_selector: AccessSelector::None },
-            GetRequestListItem { descriptor: AttributeDescriptor::new(8, ObisCode::new(0, 0, 1, 0, 0, 255), 2), access_selector: AccessSelector::None },
+            GetRequestListItem {
+                descriptor: AttributeDescriptor::new(3, ObisCode::new(1, 0, 1, 8, 0, 255), 2),
+                access_selector: AccessSelector::None
+            },
+            GetRequestListItem {
+                descriptor: AttributeDescriptor::new(8, ObisCode::new(0, 0, 1, 0, 0, 255), 2),
+                access_selector: AccessSelector::None
+            },
         ];
         let req = GetRequest::WithList(GetRequestWithList::new(InvokeId::new(5), descs));
         let apdu = Apdu::GetRequest(req);
@@ -323,7 +329,11 @@ mod tests {
     #[test]
     fn test_set_request_roundtrip_with_value() {
         let desc = AttributeDescriptor::new(3, ObisCode::new(1, 0, 1, 8, 0, 255), 2);
-        let value = DlmsType::Array(alloc::vec![DlmsType::from_u32(1), DlmsType::from_u32(2), DlmsType::from_u32(3)]);
+        let value = DlmsType::Array(alloc::vec![
+            DlmsType::from_u32(1),
+            DlmsType::from_u32(2),
+            DlmsType::from_u32(3)
+        ]);
         let req = SetRequest::Normal(SetRequestNormal::new(InvokeId::new(2), desc, value));
         let apdu = Apdu::SetRequest(req);
         let encoded = apdu.encode().unwrap();
@@ -344,7 +354,6 @@ mod tests {
 
     #[test]
     fn test_exception_response_variants() {
-        
         let exceptions = [
             ExceptionResponse::operation_not_possible(InvokeId::new(1)),
             ExceptionResponse::service_not_supported(InvokeId::new(2)),

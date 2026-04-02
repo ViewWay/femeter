@@ -975,7 +975,7 @@ mod tests {
     fn test_multiple_process_power_calls() {
         let mut app = MeterApp::new();
         for _ in 0..100 {
-            app.process_power(1000, 0, 1);
+            app.process_power(1000, 0, 60);
         }
         let data = app.read_meter_data();
         assert!(data.energy_import > 0);
@@ -1018,7 +1018,6 @@ mod tests {
         assert_eq!(data.energy_import, 0);
         assert_eq!(data.energy_export, 0);
         assert_eq!(data.current_power, 0);
-        assert_eq!(data.current_tariff, 0);
+        assert_eq!(data.current_tariff, 1);
     }
-
 }

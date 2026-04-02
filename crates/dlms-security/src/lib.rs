@@ -505,7 +505,11 @@ mod tests {
 
     #[test]
     fn test_gmac_auth_with_different_challenges() {
-        let ctx = create_test_context();
+        let ctx = SecurityContext::new(TEST_SYSTEM_TITLE)
+            .with_level(SecurityLevel::HlsGmac)
+            .with_global_key(TEST_GLOBAL_KEY)
+            .with_auth_key(TEST_AUTH_KEY)
+            .with_frame_counter(0);
         let c1 = b"challenge_one".to_vec();
         let c2 = b"challenge_two".to_vec();
         let a1 = compute_auth_value(&ctx, &c1).unwrap();

@@ -205,15 +205,15 @@ mod tests {
         // China GB/T 17215.301 standard OBIS codes for energy meters
         let gb_obis = [
             ObisCode::new(1, 0, 1, 8, 0, 255),  // 正向有功总电能
-            ObisCode::new(1, 0, 1, 8, 1, 255),   // 费率1正向有功
-            ObisCode::new(1, 0, 1, 8, 2, 255),   // 费率2正向有功
-            ObisCode::new(1, 0, 1, 8, 3, 255),   // 费率3正向有功
-            ObisCode::new(1, 0, 1, 8, 4, 255),   // 费率4正向有功
-            ObisCode::new(1, 0, 2, 8, 0, 255),   // 反向有功总电能
-            ObisCode::new(1, 0, 3, 8, 0, 255),   // 正向无功总电能
-            ObisCode::new(1, 0, 4, 8, 0, 255),   // 反向无功总电能
-            ObisCode::new(0, 0, 1, 0, 0, 255),   // 日期时间
-            ObisCode::new(0, 0, 96, 1, 0, 255),   // 逻辑设备名
+            ObisCode::new(1, 0, 1, 8, 1, 255),  // 费率1正向有功
+            ObisCode::new(1, 0, 1, 8, 2, 255),  // 费率2正向有功
+            ObisCode::new(1, 0, 1, 8, 3, 255),  // 费率3正向有功
+            ObisCode::new(1, 0, 1, 8, 4, 255),  // 费率4正向有功
+            ObisCode::new(1, 0, 2, 8, 0, 255),  // 反向有功总电能
+            ObisCode::new(1, 0, 3, 8, 0, 255),  // 正向无功总电能
+            ObisCode::new(1, 0, 4, 8, 0, 255),  // 反向无功总电能
+            ObisCode::new(0, 0, 1, 0, 0, 255),  // 日期时间
+            ObisCode::new(0, 0, 96, 1, 0, 255), // 逻辑设备名
         ];
         for obis in &gb_obis {
             let dlms = obis_to_octet_string(obis);

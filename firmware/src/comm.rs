@@ -621,7 +621,315 @@ pub trait Rs485DirControl {
 }
 
 /* ================================================================== */
-/*  Multi-Channel Communication Manager                                */
+/*  HDLC Timeout Constants                                             */
+/* ================================================================== */
+
+/// Default inter-frame timeout (ms) — time between end of one frame and start of next
+pub const HDLC_INTER_FRAME_TIMEOUT_MS: u32 = 250;
+/// Default response timeout (ms) — max time to wait for a reply frame
+pub const HDLC_RESPONSE_TIMEOUT_MS: u32 = 5000;
+/// Default max retry count for unacknowledged I-frames
+pub const HDLC_MAX_RETRIES: u8 = 3;
+/// Default window size for multi-frame transmission
+pub const HDLC_DEFAULT_WINDOW_SIZE: u8 = 1;
+/// Maximum information field length (bytes)
+pub const HDLC_MAX_INFO_LEN: usize = 2032;
+/// Default maximum information field length
+pub const HDLC_DEFAULT_MAX_INFO_LEN: usize = 128;
+
+/* ================================================================== */
+/*  HDLC Address Types                                                 */
+/* ================================================================== */
+
+/// HDLC address type classification
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum HdlcAddressType {
+    /// Individual address (unicast)
+    Individual,
+    /// Group address (multicast)
+    Group,
+    /// Broadcast address
+    Broadcast,
+}
+
+/// Classify an HDLC address type from its first byte.
+pub fn classify_address(first_byte: u8) -> HdlcAddressType {
+    if first_byte == 0xFF {
+        HdlcAddressType::Broadcast
+    } else if first_byte & 0x80 != 0 {
+        HdlcAddressType::Group
+    } else {
+        HdlcAddressType::Individual
+    }
+}
+
+/// Build a 1-byte HDLC client address (with extension bit).
+pub fn build_client_address(client_addr: u8) -> u8 {
+    // Client address format: client_addr << 1 | 0x01 (last byte indicator)
+    (client_addr << 1) | 0x01
+}
+
+/// Build a 1-byte HDLC server address (with extension bit).
+pub fn build_server_address(server_addr: u8) -> u8 {
+    (server_addr << 1) | 0x01
+}
+
+/* ================================================================== */
+/*  HDLC Multi-Frame Transmission (Sliding Window)                     */
+/* ================================================================== */
+
+/// HDLC sliding window transmitter state
+pub struct HdlcTxWindow {
+    /// Window size (max outstanding I-frames)
+    window_size: u8,
+    /// Next send sequence number
+    send_seq: u8,
+    /// Next expected receive sequence number
+    recv_seq: u8,
+    /// Count of unacknowledged frames
+    outstanding: u8,
+    /// Retry count for current frame
+    retries: u8,
+    /// Whether the window is full (waiting for ACK)
+    window_full: bool,
+}
+
+impl HdlcTxWindow {
+    /// Create a new TX window with the given size.
+    pub fn new(window_size: u8) -> Self {
+        Self {
+            window_size: window_size.clamp(1, 7),
+            send_seq: 0,
+            recv_seq: 0,
+            outstanding: 0,
+            retries: 0,
+            window_full: false,
+        }
+    }
+
+    /// Create with default window size.
+    pub fn default_window() -> Self {
+        Self::new(HDLC_DEFAULT_WINDOW_SIZE)
+    }
+
+    /// Get the next send sequence number.
+    pub fn send_seq(&self) -> u8 {
+        self.send_seq & 0x07
+    }
+
+    /// Get the next expected receive sequence number.
+    pub fn recv_seq(&self) -> u8 {
+        self.recv_seq & 0x07
+    }
+
+    /// Check if the window is full (cannot send more I-frames).
+    pub fn is_window_full(&self) -> bool {
+        self.outstanding >= self.window_size
+    }
+
+    /// Advance send sequence after sending an I-frame.
+    pub fn on_frame_sent(&mut self) {
+        self.send_seq = (self.send_seq + 1) & 0x07;
+        self.outstanding += 1;
+        self.window_full = self.outstanding >= self.window_size;
+    }
+
+    /// Process received RR/RNR frame — advance window on acknowledgment.
+    pub fn on_ack_received(&mut self, nr: u8) -> bool {
+        let nr = nr & 0x07;
+        if nr != self.recv_seq {
+            self.outstanding = 0;
+            self.recv_seq = nr;
+            self.retries = 0;
+            self.window_full = false;
+            return true; // window advanced
+        }
+        false
+    }
+
+    /// Increment retry count, return true if max retries exceeded.
+    pub fn on_timeout(&mut self) -> bool {
+        self.retries += 1;
+        self.retries > HDLC_MAX_RETRIES
+    }
+
+    /// Reset the window state.
+    pub fn reset(&mut self) {
+        self.send_seq = 0;
+        self.recv_seq = 0;
+        self.outstanding = 0;
+        self.retries = 0;
+        self.window_full = false;
+    }
+
+    /// Build I-frame control byte: N(S)<<1 | P/F | N(R)<<5
+    pub fn build_i_frame_control(&self, poll: bool) -> u8 {
+        let pf = if poll { 0x10 } else { 0x00 };
+        (self.recv_seq << 5) | pf | (self.send_seq << 1)
+    }
+
+    /// Build RR control byte: 01 | 00 | P/F | N(R)<<5
+    pub fn build_rr_control(&self, poll: bool) -> u8 {
+        let pf = if poll { 0x10 } else { 0x00 };
+        (self.recv_seq << 5) | pf | 0x01
+    }
+}
+
+/* ================================================================== */
+/*  IEC 62056-21 Standard Data Identifiers                              */
+/* ================================================================== */
+
+/// IEC 62056-21 standard data identifiers (B0-B9 and common extensions)
+#[derive(Clone, Copy, Debug)]
+pub enum IecDataId {
+    /// B0: Manufacturer ID
+    Manufacturer,
+    /// B1: Equipment type/model
+    Model,
+    /// B2: Firmware version
+    FirmwareVersion,
+    /// B3: Hardware version
+    HardwareVersion,
+    /// B4: Serial number
+    SerialNumber,
+    /// B5: Customer ID
+    CustomerId,
+    /// B6: Metering point ID
+    MeteringPoint,
+    /// B7: Billing period
+    BillingPeriod,
+    /// B8: Tariff
+    Tariff,
+    /// B9: Date and time
+    DateTime,
+    /// F.F: Status word
+    StatusWord,
+    /// 0.0.0: Total active energy import
+    TotalActiveImport,
+    /// 1.8.0: Total active energy export
+    TotalActiveExport,
+    /// 1.8.1..1.8.4: Tariff active energy import
+    TariffActiveImport(u8),
+    /// 0.2.0: Voltage L1
+    VoltageL1,
+    /// 0.6.0: Current L1
+    CurrentL1,
+    /// Custom identifier (raw OBIS)
+    Custom([u8; 6]),
+}
+
+impl IecDataId {
+    /// Convert to IEC 62056-21 data identifier string
+    pub fn to_id_string(&self) -> [u8; 16] {
+        let mut buf = [0u8; 16];
+        let s = match self {
+            IecDataId::Manufacturer => b"B0(",
+            IecDataId::Model => b"B1(",
+            IecDataId::FirmwareVersion => b"B2(",
+            IecDataId::HardwareVersion => b"B3(",
+            IecDataId::SerialNumber => b"B4(",
+            IecDataId::CustomerId => b"B5(",
+            IecDataId::MeteringPoint => b"B6(",
+            IecDataId::BillingPeriod => b"B7(",
+            IecDataId::Tariff => b"B8(",
+            IecDataId::DateTime => b"B9(",
+            IecDataId::StatusWord => b"F.F(",
+            IecDataId::TotalActiveImport => b"0.0.0(",
+            IecDataId::TotalActiveExport => b"1.8.0(",
+            IecDataId::TariffActiveImport(t) => {
+                // e.g. "1.8.1("
+                buf[0] = b'1'; buf[1] = b'.'; buf[2] = b'8'; buf[3] = b'.';
+                buf[4] = b'0' + *t; buf[5] = b'(';
+                return buf;
+            }
+            IecDataId::VoltageL1 => b"0.2.0(",
+            IecDataId::CurrentL1 => b"0.6.0(",
+            IecDataId::Custom(id) => {
+                // Format: A.B.C.D.E.F(
+                let mut pos = 0;
+                for &b in id.iter() {
+                    if b < 10 {
+                        buf[pos] = b'0' + b;
+                    } else {
+                        buf[pos] = b'0' + (b / 10);
+                        pos += 1;
+                        buf[pos] = b'0' + (b % 10);
+                    }
+                    pos += 1;
+                    if pos < 11 {
+                        buf[pos] = b'.';
+                    }
+                    pos += 1;
+                }
+                buf[pos] = b'(';
+                return buf;
+            }
+        };
+        let len = s.len().min(16);
+        buf[..len].copy_from_slice(&s[..len]);
+        buf
+    }
+}
+
+/// IEC 62056-21 supported baud rates
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum IecBaudRate {
+    /// 300 bps
+    Bps300,
+    /// 600 bps
+    Bps600,
+    /// 1200 bps
+    Bps1200,
+    /// 2400 bps
+    Bps2400,
+    /// 4800 bps
+    Bps4800,
+    /// 9600 bps
+    Bps9600,
+}
+
+impl IecBaudRate {
+    /// Get the baud character used in IEC 62056-21 protocol.
+    /// '0'=300, '1'=600, '2'=1200, '3'=2400, '4'=4800, '5'=9600
+    pub fn baud_char(&self) -> u8 {
+        match self {
+            IecBaudRate::Bps300 => b'0',
+            IecBaudRate::Bps600 => b'1',
+            IecBaudRate::Bps1200 => b'2',
+            IecBaudRate::Bps2400 => b'3',
+            IecBaudRate::Bps4800 => b'4',
+            IecBaudRate::Bps9600 => b'5',
+        }
+    }
+
+    /// Get the actual baud rate value.
+    pub fn baudrate(&self) -> u32 {
+        match self {
+            IecBaudRate::Bps300 => 300,
+            IecBaudRate::Bps600 => 600,
+            IecBaudRate::Bps1200 => 1200,
+            IecBaudRate::Bps2400 => 2400,
+            IecBaudRate::Bps4800 => 4800,
+            IecBaudRate::Bps9600 => 9600,
+        }
+    }
+
+    /// Parse baud character to baud rate.
+    pub fn from_baud_char(ch: u8) -> Option<Self> {
+        match ch {
+            b'0' => Some(IecBaudRate::Bps300),
+            b'1' => Some(IecBaudRate::Bps600),
+            b'2' => Some(IecBaudRate::Bps1200),
+            b'3' => Some(IecBaudRate::Bps2400),
+            b'4' => Some(IecBaudRate::Bps4800),
+            b'5' => Some(IecBaudRate::Bps9600),
+            _ => None,
+        }
+    }
+}
+
+/* ================================================================== */
+  Multi-Channel Communication Manager                                */
 /* ================================================================== */
 
 /// Communication event returned by poll methods.
@@ -964,4 +1272,197 @@ mod tests {
         }
         assert_eq!(result, IecRxEvent::RequestReceived);
     }
-}
+
+    // ============================================================
+    // Phase C — Boundary Tests
+    // ============================================================
+
+    #[test]
+    fn test_hdlc_address_classification() {
+        assert_eq!(classify_address(0x03), HdlcAddressType::Individual);
+        assert_eq!(classify_address(0x01), HdlcAddressType::Individual);
+        assert_eq!(classify_address(0x80), HdlcAddressType::Group);
+        assert_eq!(classify_address(0xFF), HdlcAddressType::Broadcast);
+        assert_eq!(classify_address(0xC0), HdlcAddressType::Group);
+    }
+
+    #[test]
+    fn test_build_addresses() {
+        assert_eq!(build_client_address(1), 0x03);
+        assert_eq!(build_client_address(0), 0x01);
+        assert_eq!(build_server_address(1), 0x03);
+        assert_eq!(build_server_address(0x10), 0x21);
+    }
+
+    #[test]
+    fn test_hdlc_tx_window_basic() {
+        let mut win = HdlcTxWindow::new(4);
+        assert!(!win.is_window_full());
+        assert_eq!(win.send_seq(), 0);
+        assert_eq!(win.recv_seq(), 0);
+
+        win.on_frame_sent();
+        assert_eq!(win.send_seq(), 1);
+        assert!(!win.is_window_full());
+
+        for _ in 0..3 {
+            win.on_frame_sent();
+        }
+        assert!(win.is_window_full());
+    }
+
+    #[test]
+    fn test_hdlc_tx_window_ack() {
+        let mut win = HdlcTxWindow::new(4);
+        for _ in 0..3 {
+            win.on_frame_sent();
+        }
+        assert!(win.on_ack_received(3));
+        assert!(!win.is_window_full());
+    }
+
+    #[test]
+    fn test_hdlc_tx_window_timeout() {
+        let mut win = HdlcTxWindow::new(1);
+        assert!(!win.on_timeout());
+        assert!(!win.on_timeout());
+        assert!(!win.on_timeout());
+        assert!(win.on_timeout()); // 4th timeout exceeds max_retries=3
+    }
+
+    #[test]
+    fn test_hdlc_tx_window_reset() {
+        let mut win = HdlcTxWindow::new(4);
+        for _ in 0..4 {
+            win.on_frame_sent();
+        }
+        win.reset();
+        assert!(!win.is_window_full());
+        assert_eq!(win.send_seq(), 0);
+        assert_eq!(win.recv_seq(), 0);
+    }
+
+    #[test]
+    fn test_hdlc_tx_window_i_frame_control() {
+        let win = HdlcTxWindow::new(4);
+        let ctrl = win.build_i_frame_control(true);
+        assert_eq!(ctrl & 0x01, 0); // I-frame
+        assert!(ctrl & 0x10 != 0); // P=1
+    }
+
+    #[test]
+    fn test_hdlc_tx_window_rr_control() {
+        let win = HdlcTxWindow::new(4);
+        let ctrl = win.build_rr_control(false);
+        assert_eq!(ctrl & 0x03, 0x01); // S-frame RR
+        assert_eq!(ctrl & 0x10, 0); // F=0
+    }
+
+    #[test]
+    fn test_fcs16_comprehensive() {
+        // Known FCS values
+        assert_eq!(fcs16(&[]), 0x0000);
+        assert_eq!(fcs16(&[0xFF]), 0xDCF0);
+        // Symmetric: FCS(A + FCS(A)) should be 0xF0B8
+        let data = [0x01, 0x02, 0x03];
+        let crc = fcs16(&data);
+        let crc_bytes = [crc as u8, (crc >> 8) as u8];
+        let combined = [&data[..], &crc_bytes].concat();
+        assert_eq!(fcs16(&combined), 0xF0B8);
+    }
+
+    #[test]
+    fn test_hdlc_frame_max_size() {
+        let addr = [0x03u8];
+        let ctrl = 0x00;
+        let info = [0xAA; 128];
+        let mut tx = [0u8; 512];
+        let len = HdlcFrame::build(&addr, ctrl, &info, &mut tx);
+        assert!(len > 0);
+        assert_eq!(tx[0], HDLC_FLAG);
+        assert_eq!(tx[len - 1], HDLC_FLAG);
+
+        let mut rx = HdlcReceiver::new();
+        for i in 0..len {
+            rx.feed(tx[i]);
+        }
+        let frame = rx.parse_frame().unwrap();
+        assert_eq!(frame.information(), &info);
+    }
+
+    #[test]
+    fn test_iec_baud_rates() {
+        assert_eq!(IecBaudRate::Bps300.baudrate(), 300);
+        assert_eq!(IecBaudRate::Bps9600.baudrate(), 9600);
+        assert_eq!(IecBaudRate::from_baud_char(b'0'), Some(IecBaudRate::Bps300));
+        assert_eq!(IecBaudRate::from_baud_char(b'5'), Some(IecBaudRate::Bps9600));
+        assert_eq!(IecBaudRate::from_baud_char(b'9'), None);
+        assert_eq!(IecBaudRate::Bps9600.baud_char(), b'5');
+    }
+
+    #[test]
+    fn test_iec_data_ids() {
+        let id = IecDataId::Manufacturer.to_id_string();
+        assert_eq!(&id[0..3], b"B0(");
+
+        let id = IecDataId::TotalActiveImport.to_id_string();
+        assert_eq!(&id[0..5], b"0.0.0");
+
+        let id = IecDataId::TariffActiveImport(2).to_id_string();
+        assert_eq!(&id[0..5], b"1.8.2");
+    }
+
+    #[test]
+    fn test_iec_ident_builder() {
+        let manufacturer = [b'V', b'W', b'Y'];
+        let mut out = [0u8; 16];
+        let len = Iec62056Parser::build_ident(&manufacturer, b'S', b'5', &mut out);
+        assert!(len >= 6);
+        assert_eq!(out[0], b'/');
+        assert_eq!(out[1], b'V');
+        assert_eq!(out[5], b'5');
+    }
+
+    #[test]
+    fn test_hdlc_receiver_overflow() {
+        let mut rx = HdlcReceiver::new();
+        rx.feed(HDLC_FLAG); // start
+        // Fill buffer beyond 512 bytes
+        for _ in 0..520 {
+            let event = rx.feed(0x41);
+            if let HdlcRxEvent::Error(HdlcError::Overflow) = event {
+                return; // test passed
+            }
+        }
+        panic!("Expected overflow error");
+    }
+
+    #[test]
+    fn test_hdlc_frame_fcs_error() {
+        let addr = [0x03u8];
+        let ctrl = 0x63;
+        let info = [];
+        let mut tx = [0u8; 64];
+        let len = HdlcFrame::build(&addr, ctrl, &info, &mut tx);
+        // Corrupt a byte in the middle
+        if len > 4 {
+            tx[2] ^= 0xFF;
+        }
+        let mut rx = HdlcReceiver::new();
+        for i in 0..len {
+            rx.feed(tx[i]);
+        }
+        assert!(rx.parse_frame().is_err());
+    }
+
+    #[test]
+    fn test_iec_parser_overflow() {
+        let mut parser = Iec62056Parser::new();
+        for _ in 0..200 {
+            let event = parser.feed(0x41);
+            if let IecRxEvent::Overflow = event {
+                return; // test passed
+            }
+        }
+        panic!("Expected overflow");
+    }

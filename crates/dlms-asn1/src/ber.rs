@@ -572,9 +572,24 @@ mod tests {
     #[test]
     fn test_integer_edge_cases() {
         let values = [
-            0i64, 1, -1, 127, -128, 128, -129, 255, 256, -256,
-            32767, -32768, 65535, 65536, i32::MAX as i64, i32::MIN as i64,
-            i64::MAX, i64::MIN,
+            0i64,
+            1,
+            -1,
+            127,
+            -128,
+            128,
+            -129,
+            255,
+            256,
+            -256,
+            32767,
+            -32768,
+            65535,
+            65536,
+            i32::MAX as i64,
+            i32::MIN as i64,
+            i64::MAX,
+            i64::MIN,
         ];
         for v in &values {
             let mut enc = BerEncoder::new();

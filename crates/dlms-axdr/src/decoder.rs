@@ -466,14 +466,22 @@ mod tests {
     #[test]
     fn test_decode_all_integer_types() {
         let values = [
-            DlmsType::UInt8(0), DlmsType::UInt8(255),
-            DlmsType::Int8(-128), DlmsType::Int8(127),
-            DlmsType::UInt16(0), DlmsType::UInt16(65535),
-            DlmsType::Int16(-32768), DlmsType::Int16(32767),
-            DlmsType::UInt32(0), DlmsType::UInt32(u32::MAX),
-            DlmsType::Int32(i32::MIN), DlmsType::Int32(i32::MAX),
-            DlmsType::UInt64(0), DlmsType::UInt64(u64::MAX),
-            DlmsType::Int64(i64::MIN), DlmsType::Int64(i64::MAX),
+            DlmsType::UInt8(0),
+            DlmsType::UInt8(255),
+            DlmsType::Int8(-128),
+            DlmsType::Int8(127),
+            DlmsType::UInt16(0),
+            DlmsType::UInt16(65535),
+            DlmsType::Int16(-32768),
+            DlmsType::Int16(32767),
+            DlmsType::UInt32(0),
+            DlmsType::UInt32(u32::MAX),
+            DlmsType::Int32(i32::MIN),
+            DlmsType::Int32(i32::MAX),
+            DlmsType::UInt64(0),
+            DlmsType::UInt64(u64::MAX),
+            DlmsType::Int64(i64::MIN),
+            DlmsType::Int64(i64::MAX),
         ];
         for v in &values {
             let mut enc = AxdrEncoder::new();
@@ -514,7 +522,8 @@ mod tests {
     #[test]
     fn test_decode_empty_octet_string() {
         let mut enc = AxdrEncoder::new();
-        enc.encode(&DlmsType::from_octet_string(alloc::vec![])).unwrap();
+        enc.encode(&DlmsType::from_octet_string(alloc::vec![]))
+            .unwrap();
         let mut dec = AxdrDecoder::new(enc.to_bytes());
         let decoded = dec.decode().unwrap();
         assert!(matches!(decoded, DlmsType::OctetString(ref v) if v.is_empty()));
