@@ -484,12 +484,12 @@ unsafe extern "C" fn task_display_entry(_arg: *mut c_void) {
         if let Some(ref mut scanner) = (*state).key_scanner {
             if let Some(key_event) = scanner.tick() {
                 match key_event {
-                    key_scan::KeyEvent::Press(key_scan::KeyId::Key1) => {
+                    key_scan::KeyEvent::Press(key_scan::KeyId::Page) => {
                         (*state).lcd.next_page();
                         auto_scroll_ticks = 0; // 按键重置轮显计时
                         info!("Display page: {}", (*state).lcd.current_page());
                     }
-                    key_scan::KeyEvent::LongPress(key_scan::KeyId::Key1) => {
+                    key_scan::KeyEvent::LongPress(key_scan::KeyId::Page) => {
                         // 长按切换编程模式
                         scanner.reset();
                         info!("Display: long press — programming toggle");
@@ -613,14 +613,14 @@ unsafe extern "C" fn task_rtc_sync_entry(_arg: *mut c_void) {
 
         let status = rtc::sync_status();
         if status.source == rtc::SyncSource::None {
-            warn!("RTC sync lost (last: {}ms ago)", status.age_ms);
+            warn!("RTC sync lost (last: {}ms ago)", get_timestamp() - status.last_sync_timestamp);
             // TODO: 触发 LoRaWAN/蜂窝 NTP 同步请求
         } else {
-            debug!("RTC synced via {:?}, drift={}", status.source, status.drift_ppm);
+            debug!("RTC synced via {:?}, offset={}", status.source, status.last_offset_ms);
         }
 
         // RTC 精度微调
-        if let Some(drift) = Some(status.drift_ppm) {
+        if let Some(drift) = Some(status.last_offset_ms) {
             if drift.abs() > 10 {
                 rtc::trim_ppm(-(drift as i16 / 2)); // 补偿一半偏差
             }
@@ -806,7 +806,7 @@ fn main() -> ! {
     info!("Key scanner initialized");
 
     // ── 9. OTA 管理器 ──
-    let ota_mgr = ota::OtaManager<ota::InternalFlash>::new();
+    let ota_mgr = ota::OtaManager::<ota::InternalFlash>::new();
     info!("OTA manager initialized");
 
     // ── 10. FreeRTOS 同步原语 ──
