@@ -24,6 +24,7 @@ use cortex_m_rt::entry;
 use panic_halt as _;
 use defmt::{info, warn, error, debug, trace};
 use crate::hal::{MeteringChip, LcdDriver, UartDriver};
+use crate::rtc::get_timestamp;
 use core::ffi::c_void;
 
 // defmt 要求用户提供 _defmt_timestamp 实现 (空 = 无时间戳, 省空间)
@@ -791,7 +792,7 @@ fn main() -> ! {
     info!("RTC initialized");
 
     // ── 6. 看门狗 (4s 超时) ──
-    watchdog::init(watchdog::IwdtTimeout::Ms4000);
+    watchdog::init(watchdog::IwdtTimeout::Sec4);
     let wdt_task_id = watchdog::task_register(5000); // 5s 内必须喂狗
     info!("Watchdog initialized (4s timeout, task_id={})", wdt_task_id);
 
@@ -801,7 +802,7 @@ fn main() -> ! {
     info!("Power manager initialized");
 
     // ── 8. 按键扫描器 ──
-    let key_driver = key_scan::DefaultKeyDriver;
+    let key_driver = key_scan::DefaultKeyDriver { last_tick: 0 };
     let key_scanner = key_scan::KeyScanner::new(key_driver);
     info!("Key scanner initialized");
 
@@ -947,7 +948,7 @@ fn main() -> ! {
     }).ok();
 
     rtc::init();
-    watchdog::init(watchdog::IwdtTimeout::Ms4000);
+    watchdog::init(watchdog::IwdtTimeout::Sec4);
 
     let mut power_mgr = power_manager::PowerManager::new();
     power_mgr.init();
