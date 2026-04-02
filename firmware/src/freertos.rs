@@ -447,4 +447,6 @@ pub mod events {
     pub const EVENT_LOG_SAVE: u32      = (1 << 11);
     /// 事件检测完成
     pub const EVENTS_DETECTED: u32     = (1 << 12);
+    /// LoRaWAN NTP 同步请求
+    pub const LORA_NTP_SYNC: u32       = (1 << 13);
 }

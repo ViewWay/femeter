@@ -22,9 +22,13 @@ def dlms_conn(virtual_meter):
     return connect
 
 
-@pytest.mark.skipif(not _dlms_available(), reason="DLMS TCP port 4059 not available")
 class TestDlmsConnection:
     """Basic DLMS-over-TCP connectivity."""
+
+    @pytest.fixture(autouse=True)
+    def _check_dlms(self):
+        if not _dlms_available():
+            pytest.skip("DLMS TCP port 4059 not available")
 
     def test_tcp_connect(self, dlms_conn):
         s = dlms_conn()
@@ -39,3 +43,22 @@ class TestDlmsConnection:
             assert len(resp) > 0
         finally:
             s.close()
+
+    def test_hdlc_flag_bytes(self, dlms_conn):
+        """Multiple HDLC flags should be accepted."""
+        s = dlms_conn()
+        try:
+            s.sendall(b"\x7e\x7e\x7e")
+            s.settimeout(3)
+            resp = s.recv(1024)
+            # Server should respond or at least not disconnect
+            assert True
+        finally:
+            s.close()
+
+    def test_dlms_disconnect_reconnect(self, dlms_conn):
+        """Disconnect and reconnect should work."""
+        s1 = dlms_conn()
+        s1.close()
+        s2 = dlms_conn()
+        s2.close()

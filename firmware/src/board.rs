@@ -1303,3 +1303,51 @@ impl TamperDriver for TamperImpl {
         None
     }
 }
+
+/* ── 模块级便捷函数 (供 main.rs 调用) ── */
+
+pub mod tamper_ext {
+    use super::{gpio_read_pin, pins};
+
+    /// 防窃电检测 — 开盖检测
+    pub fn check_cover_open() -> bool {
+        gpio_read_pin(pins::COVER_DET)
+    }
+
+    /// 防窃电检测 — 磁场检测
+    pub fn check_magnetic() -> bool {
+        gpio_read_pin(pins::MAGNETIC_DET)
+    }
+}
+
+pub mod pulse_ext {
+    use super::{gpio_port, pins};
+
+    /// 翻转有功脉冲 GPIO
+    pub fn toggle_active() {
+        unsafe {
+            let gpio = gpio_port(pins::PULSE_P.port);
+            let odr = core::ptr::read_volatile(&gpio.odr as *const u32);
+            core::ptr::write_volatile(
+                &gpio.odr as *const u32 as *mut u32,
+                odr ^ (1u32 << pins::PULSE_P.pin),
+            );
+        }
+    }
+}
+
+pub mod adc {
+    /// 读取 MCU 内部温度传感器 ADC 原始值
+    pub fn read_temperature_raw() -> u16 {
+        // ADC 通道 16 = 内部温度传感器 (FM33A068EV)
+        // 基准电压 3.3V, 12bit ADC
+        0 // 占位: 实际由 HAL ADC 驱动读取
+    }
+
+    /// 将 ADC 原始值转换为摄氏温度
+    pub fn raw_to_celsius(raw: u16) -> i16 {
+        let v_sense = (raw as u32) * 3300 / 4096;
+        let temp_x10 = ((v_sense as i32 - 1430) * 10 / 43) + 250;
+        (temp_x10 / 10) as i16
+    }
+}
