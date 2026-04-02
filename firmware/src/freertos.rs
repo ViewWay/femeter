@@ -72,21 +72,26 @@ extern "C" {
     pub fn xTaskGetCurrentTaskHandle() -> TaskHandle;
 
     /* ── 队列 ── */
-    pub fn xQueueCreate(uxQueueLength: u32, uxItemSize: u32) -> QueueHandle;
-    pub fn xQueueSend(
+    /* FreeRTOS 11.x: xQueueCreate 是宏 → xQueueGenericCreate */
+    pub fn xQueueGenericCreate(uxQueueLength: u32, uxItemSize: u32, ucQueueType: u8) -> QueueHandle;
+    /* FreeRTOS 11.x: xQueueSend 是宏 → xQueueGenericSend */
+    pub fn xQueueGenericSend(
         xQueue: QueueHandle,
         pvItemToQueue: *const c_void,
         xTicksToWait: TickType,
+        xCopyPosition: u32,
     ) -> i32;
     pub fn xQueueReceive(
         xQueue: QueueHandle,
         pvBuffer: *mut c_void,
         xTicksToWait: TickType,
     ) -> i32;
-    pub fn xQueueSendFromISR(
+    /* FreeRTOS 11.x: xQueueSendFromISR 是宏 → xQueueGenericSendFromISR */
+    pub fn xQueueGenericSendFromISR(
         xQueue: QueueHandle,
         pvItemToQueue: *const c_void,
         pxHigherPriorityTaskWoken: *mut i32,
+        xCopyPosition: u32,
     ) -> i32;
     pub fn xQueueReceiveFromISR(
         xQueue: QueueHandle,
@@ -94,19 +99,13 @@ extern "C" {
         pxHigherPriorityTaskWoken: *mut i32,
     ) -> i32;
     pub fn uxQueueMessagesWaiting(xQueue: QueueHandle) -> u32;
-    pub fn xQueueReset(xQueue: QueueHandle) -> i32;
+    /* FreeRTOS 11.x: xQueueReset 是宏 → xQueueGenericReset */
+    pub fn xQueueGenericReset(xQueue: QueueHandle, xNewQueue: i32) -> i32;
 
     /* ── 信号量 ── */
     /* FreeRTOS 11.x: semaphore API 是宏，映射到 xQueue* 内部函数 */
-    pub fn xQueueCreateMutex(ucInheritPriority: i32) -> SemaphoreHandle;
+    pub fn xQueueCreateMutex(ucQueueType: u8) -> SemaphoreHandle;
     pub fn xQueueSemaphoreTake(xSemaphore: SemaphoreHandle, xTicksToWait: TickType) -> i32;
-    /* xSemaphoreGive maps to xQueueGenericSend with queueSEND_TO_BACK */
-    pub fn xQueueGenericSend(
-        xQueue: QueueHandle,
-        pvItemToQueue: *const c_void,
-        xTicksToWait: TickType,
-        xCopyPosition: u32,
-    ) -> i32;
 
     /* ── 事件组 ── */
     pub fn xEventGroupCreate() -> EventGroupHandle;
@@ -232,10 +231,15 @@ impl<T> Queue<T> {
         ptr as *mut c_void
     }
 
+    /// FreeRTOS 队列类型: queueQUEUE_TYPE_BASE = 0
+    const QUEUE_TYPE_BASE: u8 = 0;
+    /// FreeRTOS 发送位置: queueSEND_TO_BACK = 1
+    const SEND_TO_BACK: u32 = 1;
+
     /// 创建队列
     /// capacity: 队列深度
     pub fn new(capacity: u32) -> Option<Self> {
-        let handle = unsafe { xQueueCreate(capacity, core::mem::size_of::<T>() as u32) };
+        let handle = unsafe { xQueueGenericCreate(capacity, core::mem::size_of::<T>() as u32, Self::QUEUE_TYPE_BASE) };
         if handle.is_null() {
             None
         } else {
@@ -246,10 +250,10 @@ impl<T> Queue<T> {
         }
     }
 
-    /// 发送数据到队列 (ISR 中使用 xQueueSendFromISR)
+    /// 发送数据到队列 (ISR 中使用 send_from_isr)
     pub fn send(&self, item: &T, timeout_ms: u32) -> bool {
         unsafe {
-            xQueueSend(self.handle, item as *const T as *const c_void, ms_to_ticks(timeout_ms)) == 1
+            xQueueGenericSend(self.handle, item as *const T as *const c_void, ms_to_ticks(timeout_ms), Self::SEND_TO_BACK) == 1
         }
     }
 
@@ -301,7 +305,8 @@ impl Mutex {
 
     /// 创建互斥量
     pub fn new() -> Option<Self> {
-        let handle = unsafe { xQueueCreateMutex(0) };
+        /* queueQUEUE_TYPE_MUTEX = 1 */
+        let handle = unsafe { xQueueCreateMutex(1u8) };
         if handle.is_null() {
             None
         } else {
@@ -318,7 +323,7 @@ impl Mutex {
     pub fn unlock(&self) -> bool {
         unsafe {
             // xSemaphoreGive -> xQueueGenericSend(queue, NULL, 0, queueSEND_TO_BACK)
-            xQueueGenericSend(self.handle, ptr::null(), 0, 0) == 1
+            xQueueGenericSend(self.handle, ptr::null(), 0, 1) == 1
         }
     }
 }
