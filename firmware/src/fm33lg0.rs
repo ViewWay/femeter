@@ -93,7 +93,7 @@ pub struct CmuRegs {
     pub rchfcr:   u32, // 0x04: RCHF控制
     pub rchftr:   u32, // 0x08: RCHF调校
     pub plllcr:   u32, // 0x0C: PLL_L控制
-    pub pllHcr:   u32, // 0x10: PLL_H控制
+    pub pll_hcr:   u32, // 0x10: PLL_H控制
     pub xthfcr:   u32, // 0x14: XTHF控制
     pub ier:      u32, // 0x18: 中断使能
     pub isr:      u32, // 0x1C: 中断标志

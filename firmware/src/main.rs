@@ -802,7 +802,7 @@ fn main() -> ! {
     info!("Power manager initialized");
 
     // ── 8. 按键扫描器 ──
-    let key_driver = key_scan::DefaultKeyDriver { last_tick: 0 };
+    let key_driver = key_scan::DefaultKeyDriver::new();
     let key_scanner = key_scan::KeyScanner::new(key_driver);
     info!("Key scanner initialized");
 

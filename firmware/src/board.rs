@@ -590,10 +590,10 @@ impl<M: crate::hal::MeteringChip> Board<M> {
             let pll_val = (0x01 << 1)  // INSEL = XTHF
                         | (0x01 << 8)  // N_DIV = 1
                         | (0x08 << 16); // M_MUL = 8
-            write_reg(&cmu.pllHcr as *const u32 as *mut u32, pll_val);
+            write_reg(&cmu.pll_hcr as *const u32 as *mut u32, pll_val);
 
             // 使能 PLL_H (bit0)
-            write_reg(&cmu.pllHcr as *const u32 as *mut u32, read_reg(&cmu.pllHcr as *const u32) | 0x01);
+            write_reg(&cmu.pll_hcr as *const u32 as *mut u32, read_reg(&cmu.pll_hcr as *const u32) | 0x01);
 
             // 等待 PLL_H 锁定 (轮询 CMU ISR bit for PLL ready)
             // FM33 使用 ISR 的 bit 来指示 PLL 就绪
