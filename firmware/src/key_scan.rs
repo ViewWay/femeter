@@ -212,7 +212,6 @@ impl<D: KeyDriver> KeyScanner<D> {
 
     /// 处理单个按键通道的状态机（纯函数，无 self 借用）
     fn tick_channel_inner(ch: &mut KeyChannel, level: bool, _tick: u32) -> Option<KeyEvent> {
-
         match ch.state {
             KeyState::Idle => {
                 // 检测到按下（低电平）
@@ -288,6 +287,12 @@ impl<D: KeyDriver> KeyScanner<D> {
     }
 
     /// 进入编程模式（placeholder: 密码校验）
+    #[cfg(test)]
+    fn enter_programming_mode_inner(&mut self) {
+        self.programming_mode = true;
+        self.prog_timeout_min = 0;
+    }
+
     fn enter_programming_mode(&mut self) {
         // TODO: 实际密码校验:
         //   1. 显示密码输入界面
@@ -363,7 +368,7 @@ impl DefaultKeyDriver {
     pub fn init(&self) {
         for pin in &[pins::KEY_PAGE, pins::KEY_PROG] {
             // GPIO 已在 board.rs::gpio_init() 中配置为上拉输入
-        // 这里无需重复配置
+            // 这里无需重复配置
         }
     }
 }
@@ -374,14 +379,131 @@ impl KeyDriver for DefaultKeyDriver {
             KeyId::Page => pins::KEY_PAGE,
             KeyId::Prog => pins::KEY_PROG,
         };
-        // 上拉输入: 低电平 = 按下, 高电平 = 释放
         crate::board::gpio_read_pin(pin)
     }
 
     fn get_tick_ms(&self) -> u32 {
-        // TODO: 集成 FreeRTOS xTaskGetTickCount()
-        // 当前返回 0，实际应使用 FreeRTOS tick (configTICK_RATE_HZ = 1000)
-        // tick_ms = xTaskGetTickCount() * portTICK_PERIOD_MS
         0
+    }
+}
+
+/* ================================================================== */
+/*  单元测试                                                            */
+/* ================================================================== */
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 测试用驱动: 可控 GPIO 和时间
+    struct TestKeyDriver {
+        levels: [bool; 2],
+        tick: u32,
+    }
+
+    impl TestKeyDriver {
+        fn new() -> Self {
+            Self {
+                levels: [true, true],
+                tick: 0,
+            }
+        }
+        fn press_page(&mut self) {
+            self.levels[0] = false;
+        }
+        fn release_page(&mut self) {
+            self.levels[0] = true;
+        }
+        fn press_prog(&mut self) {
+            self.levels[1] = false;
+        }
+        fn release_prog(&mut self) {
+            self.levels[1] = true;
+        }
+        fn advance(&mut self, ms: u32) {
+            self.tick += ms;
+        }
+    }
+
+    impl KeyDriver for TestKeyDriver {
+        fn read_key(&self, key: KeyId) -> bool {
+            match key {
+                KeyId::Page => self.levels[0],
+                KeyId::Prog => self.levels[1],
+            }
+        }
+        fn get_tick_ms(&self) -> u32 {
+            self.tick
+        }
+    }
+
+    #[test]
+    fn test_display_page_count() {
+        assert_eq!(DisplayPage::COUNT, 4);
+    }
+
+    #[test]
+    fn test_display_page_next() {
+        assert_eq!(DisplayPage::Realtime.next(), DisplayPage::Energy);
+        assert_eq!(DisplayPage::Energy.next(), DisplayPage::Events);
+        assert_eq!(DisplayPage::Events.next(), DisplayPage::Info);
+        assert_eq!(DisplayPage::Info.next(), DisplayPage::Realtime);
+    }
+
+    #[test]
+    fn test_key_event_debug() {
+        assert_eq!(format!("{:?}", KeyEvent::Press(KeyId::Page)), "Press(Page)");
+        assert_eq!(
+            format!("{:?}", KeyEvent::LongPress(KeyId::Prog)),
+            "LongPress(Prog)"
+        );
+    }
+
+    #[test]
+    fn test_key_id_equality() {
+        assert_eq!(KeyId::Page, KeyId::Page);
+        assert_ne!(KeyId::Page, KeyId::Prog);
+    }
+
+    #[test]
+    fn test_scanner_initial_state() {
+        let driver = TestKeyDriver::new();
+        let scanner = KeyScanner::new(driver);
+        assert_eq!(scanner.current_page(), DisplayPage::Realtime);
+        assert!(!scanner.is_programming());
+    }
+
+    #[test]
+    fn test_scanner_set_page() {
+        let driver = TestKeyDriver::new();
+        let mut scanner = KeyScanner::new(driver);
+        scanner.set_page(DisplayPage::Info);
+        assert_eq!(scanner.current_page(), DisplayPage::Info);
+    }
+
+    #[test]
+    fn test_scanner_reset() {
+        let driver = TestKeyDriver::new();
+        let mut scanner = KeyScanner::new(driver);
+        scanner.reset();
+        assert_eq!(scanner.current_page(), DisplayPage::Realtime);
+    }
+
+    #[test]
+    fn test_scanner_programming_timeout() {
+        let driver = TestKeyDriver::new();
+        let mut scanner = KeyScanner::new(driver);
+        scanner.enter_programming_mode_inner();
+        assert!(scanner.is_programming());
+
+        // 9 分钟不超时
+        for _ in 0..9 {
+            scanner.tick_minute();
+        }
+        assert!(scanner.is_programming());
+
+        // 第 10 分钟超时
+        scanner.tick_minute();
+        assert!(!scanner.is_programming());
     }
 }

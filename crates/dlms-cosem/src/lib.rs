@@ -140,4 +140,85 @@ mod tests {
         assert_eq!(scaler, -3);
         assert_eq!(unit, dlms_core::units::Unit::WattHour);
     }
+
+    // ============================================================
+    // Phase C — Boundary Tests
+    // ============================================================
+
+    #[test]
+    fn test_octet_string_to_obis_invalid_length() {
+        let result = octet_string_to_obis(&DlmsType::OctetString(alloc::vec![1, 2]));
+        assert!(result.is_err());
+
+        let result = octet_string_to_obis(&DlmsType::OctetString(alloc::vec![]));
+        assert!(result.is_err());
+
+        let result = octet_string_to_obis(&DlmsType::OctetString(alloc::vec![1, 2, 3, 4, 5, 6, 7]));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_octet_string_to_obis_wrong_type() {
+        let result = octet_string_to_obis(&DlmsType::UInt32(42));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_dlms_to_scaler_unit_invalid_type() {
+        let result = dlms_to_scaler_unit(&DlmsType::Null);
+        assert!(result.is_err());
+
+        let result = dlms_to_scaler_unit(&DlmsType::UInt32(42));
+        assert!(result.is_err());
+
+        let result = dlms_to_scaler_unit(&DlmsType::Structure(alloc::vec![DlmsType::from_u32(1)]));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_obis_all_zeros() {
+        let obis = ObisCode::new(0, 0, 0, 0, 0, 0);
+        let dlms = obis_to_octet_string(&obis);
+        let result = octet_string_to_obis(&dlms).unwrap();
+        assert_eq!(result, obis);
+    }
+
+    #[test]
+    fn test_obis_all_255() {
+        let obis = ObisCode::new(255, 255, 255, 255, 255, 255);
+        let dlms = obis_to_octet_string(&obis);
+        let result = octet_string_to_obis(&dlms).unwrap();
+        assert_eq!(result, obis);
+    }
+
+    #[test]
+    fn test_scaler_unit_all_scalers() {
+        for scaler in -7i8..=7 {
+            let dlms = scaler_unit_to_dlms(scaler, dlms_core::units::Unit::None);
+            let (s, _u) = dlms_to_scaler_unit(&dlms).unwrap();
+            assert_eq!(s, scaler);
+        }
+    }
+
+    #[test]
+    fn test_gb_standard_obis_codes() {
+        // China GB/T 17215.301 standard OBIS codes for energy meters
+        let gb_obis = [
+            ObisCode::new(1, 0, 1, 8, 0, 255),  // 正向有功总电能
+            ObisCode::new(1, 0, 1, 8, 1, 255),   // 费率1正向有功
+            ObisCode::new(1, 0, 1, 8, 2, 255),   // 费率2正向有功
+            ObisCode::new(1, 0, 1, 8, 3, 255),   // 费率3正向有功
+            ObisCode::new(1, 0, 1, 8, 4, 255),   // 费率4正向有功
+            ObisCode::new(1, 0, 2, 8, 0, 255),   // 反向有功总电能
+            ObisCode::new(1, 0, 3, 8, 0, 255),   // 正向无功总电能
+            ObisCode::new(1, 0, 4, 8, 0, 255),   // 反向无功总电能
+            ObisCode::new(0, 0, 1, 0, 0, 255),   // 日期时间
+            ObisCode::new(0, 0, 96, 1, 0, 255),   // 逻辑设备名
+        ];
+        for obis in &gb_obis {
+            let dlms = obis_to_octet_string(obis);
+            let result = octet_string_to_obis(&dlms).unwrap();
+            assert_eq!(result, *obis);
+        }
+    }
 }

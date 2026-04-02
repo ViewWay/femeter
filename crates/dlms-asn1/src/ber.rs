@@ -510,4 +510,156 @@ mod tests {
         assert_eq!(tag.number, 0x06);
         assert_eq!(value[0], 2 * 40 + 16); // 96
     }
+
+    // ============================================================
+    // Phase C — Boundary Tests
+    // ============================================================
+
+    #[test]
+    fn test_tag_high_number() {
+        // Tag number >= 31 (long form)
+        let tag = BerTag::universal(31);
+        let encoded = tag.encode();
+        assert_eq!(encoded[0] & 0x1F, 0x1F); // long form indicator
+        let (decoded, _) = BerTag::decode(&encoded).unwrap();
+        assert_eq!(decoded, tag);
+    }
+
+    #[test]
+    fn test_tag_very_high_number() {
+        // Tag number 128+ (multi-byte long form)
+        let tag = BerTag::context(128);
+        let encoded = tag.encode();
+        let (decoded, _) = BerTag::decode(&encoded).unwrap();
+        assert_eq!(decoded.number, 128);
+    }
+
+    #[test]
+    fn test_empty_data_decode() {
+        assert!(BerTag::decode(&[]).is_err());
+    }
+
+    #[test]
+    fn test_incomplete_long_tag() {
+        // Long form tag byte but no continuation bytes
+        let data = [0x1F]; // long form indicator, no more bytes
+        assert!(BerTag::decode(&data).is_err());
+    }
+
+    #[test]
+    fn test_decode_empty_buffer() {
+        let mut dec = BerDecoder::new(&[]);
+        assert!(dec.read_tlv().is_err());
+        assert!(dec.read_integer().is_err());
+    }
+
+    #[test]
+    fn test_decode_truncated_length() {
+        // 0x81 length marker but no length byte
+        let data = [0x02, 0x81]; // integer tag + long form length, but missing byte
+        let mut dec = BerDecoder::new(&data);
+        assert!(dec.read_tlv().is_err());
+    }
+
+    #[test]
+    fn test_decode_length_overflow() {
+        // Length claims more bytes than available
+        let data = [0x04, 0x10, 0x41]; // octet string, len=16, but only 1 byte
+        let mut dec = BerDecoder::new(&data);
+        assert!(dec.read_tlv().is_err());
+    }
+
+    #[test]
+    fn test_integer_edge_cases() {
+        let values = [
+            0i64, 1, -1, 127, -128, 128, -129, 255, 256, -256,
+            32767, -32768, 65535, 65536, i32::MAX as i64, i32::MIN as i64,
+            i64::MAX, i64::MIN,
+        ];
+        for v in &values {
+            let mut enc = BerEncoder::new();
+            enc.write_integer(*v);
+            let mut dec = BerDecoder::new(enc.to_bytes());
+            let decoded = dec.read_integer().unwrap();
+            assert_eq!(decoded, *v, "Integer roundtrip failed for {}", v);
+        }
+    }
+
+    #[test]
+    fn test_boolean_values() {
+        for v in [true, false] {
+            let mut enc = BerEncoder::new();
+            enc.write_boolean(v);
+            let mut dec = BerDecoder::new(enc.to_bytes());
+            let decoded = dec.read_boolean().unwrap();
+            assert_eq!(decoded, v);
+        }
+    }
+
+    #[test]
+    fn test_empty_constructed() {
+        let mut enc = BerEncoder::new();
+        enc.write_constructed(BerTag::context_constructed(5), |_inner| {});
+        let bytes = enc.to_bytes();
+        let mut dec = BerDecoder::new(&bytes);
+        let (tag, content) = dec.read_tlv().unwrap();
+        assert_eq!(tag.number, 5);
+        assert!(tag.constructed);
+        assert!(content.is_empty());
+    }
+
+    #[test]
+    fn test_large_octet_string() {
+        let data = vec![0xAB; 300];
+        let mut enc = BerEncoder::new();
+        enc.write_octet_string(&data);
+        let bytes = enc.to_bytes();
+        assert_eq!(bytes[1], 0x82); // 2-byte length for > 255
+        let mut dec = BerDecoder::new(&bytes);
+        let result = dec.read_octet_string().unwrap();
+        assert_eq!(result.len(), 300);
+    }
+
+    #[test]
+    fn test_null_encoding() {
+        let mut enc = BerEncoder::new();
+        enc.write_null();
+        let bytes = enc.to_bytes();
+        assert_eq!(bytes, vec![0x05, 0x00]);
+    }
+
+    #[test]
+    fn test_deeply_nested_constructed() {
+        let mut enc = BerEncoder::new();
+        enc.write_constructed(BerTag::context_constructed(1), |l1| {
+            l1.write_constructed(BerTag::context_constructed(2), |l2| {
+                l2.write_constructed(BerTag::context_constructed(3), |l3| {
+                    l3.write_integer(42);
+                });
+            });
+        });
+        let bytes = enc.to_bytes();
+        let mut dec = BerDecoder::new(&bytes);
+        let (tag, content) = dec.read_tlv().unwrap();
+        assert_eq!(tag.number, 1);
+        let mut inner = BerDecoder::new(content);
+        let (tag2, content2) = inner.read_tlv().unwrap();
+        assert_eq!(tag2.number, 2);
+        let mut inner2 = BerDecoder::new(content2);
+        let (tag3, content3) = inner2.read_tlv().unwrap();
+        assert_eq!(tag3.number, 3);
+        let mut inner3 = BerDecoder::new(content3);
+        assert_eq!(inner3.read_integer().unwrap(), 42);
+    }
+
+    #[test]
+    fn test_oid_large_component() {
+        let mut enc = BerEncoder::new();
+        enc.write_oid(&[2, 16, 776, 1, 1, 9999999]);
+        let bytes = enc.to_bytes();
+        assert_eq!(bytes[0], 0x06); // OID tag
+        let mut dec = BerDecoder::new(&bytes);
+        let (tag, _value) = dec.read_tlv().unwrap();
+        assert_eq!(tag.number, 0x06);
+    }
 }

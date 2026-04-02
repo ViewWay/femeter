@@ -14,11 +14,7 @@
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use crate::fm33lg0::{
-    base, calc_spbrg,
-    uart_csr, uart_ier, uart_isr,
-    UartRegs,
-};
+use crate::fm33lg0::{base, calc_spbrg, uart_csr, uart_ier, uart_isr, UartRegs};
 use crate::hal::{Parity, UartChannel, UartConfig, UartError};
 
 // ── 环形缓冲区容量 ──
@@ -208,19 +204,13 @@ impl UartHal for UartInstance {
             cortex_m::interrupt::free(|_| {
                 let csr = regs.csr & !(uart_csr::TXEN | uart_csr::RXEN);
                 // Safety: 写入 UART CSR 控制寄存器
-                core::ptr::write_volatile(
-                    &regs.csr as *const u32 as *mut u32,
-                    csr,
-                );
+                core::ptr::write_volatile(&regs.csr as *const u32 as *mut u32, csr);
             });
 
             // 2. 配置波特率
             let spbrg = calc_spbrg(SYSCLK, config.baudrate);
             // Safety: 写入波特率分频寄存器
-            core::ptr::write_volatile(
-                &regs.bgr as *const u32 as *mut u32,
-                spbrg as u32,
-            );
+            core::ptr::write_volatile(&regs.bgr as *const u32 as *mut u32, spbrg as u32);
 
             // 3. 配置帧格式 (CSR)
             let mut csr: u32 = 0;
@@ -249,25 +239,16 @@ impl UartHal for UartInstance {
             csr |= uart_csr::TXEN | uart_csr::RXEN;
 
             // Safety: 写入 CSR 配置帧格式并使能收发
-            core::ptr::write_volatile(
-                &regs.csr as *const u32 as *mut u32,
-                csr,
-            );
+            core::ptr::write_volatile(&regs.csr as *const u32 as *mut u32, csr);
 
             // 4. 清除所有中断标志 (写1清零)
             // Safety: ISR 寄存器写1清零对应标志位
-            core::ptr::write_volatile(
-                &regs.isr as *const u32 as *mut u32,
-                0xFFFFFFFF,
-            );
+            core::ptr::write_volatile(&regs.isr as *const u32 as *mut u32, 0xFFFFFFFF);
 
             // 5. 使能接收缓冲区满中断 (RXBF) 和接收错误中断 (RXERR)
             let ier = uart_ier::RXBF_IE | uart_ier::RXERR_IE;
             // Safety: 写入中断使能寄存器
-            core::ptr::write_volatile(
-                &regs.ier as *const u32 as *mut u32,
-                ier,
-            );
+            core::ptr::write_volatile(&regs.ier as *const u32 as *mut u32, ier);
 
             // 6. 使能 NVIC 中断 (使用 cortex_m::peripheral::NVIC::unmask)
             // 注意: cortex_m::NVIC::unmask 需要 InterruptNumber trait 实现
@@ -309,10 +290,7 @@ impl UartHal for UartInstance {
                     cortex_m::asm::nop();
                 }
                 // Safety: 写入发送数据寄存器
-                core::ptr::write_volatile(
-                    &regs.txbuf as *const u32 as *mut u32,
-                    byte as u32,
-                );
+                core::ptr::write_volatile(&regs.txbuf as *const u32 as *mut u32, byte as u32);
             }
         }
 
@@ -363,10 +341,7 @@ impl UartHal for UartInstance {
                 cortex_m::asm::nop();
             }
             // Safety: 写入发送数据寄存器
-            core::ptr::write_volatile(
-                &regs.txbuf as *const u32 as *mut u32,
-                byte as u32,
-            );
+            core::ptr::write_volatile(&regs.txbuf as *const u32 as *mut u32, byte as u32);
         }
     }
 
@@ -401,7 +376,7 @@ pub static mut UART0: UartInstance = UartInstance::new(
     base::UART0 as *const UartRegs,
     UartChannel::Uart0,
     0,
-    9i32, // fm33lg0::irqn::UART0 = 9
+    9i32,         // fm33lg0::irqn::UART0 = 9
     Some((5, 2)), // RS485 CON: PF2 (board.rs: RS485_DE)
 );
 
@@ -411,7 +386,7 @@ pub static mut UART1: UartInstance = UartInstance::new(
     UartChannel::Uart1,
     1,
     10i32, // fm33lg0::irqn::UART1 = 10
-    None, // 红外无需方向控制
+    None,  // 红外无需方向控制
 );
 
 /// UART2 → LoRaWAN (ASR6601)
@@ -508,10 +483,7 @@ fn uart_isr_handler(index: usize, regs_ptr: *const UartRegs) {
         // 清除 RXBF 中断标志 (写1清零)
         // Safety: ISR 写1清零对应标志位
         unsafe {
-            core::ptr::write_volatile(
-                &regs.isr as *const u32 as *mut u32,
-                uart_isr::RXBF,
-            );
+            core::ptr::write_volatile(&regs.isr as *const u32 as *mut u32, uart_isr::RXBF);
         }
     }
 

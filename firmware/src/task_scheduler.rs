@@ -209,29 +209,29 @@ impl TaskScheduler {
 
 pub mod task {
     /// 计量采样 (200ms)
-    pub const METERING:   super::TaskId = 0;
+    pub const METERING: super::TaskId = 0;
     /// 电能累计 (1000ms)
-    pub const ENERGY:     super::TaskId = 1;
+    pub const ENERGY: super::TaskId = 1;
     /// LCD 刷新 (500ms)
-    pub const DISPLAY:    super::TaskId = 2;
+    pub const DISPLAY: super::TaskId = 2;
     /// RS485 通信 (10ms)
-    pub const RS485:      super::TaskId = 3;
+    pub const RS485: super::TaskId = 3;
     /// 红外通信 (50ms)
-    pub const INFRARED:   super::TaskId = 4;
+    pub const INFRARED: super::TaskId = 4;
     /// 按键扫描 (50ms)
-    pub const KEY:        super::TaskId = 5;
+    pub const KEY: super::TaskId = 5;
     /// 脉冲输出 (100ms)
-    pub const PULSE:      super::TaskId = 6;
+    pub const PULSE: super::TaskId = 6;
     /// 防窃电检测 (5000ms)
-    pub const TAMPER:     super::TaskId = 7;
+    pub const TAMPER: super::TaskId = 7;
     /// 温度采集 (10000ms)
-    pub const TEMPERATURE:super::TaskId = 8;
+    pub const TEMPERATURE: super::TaskId = 8;
     /// 看门狗喂狗 (1000ms)
-    pub const WATCHDOG:   super::TaskId = 9;
+    pub const WATCHDOG: super::TaskId = 9;
     /// 低功耗管理 (1000ms)
-    pub const POWER_MGR:  super::TaskId = 12;
+    pub const POWER_MGR: super::TaskId = 12;
     /// LoRaWAN (30000ms)
-    pub const LORAWAN:    super::TaskId = 10;
+    pub const LORAWAN: super::TaskId = 10;
     /// 蜂窝通信 (60000ms)
-    pub const CELLULAR:   super::TaskId = 11;
+    pub const CELLULAR: super::TaskId = 11;
 }

@@ -19,21 +19,21 @@
 #![allow(invalid_reference_casting)]
 #![allow(unused)]
 
-use defmt_rtt as _;
-use cortex_m_rt::entry;
-use panic_halt as _;
-use defmt::{info, warn, error, debug, trace};
-use crate::hal::{MeteringChip, LcdDriver, UartDriver};
+use crate::hal::{LcdDriver, MeteringChip, UartDriver};
 use crate::rtc::get_timestamp;
 use core::ffi::c_void;
+use cortex_m_rt::entry;
+use defmt::{debug, error, info, trace, warn};
+use defmt_rtt as _;
+use panic_halt as _;
 
 // defmt 要求用户提供 _defmt_timestamp 实现 (空 = 无时间戳, 省空间)
 #[no_mangle]
 unsafe extern "C" fn _defmt_timestamp() {}
 
 /* ── HAL 抽象层 ── */
-mod hal;
 mod fm33lg0;
+mod hal;
 
 /* ── 计量芯片驱动 (编译时选择) ── */
 #[cfg(feature = "att7022e")]
@@ -45,17 +45,17 @@ mod rn8615v2;
 
 /* ── 通信驱动 ── */
 mod asr6601;
-mod uart_driver;
 #[cfg(feature = "cellular")]
 mod at_parser;
 #[cfg(feature = "cellular")]
 mod quectel;
+mod uart_driver;
 
 /* ── 板级驱动 ── */
 mod board;
+mod comm;
 mod display;
 mod metering;
-mod comm;
 
 /* ── DLMS/COSEM 协议栈 (feature gate) ── */
 #[cfg(feature = "dlms")]
@@ -68,14 +68,15 @@ mod freertos;
 mod freertos_hooks;
 
 /* ── 功能模块 ── */
+mod calibration;
 mod event_detect;
+mod key_scan;
+mod ota;
+mod power_manager;
 mod rtc;
-mod watchdog;
 #[cfg(feature = "ext-flash")]
 mod storage;
-mod key_scan;
-mod power_manager;
-mod ota;
+mod watchdog;
 
 /* ── FreeRTOS interrupt handlers provided by portasm.c ── */
 /* SVC_Handler, PendSV_Handler, vStartFirstTask are all in portasm.c */
@@ -104,8 +105,8 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg(feature = "freertos")]
 use freertos::{
-    task_create, delay_ms, tick_count, ms_to_ticks,
-    Mutex, Queue, EventGroup, TaskParams, PORT_MAX_DELAY, events,
+    delay_ms, events, ms_to_ticks, task_create, tick_count, EventGroup, Mutex, Queue, TaskParams,
+    PORT_MAX_DELAY,
 };
 
 /// 事件队列消息类型 — 从 event_detect 发送到 DLMS/storage 任务
@@ -184,35 +185,35 @@ static mut DATA_READY_SEM: *mut c_void = core::ptr::null_mut();
  */
 #[cfg(feature = "freertos")]
 mod prio {
-    pub const RS485:        u32 = 6;  // DLMS RS485 通信 (帧超时敏感)
-    pub const INFRARED:     u32 = 5;  // DLMS 红外通信
-    pub const METERING:     u32 = 4;  // 计量采集 (200ms 周期)
-    pub const EVENT_DETECT: u32 = 4;  // 事件检测 (跟随计量)
-    pub const PULSE:        u32 = 3;  // 脉冲输出 (精度要求)
-    pub const KEY:          u32 = 3;  // 按键扫描 (去抖)
-    pub const DISPLAY:      u32 = 3;  // LCD 刷新
-    pub const STORAGE:      u32 = 2;  // 闪存存储 (冻结/事件)
-    pub const WATCHDOG:     u32 = 2;  // 看门狗喂狗
-    pub const RTC_SYNC:     u32 = 2;  // RTC 对时
-    pub const POWER_MGR:    u32 = 1;  // 低功耗管理
-    pub const TAMPER:       u32 = 1;  // 防窃电检测
-    pub const TEMPERATURE:  u32 = 1;  // 温度采集
-    pub const LORAWAN:      u32 = 1;  // LoRaWAN 上报
-    pub const OTA:          u32 = 1;  // OTA 检查
+    pub const RS485: u32 = 6; // DLMS RS485 通信 (帧超时敏感)
+    pub const INFRARED: u32 = 5; // DLMS 红外通信
+    pub const METERING: u32 = 4; // 计量采集 (200ms 周期)
+    pub const EVENT_DETECT: u32 = 4; // 事件检测 (跟随计量)
+    pub const PULSE: u32 = 3; // 脉冲输出 (精度要求)
+    pub const KEY: u32 = 3; // 按键扫描 (去抖)
+    pub const DISPLAY: u32 = 3; // LCD 刷新
+    pub const STORAGE: u32 = 2; // 闪存存储 (冻结/事件)
+    pub const WATCHDOG: u32 = 2; // 看门狗喂狗
+    pub const RTC_SYNC: u32 = 2; // RTC 对时
+    pub const POWER_MGR: u32 = 1; // 低功耗管理
+    pub const TAMPER: u32 = 1; // 防窃电检测
+    pub const TEMPERATURE: u32 = 1; // 温度采集
+    pub const LORAWAN: u32 = 1; // LoRaWAN 上报
+    pub const OTA: u32 = 1; // OTA 检查
     #[cfg(feature = "cellular")]
-    pub const CELLULAR:     u32 = 1;  // 蜂窝通信
+    pub const CELLULAR: u32 = 1; // 蜂窝通信
 }
 
 #[cfg(feature = "freertos")]
-const STACK_TINY:   u16 = 96;   // 384 bytes — 最小任务
+const STACK_TINY: u16 = 96; // 384 bytes — 最小任务
 #[cfg(feature = "freertos")]
-const STACK_SMALL:  u16 = 128;  // 512 bytes
+const STACK_SMALL: u16 = 128; // 512 bytes
 #[cfg(feature = "freertos")]
-const STACK_MEDIUM: u16 = 192;  // 768 bytes
+const STACK_MEDIUM: u16 = 192; // 768 bytes
 #[cfg(feature = "freertos")]
-const STACK_LARGE:  u16 = 256;  // 1024 bytes
+const STACK_LARGE: u16 = 256; // 1024 bytes
 #[cfg(feature = "freertos")]
-const STACK_XLARGE: u16 = 384;  // 1536 bytes — DLMS 栈 (需要解析/构建APDU)
+const STACK_XLARGE: u16 = 384; // 1536 bytes — DLMS 栈 (需要解析/构建APDU)
 
 /* ══════════════════════════════════════════════════════════════════ */
 /*  [FreeRTOS] 辅助函数                                                 */
@@ -420,8 +421,8 @@ unsafe extern "C" fn task_storage_entry(_arg: *mut c_void) {
         // 等待数据就绪或事件保存请求, 超时 5s 做冻结检查
         let bits = ev.wait(
             events::DATA_READY | events::EVENT_LOG_SAVE,
-            false,   // wait_all = false (任一触发)
-            true,    // clear_on_exit
+            false, // wait_all = false (任一触发)
+            true,  // clear_on_exit
             5000,
         );
 
@@ -444,10 +445,7 @@ unsafe extern "C" fn task_storage_entry(_arg: *mut c_void) {
                 // storage::PartitionStorage 通过全局句柄访问
                 // freeze record: timestamp + energy_data + crc32
                 // 实际写入由 storage task 的 flash 驱动完成
-                trace!(
-                    "Energy freeze: ts={}, AI={}",
-                    hour_ts, energy.active_import
-                );
+                trace!("Energy freeze: ts={}, AI={}", hour_ts, energy.active_import);
             }
 
             unlock_state(mtx);
@@ -462,10 +460,7 @@ unsafe extern "C" fn task_storage_entry(_arg: *mut c_void) {
                 // 写入事件日志到外部 Flash
                 // 通过 storage 分区管理器的循环写入接口持久化
                 // event_detect 内部维护 flash_write_pos 和 total_count
-                trace!(
-                    "Event log save: {} entries",
-                    log.len()
-                );
+                trace!("Event log save: {} entries", log.len());
             }
             unlock_state(mtx);
         }
@@ -475,7 +470,9 @@ unsafe extern "C" fn task_storage_entry(_arg: *mut c_void) {
 #[cfg(all(feature = "freertos", not(feature = "ext-flash")))]
 unsafe extern "C" fn task_storage_entry(_arg: *mut c_void) {
     info!("Task: Storage (no ext-flash) — idle");
-    loop { delay_ms(5000); }
+    loop {
+        delay_ms(5000);
+    }
 }
 
 /* ── 6. 显示任务 (LCD 段码轮显) ── */
@@ -518,7 +515,8 @@ unsafe extern "C" fn task_display_entry(_arg: *mut c_void) {
 
             // 自动轮显
             auto_scroll_ticks += 1;
-            if auto_scroll_ticks >= AUTO_SCROLL_INTERVAL_S * 2 { // 500ms * 2 = 1s per tick
+            if auto_scroll_ticks >= AUTO_SCROLL_INTERVAL_S * 2 {
+                // 500ms * 2 = 1s per tick
                 auto_scroll_ticks = 0;
                 (*state).lcd.next_page();
             }
@@ -633,12 +631,18 @@ unsafe extern "C" fn task_rtc_sync_entry(_arg: *mut c_void) {
 
         let status = rtc::sync_status();
         if status.source == rtc::SyncSource::None {
-            warn!("RTC sync lost (last: {}ms ago)", get_timestamp() - status.last_sync_timestamp);
+            warn!(
+                "RTC sync lost (last: {}ms ago)",
+                get_timestamp() - status.last_sync_timestamp
+            );
             // 触发 LoRaWAN/蜂窝 NTP 同步请求
             // 通过 SYS_EVENTS 通知 LoRaWAN 任务发起 NTP 同步
             ev.set(events::LORA_NTP_SYNC);
         } else {
-            debug!("RTC synced via {:?}, offset={}", status.source, status.last_offset_ms);
+            debug!(
+                "RTC synced via {:?}, offset={}",
+                status.source, status.last_offset_ms
+            );
         }
 
         // RTC 精度微调
@@ -665,7 +669,8 @@ unsafe extern "C" fn task_lorawan_entry(_arg: *mut c_void) {
         // 每 15 分钟上报一次
         let bits = ev.wait(
             events::DATA_READY,
-            false, true,
+            false,
+            true,
             15 * 60 * 1000, // 15min
         );
 
@@ -679,8 +684,11 @@ unsafe extern "C" fn task_lorawan_entry(_arg: *mut c_void) {
 
             trace!(
                 "LoRaWAN report: ts={}, Ua={}, Ia={}, P={}, E={}",
-                ts, inst.voltage_a, inst.current_a,
-                inst.active_power_total, energy.active_import
+                ts,
+                inst.voltage_a,
+                inst.current_a,
+                inst.active_power_total,
+                energy.active_import
             );
 
             // ASR6601 AT 指令发送
@@ -692,13 +700,19 @@ unsafe extern "C" fn task_lorawan_entry(_arg: *mut c_void) {
                 let mut tlv_buf = [0u8; 64];
                 let mut pos = 0usize;
                 // timestamp (4B)
-                tlv_buf[pos] = 0x01; pos += 1;
-                tlv_buf[pos] = 4; pos += 1;
-                tlv_buf[pos..pos+4].copy_from_slice(&ts.to_le_bytes()); pos += 4;
+                tlv_buf[pos] = 0x01;
+                pos += 1;
+                tlv_buf[pos] = 4;
+                pos += 1;
+                tlv_buf[pos..pos + 4].copy_from_slice(&ts.to_le_bytes());
+                pos += 4;
                 // voltage_a (2B)
-                tlv_buf[pos] = 0x02; pos += 1;
-                tlv_buf[pos] = 2; pos += 1;
-                tlv_buf[pos..pos+2].copy_from_slice(&(inst.voltage_a).to_le_bytes()); pos += 2;
+                tlv_buf[pos] = 0x02;
+                pos += 1;
+                tlv_buf[pos] = 2;
+                pos += 1;
+                tlv_buf[pos..pos + 2].copy_from_slice(&(inst.voltage_a).to_le_bytes());
+                pos += 2;
                 trace!("LoRaWAN TLV: {} bytes", pos);
                 // 实际发送通过 asr6601::AT command interface
             }
@@ -761,15 +775,15 @@ unsafe extern "C" fn task_tamper_entry(_arg: *mut c_void) {
         //   board::tamper::check_magnetic() → 霍尔传感器 ADC 读取
         let (state, mtx) = lock_state();
         if board::tamper_ext::check_cover_open() {
-            (*state).event_detector.trigger_external(
-                event_detect::MeterEvent::CoverOpen
-            );
+            (*state)
+                .event_detector
+                .trigger_external(event_detect::MeterEvent::CoverOpen);
             warn!("Tamper: cover opened!");
         }
         if board::tamper_ext::check_magnetic() {
-            (*state).event_detector.trigger_external(
-                event_detect::MeterEvent::MagneticTamper
-            );
+            (*state)
+                .event_detector
+                .trigger_external(event_detect::MeterEvent::MagneticTamper);
             warn!("Tamper: magnetic field detected!");
         }
         unlock_state(mtx);
@@ -828,10 +842,9 @@ fn main() -> ! {
     info!("RTOS: FreeRTOS");
 
     // ── 1. 硬件初始化 ──
-    let chip = Metering::new(
-        unsafe { att7022e::BoardSpi0 },
-        unsafe { att7022e::BoardCs0 },
-    );
+    let chip = Metering::new(unsafe { att7022e::BoardSpi0 }, unsafe {
+        att7022e::BoardCs0
+    });
     let mut board = board::Board::new(chip);
     board.init();
     info!("Board initialized");
@@ -848,12 +861,15 @@ fn main() -> ! {
     info!("LCD initialized");
 
     // ── 4. RS485 (9600 8E1) ──
-    board.rs485.init(&hal::UartConfig {
-        baudrate: 9600,
-        data_bits: 8,
-        stop_bits: 1,
-        parity: hal::Parity::Even,
-    }).ok();
+    board
+        .rs485
+        .init(&hal::UartConfig {
+            baudrate: 9600,
+            data_bits: 8,
+            stop_bits: 1,
+            parity: hal::Parity::Even,
+        })
+        .ok();
     info!("RS485 initialized (9600 8E1)");
 
     // ── 5. RTC ──
@@ -884,8 +900,7 @@ fn main() -> ! {
     let sys_events = EventGroup::new().expect("event_group create failed");
 
     // 事件队列: event_detect → DLMS/storage (深度 16)
-    let event_queue = Queue::<EventQueueItem>::new(16)
-        .expect("event_queue create failed");
+    let event_queue = Queue::<EventQueueItem>::new(16).expect("event_queue create failed");
 
     // ── 11. 共享状态 ──
     let mut shared = SharedState {
@@ -916,51 +931,91 @@ fn main() -> ! {
     // ── 12. 创建任务 ──
     let task_defs: &[(&str, unsafe extern "C" fn(*mut c_void), u32, u16)] = &[
         // 高优先级: 通信
-        ("rs485",       task_rs485_entry,          prio::RS485,        STACK_XLARGE),
-        ("infrared",    task_infrared_entry,       prio::INFRARED,     STACK_LARGE),
+        ("rs485", task_rs485_entry, prio::RS485, STACK_XLARGE),
+        ("infrared", task_infrared_entry, prio::INFRARED, STACK_LARGE),
         // 中高优先级: 计量 & 事件
-        ("metering",    task_metering_entry,       prio::METERING,     STACK_MEDIUM),
-        ("event_detect",task_event_detect_entry,   prio::EVENT_DETECT, STACK_SMALL),
+        (
+            "metering",
+            task_metering_entry,
+            prio::METERING,
+            STACK_MEDIUM,
+        ),
+        (
+            "event_detect",
+            task_event_detect_entry,
+            prio::EVENT_DETECT,
+            STACK_SMALL,
+        ),
         // 中优先级: 人机交互
-        ("pulse",       task_pulse_entry,          prio::PULSE,        STACK_SMALL),
-        ("key",         task_key_entry,            prio::KEY,          STACK_TINY),
-        ("display",     task_display_entry,        prio::DISPLAY,      STACK_MEDIUM),
+        ("pulse", task_pulse_entry, prio::PULSE, STACK_SMALL),
+        ("key", task_key_entry, prio::KEY, STACK_TINY),
+        ("display", task_display_entry, prio::DISPLAY, STACK_MEDIUM),
         // 中低优先级: 后台
-        ("storage",     task_storage_entry,        prio::STORAGE,      STACK_MEDIUM),
-        ("watchdog",    task_watchdog_entry,       prio::WATCHDOG,     STACK_TINY),
-        ("rtc_sync",    task_rtc_sync_entry,       prio::RTC_SYNC,     STACK_SMALL),
+        ("storage", task_storage_entry, prio::STORAGE, STACK_MEDIUM),
+        ("watchdog", task_watchdog_entry, prio::WATCHDOG, STACK_TINY),
+        ("rtc_sync", task_rtc_sync_entry, prio::RTC_SYNC, STACK_SMALL),
         // 低优先级
-        ("power_mgr",   task_power_mgr_entry,      prio::POWER_MGR,    STACK_SMALL),
-        ("tamper",      task_tamper_entry,         prio::TAMPER,       STACK_SMALL),
-        ("temperature", task_temperature_entry,    prio::TEMPERATURE,  STACK_TINY),
-        ("lorawan",     task_lorawan_entry,        prio::LORAWAN,      STACK_MEDIUM),
-        ("ota",         task_ota_entry,            prio::OTA,          STACK_SMALL),
+        (
+            "power_mgr",
+            task_power_mgr_entry,
+            prio::POWER_MGR,
+            STACK_SMALL,
+        ),
+        ("tamper", task_tamper_entry, prio::TAMPER, STACK_SMALL),
+        (
+            "temperature",
+            task_temperature_entry,
+            prio::TEMPERATURE,
+            STACK_TINY,
+        ),
+        ("lorawan", task_lorawan_entry, prio::LORAWAN, STACK_MEDIUM),
+        ("ota", task_ota_entry, prio::OTA, STACK_SMALL),
     ];
 
     let mut count: u8 = 0;
     for &(name, func, p, stack) in task_defs {
-        match task_create(func, TaskParams {
-            name,
-            stack_depth: stack,
-            priority: p,
-            arg: core::ptr::null_mut(),
-        }) {
-            Ok(_) => { info!("  + {} (prio={}, stack={})", name, p, stack); count += 1; }
-            Err(_) => { error!("  FAILED: {}", name); }
+        match task_create(
+            func,
+            TaskParams {
+                name,
+                stack_depth: stack,
+                priority: p,
+                arg: core::ptr::null_mut(),
+            },
+        ) {
+            Ok(_) => {
+                info!("  + {} (prio={}, stack={})", name, p, stack);
+                count += 1;
+            }
+            Err(_) => {
+                error!("  FAILED: {}", name);
+            }
         }
     }
 
     // 蜂窝任务 (feature gate)
     #[cfg(feature = "cellular")]
     {
-        match task_create(task_cellular_entry, TaskParams {
-            name: "cellular",
-            stack_depth: STACK_MEDIUM,
-            priority: prio::CELLULAR,
-            arg: core::ptr::null_mut(),
-        }) {
-            Ok(_) => { info!("  + cellular (prio={}, stack={})", prio::CELLULAR, STACK_MEDIUM); count += 1; }
-            Err(_) => { error!("  FAILED: cellular"); }
+        match task_create(
+            task_cellular_entry,
+            TaskParams {
+                name: "cellular",
+                stack_depth: STACK_MEDIUM,
+                priority: prio::CELLULAR,
+                arg: core::ptr::null_mut(),
+            },
+        ) {
+            Ok(_) => {
+                info!(
+                    "  + cellular (prio={}, stack={})",
+                    prio::CELLULAR,
+                    STACK_MEDIUM
+                );
+                count += 1;
+            }
+            Err(_) => {
+                error!("  FAILED: cellular");
+            }
         }
     }
 
@@ -975,7 +1030,7 @@ fn main() -> ! {
 /* ══════════════════════════════════════════════════════════════════ */
 
 #[cfg(not(feature = "freertos"))]
-use task_scheduler::{TaskScheduler, TASK_NONE, task};
+use task_scheduler::{task, TaskScheduler, TASK_NONE};
 
 #[cfg(not(feature = "freertos"))]
 struct BareState<M: hal::MeteringChip> {
@@ -998,10 +1053,9 @@ struct BareState<M: hal::MeteringChip> {
 fn main() -> ! {
     info!("FeMeter v{} starting (bare-metal)...", VERSION);
 
-    let chip = Metering::new(
-        unsafe { att7022e::BoardSpi0 },
-        unsafe { att7022e::BoardCs0 },
-    );
+    let chip = Metering::new(unsafe { att7022e::BoardSpi0 }, unsafe {
+        att7022e::BoardCs0
+    });
     let mut board = board::Board::new(chip);
     board.init();
 
@@ -1012,9 +1066,15 @@ fn main() -> ! {
     lcd.init_hw();
     lcd.init();
 
-    board.rs485.init(&hal::UartConfig {
-        baudrate: 9600, data_bits: 8, stop_bits: 1, parity: hal::Parity::Even,
-    }).ok();
+    board
+        .rs485
+        .init(&hal::UartConfig {
+            baudrate: 9600,
+            data_bits: 8,
+            stop_bits: 1,
+            parity: hal::Parity::Even,
+        })
+        .ok();
 
     rtc::init();
     watchdog::init(watchdog::IwdtTimeout::Sec4);
@@ -1023,7 +1083,8 @@ fn main() -> ! {
     power_mgr.init();
 
     let mut state = BareState {
-        metering_mgr, lcd,
+        metering_mgr,
+        lcd,
         lcd_content: hal::LcdContent::default(),
         rs485: board.rs485,
         event_detector: event_detect::EventDetector::new(),
@@ -1037,20 +1098,20 @@ fn main() -> ! {
     };
 
     let mut sched = TaskScheduler::new();
-    sched.register(200);   // METERING
-    sched.register(1000);  // ENERGY
-    sched.register(500);   // DISPLAY
-    sched.register(10);    // RS485
-    sched.register(50);    // KEY
-    sched.register(100);   // PULSE
-    sched.register(5000);  // STORAGE
+    sched.register(200); // METERING
+    sched.register(1000); // ENERGY
+    sched.register(500); // DISPLAY
+    sched.register(10); // RS485
+    sched.register(50); // KEY
+    sched.register(100); // PULSE
+    sched.register(5000); // STORAGE
     sched.register(10000); // TEMPERATURE
-    sched.register(1000);  // WATCHDOG
+    sched.register(1000); // WATCHDOG
     sched.register(30000); // LORAWAN
     sched.register(60000); // CELLULAR
-    sched.register(1000);  // POWER_MGR
-    sched.register(1000);  // TAMPER
-    sched.register(1000);  // EVENT_DETECT
+    sched.register(1000); // POWER_MGR
+    sched.register(1000); // TAMPER
+    sched.register(1000); // EVENT_DETECT
 
     info!("Entering main loop...");
     let mut uptime_ms: u64 = 0;
@@ -1089,7 +1150,9 @@ fn main() -> ! {
                 task::RS485 => {
                     let mut rx_buf = [0u8; 256];
                     match state.rs485.read(&mut rx_buf, 5) {
-                        Ok(n) if n > 0 => { state.rs485_rx_len = n; }
+                        Ok(n) if n > 0 => {
+                            state.rs485_rx_len = n;
+                        }
                         _ => {}
                     }
                 }
@@ -1122,7 +1185,10 @@ fn main() -> ! {
         if sleep_ms > 5 {
             let loops = sleep_ms.min(10) * 6400 / 10;
             let mut i: u32 = 0;
-            while i < loops { i += 1; cortex_m::asm::nop(); }
+            while i < loops {
+                i += 1;
+                cortex_m::asm::nop();
+            }
         }
     }
 }

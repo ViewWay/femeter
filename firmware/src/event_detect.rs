@@ -310,12 +310,26 @@ fn check_phase(
 /// 不平衡度 = (最大相电压偏差 / 平均电压) × 100%
 fn calc_voltage_unbalance(va: u16, vb: u16, vc: u16) -> u16 {
     let sum = (va as u32).wrapping_add(vb as u32).wrapping_add(vc as u32);
-    if sum == 0 { return 0; }
+    if sum == 0 {
+        return 0;
+    }
     let avg = sum / 3;
 
-    let da = if va as u32 > avg { va as u32 - avg } else { avg - va as u32 };
-    let db = if vb as u32 > avg { vb as u32 - avg } else { avg - vb as u32 };
-    let dc = if vc as u32 > avg { vc as u32 - avg } else { avg - vc as u32 };
+    let da = if va as u32 > avg {
+        va as u32 - avg
+    } else {
+        avg - va as u32
+    };
+    let db = if vb as u32 > avg {
+        vb as u32 - avg
+    } else {
+        avg - vb as u32
+    };
+    let dc = if vc as u32 > avg {
+        vc as u32 - avg
+    } else {
+        avg - vc as u32
+    };
 
     let max_dev = da.max(db).max(dc);
     // 不平衡度 = max_dev / avg * 10000 (0.01%)
@@ -459,14 +473,10 @@ impl EventDetector {
         let poll_ms: u16 = 200;
         if field_strength > self.magnetic_thresholds.field_strength {
             self.magnetic.ticks = self.magnetic.ticks.saturating_add(poll_ms);
-            if !self.magnetic.active
-                && self.magnetic.ticks >= self.magnetic_thresholds.duration_ms
+            if !self.magnetic.active && self.magnetic.ticks >= self.magnetic_thresholds.duration_ms
             {
                 self.magnetic.active = true;
-                self.trigger_external_with_value(
-                    MeterEvent::MagneticTamper,
-                    field_strength as u32,
-                );
+                self.trigger_external_with_value(MeterEvent::MagneticTamper, field_strength as u32);
                 defmt::warn!("磁场干扰检测: {} mT", field_strength);
                 return true;
             }
@@ -505,22 +515,37 @@ impl EventDetector {
         let mut new_events: u32 = 0;
 
         new_events |= check_phase(
-            &mut self.phase_a, data.voltage_a, data.current_a,
-            &self.v_thresholds, &self.c_thresholds,
-            MeterEvent::OverVoltageA, MeterEvent::UnderVoltageA,
-            MeterEvent::PhaseLossA, MeterEvent::OverCurrentA,
+            &mut self.phase_a,
+            data.voltage_a,
+            data.current_a,
+            &self.v_thresholds,
+            &self.c_thresholds,
+            MeterEvent::OverVoltageA,
+            MeterEvent::UnderVoltageA,
+            MeterEvent::PhaseLossA,
+            MeterEvent::OverCurrentA,
         );
         new_events |= check_phase(
-            &mut self.phase_b, data.voltage_b, data.current_b,
-            &self.v_thresholds, &self.c_thresholds,
-            MeterEvent::OverVoltageB, MeterEvent::UnderVoltageB,
-            MeterEvent::PhaseLossB, MeterEvent::OverCurrentB,
+            &mut self.phase_b,
+            data.voltage_b,
+            data.current_b,
+            &self.v_thresholds,
+            &self.c_thresholds,
+            MeterEvent::OverVoltageB,
+            MeterEvent::UnderVoltageB,
+            MeterEvent::PhaseLossB,
+            MeterEvent::OverCurrentB,
         );
         new_events |= check_phase(
-            &mut self.phase_c, data.voltage_c, data.current_c,
-            &self.v_thresholds, &self.c_thresholds,
-            MeterEvent::OverVoltageC, MeterEvent::UnderVoltageC,
-            MeterEvent::PhaseLossC, MeterEvent::OverCurrentC,
+            &mut self.phase_c,
+            data.voltage_c,
+            data.current_c,
+            &self.v_thresholds,
+            &self.c_thresholds,
+            MeterEvent::OverVoltageC,
+            MeterEvent::UnderVoltageC,
+            MeterEvent::PhaseLossC,
+            MeterEvent::OverCurrentC,
         );
 
         // 频率越限 (50Hz ± 2Hz → 4800~5200, 0.01Hz)
@@ -771,7 +796,9 @@ mod tests {
         let mut d = default_data();
         d.voltage_b = 17000;
         for _ in 0..20 {
-            if det.check(&d) & (1 << MeterEvent::UnderVoltageB as u8) != 0 { return; }
+            if det.check(&d) & (1 << MeterEvent::UnderVoltageB as u8) != 0 {
+                return;
+            }
         }
         panic!("under voltage should trigger");
     }
@@ -782,7 +809,9 @@ mod tests {
         let mut d = default_data();
         d.voltage_c = 500;
         for _ in 0..20 {
-            if det.check(&d) & (1 << MeterEvent::PhaseLossC as u8) != 0 { return; }
+            if det.check(&d) & (1 << MeterEvent::PhaseLossC as u8) != 0 {
+                return;
+            }
         }
         panic!("phase loss should trigger");
     }
@@ -793,7 +822,9 @@ mod tests {
         let mut d = default_data();
         d.current_a = 65000;
         for _ in 0..30 {
-            if det.check(&d) & (1 << MeterEvent::OverCurrentA as u8) != 0 { return; }
+            if det.check(&d) & (1 << MeterEvent::OverCurrentA as u8) != 0 {
+                return;
+            }
         }
         panic!("over current should trigger");
     }
@@ -804,7 +835,9 @@ mod tests {
         let mut d = default_data();
         d.frequency = 4700;
         for _ in 0..20 {
-            if det.check(&d) & (1 << MeterEvent::FrequencyDeviation as u8) != 0 { return; }
+            if det.check(&d) & (1 << MeterEvent::FrequencyDeviation as u8) != 0 {
+                return;
+            }
         }
         panic!("frequency deviation should trigger");
     }
@@ -822,7 +855,9 @@ mod tests {
         let mut det = EventDetector::new();
         let mut d = default_data();
         d.voltage_a = 27000;
-        for _ in 0..16 { det.check(&d); }
+        for _ in 0..16 {
+            det.check(&d);
+        }
         d.voltage_a = 22000;
         assert_eq!(det.check(&d) & (1 << MeterEvent::OverVoltageA as u8), 0);
     }
@@ -841,7 +876,9 @@ mod tests {
     #[test]
     fn test_event_log_overflow() {
         let mut det = EventDetector::new();
-        for _ in 0..300 { det.trigger_external(MeterEvent::BatteryLow); }
+        for _ in 0..300 {
+            det.trigger_external(MeterEvent::BatteryLow);
+        }
         assert_eq!(det.event_log().len(), MAX_EVENT_LOG);
     }
 
@@ -859,8 +896,10 @@ mod tests {
     fn test_custom_thresholds_instant() {
         let mut det = EventDetector::new();
         det.set_voltage_thresholds(VoltageThresholds {
-            over_voltage: 25000, under_voltage: 19000,
-            lost_voltage: 5000, duration_ms: 0,
+            over_voltage: 25000,
+            under_voltage: 19000,
+            lost_voltage: 5000,
+            duration_ms: 0,
         });
         let mut d = default_data();
         d.voltage_a = 25500;
@@ -871,11 +910,15 @@ mod tests {
     fn test_multi_phase() {
         let mut det = EventDetector::new();
         det.set_voltage_thresholds(VoltageThresholds {
-            over_voltage: 25000, under_voltage: 19000,
-            lost_voltage: 5000, duration_ms: 0,
+            over_voltage: 25000,
+            under_voltage: 19000,
+            lost_voltage: 5000,
+            duration_ms: 0,
         });
         let mut d = default_data();
-        d.voltage_a = 27000; d.voltage_b = 18000; d.voltage_c = 1000;
+        d.voltage_a = 27000;
+        d.voltage_b = 18000;
+        d.voltage_c = 1000;
         let ev = det.check(&d);
         assert_ne!(ev & (1 << MeterEvent::OverVoltageA as u8), 0);
         assert_ne!(ev & (1 << MeterEvent::UnderVoltageB as u8), 0);
@@ -917,7 +960,9 @@ mod tests {
         let mut det = EventDetector::new();
         // 默认阈值 500, duration 1000ms, poll 200ms → 需要 5 次
         for _ in 0..10 {
-            if det.check_magnetic(600) { return; }
+            if det.check_magnetic(600) {
+                return;
+            }
         }
         panic!("magnetic tamper should trigger");
     }
@@ -926,8 +971,10 @@ mod tests {
     fn test_event_active_query() {
         let mut det = EventDetector::new();
         det.set_voltage_thresholds(VoltageThresholds {
-            over_voltage: 25000, under_voltage: 19000,
-            lost_voltage: 5000, duration_ms: 0,
+            over_voltage: 25000,
+            under_voltage: 19000,
+            lost_voltage: 5000,
+            duration_ms: 0,
         });
         let mut d = default_data();
         d.voltage_a = 26000;

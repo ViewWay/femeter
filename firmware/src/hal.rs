@@ -105,9 +105,17 @@ impl HarmonicData {
 #[derive(Clone, Copy, Debug)]
 pub enum PowerQualityEvent {
     /// 电压暂降 (相号, 持续ms, 最低0.01V)
-    VoltageSag { phase: u8, duration_ms: u16, min_voltage: u16 },
+    VoltageSag {
+        phase: u8,
+        duration_ms: u16,
+        min_voltage: u16,
+    },
     /// 电压暂升 (相号, 持续ms, 最高0.01V)
-    VoltageSwell { phase: u8, duration_ms: u16, max_voltage: u16 },
+    VoltageSwell {
+        phase: u8,
+        duration_ms: u16,
+        max_voltage: u16,
+    },
     /// 频率越限 (当前0.01Hz)
     FrequencyDeviation { frequency: u16 },
     /// 三相不平衡度越限 (百分比 0.01%)
@@ -190,7 +198,9 @@ pub trait MeteringChip {
     fn chip_id(&mut self) -> Result<u32, MeteringError>;
 
     /// 芯片名称 (编译时已知)
-    fn name() -> &'static str where Self: Sized;
+    fn name() -> &'static str
+    where
+        Self: Sized;
 
     /// 是否支持基波/谐波分离测量
     fn supports_fundamental(&self) -> bool {
@@ -503,7 +513,7 @@ pub enum NetworkStatus {
 /// MQTT 连接配置
 #[derive(Clone, Copy, Debug)]
 pub struct MqttConfig {
-    pub broker: [u8; 64],  // URL (以 \0 结尾的 C 字符串风格)
+    pub broker: [u8; 64], // URL (以 \0 结尾的 C 字符串风格)
     pub port: u16,
     pub client_id: [u8; 32],
     pub username: [u8; 32],
@@ -560,7 +570,12 @@ pub trait CellularDriver {
     fn http_get(&mut self, url: &str) -> Result<HttpResult, CellularError>;
 
     /// HTTP POST
-    fn http_post(&mut self, url: &str, content_type: &str, body: &[u8]) -> Result<HttpResult, CellularError>;
+    fn http_post(
+        &mut self,
+        url: &str,
+        content_type: &str,
+        body: &[u8],
+    ) -> Result<HttpResult, CellularError>;
 
     /// 发送 SMS
     fn sms_send(&mut self, number: &str, text: &str) -> Result<(), CellularError>;
@@ -724,13 +739,27 @@ pub enum StorageRegion {
 /// 存储驱动接口
 pub trait StorageDriver {
     /// 读取数据
-    fn read(&mut self, region: StorageRegion, offset: u32, buf: &mut [u8]) -> Result<(), StorageError>;
+    fn read(
+        &mut self,
+        region: StorageRegion,
+        offset: u32,
+        buf: &mut [u8],
+    ) -> Result<(), StorageError>;
 
     /// 写入数据 (需先擦除)
-    fn write(&mut self, region: StorageRegion, offset: u32, data: &[u8]) -> Result<(), StorageError>;
+    fn write(
+        &mut self,
+        region: StorageRegion,
+        offset: u32,
+        data: &[u8],
+    ) -> Result<(), StorageError>;
 
     /// 擦除扇区 (内部: 2KB, 外部: 4KB)
-    fn erase_sector(&mut self, region: StorageRegion, sector_index: u32) -> Result<(), StorageError>;
+    fn erase_sector(
+        &mut self,
+        region: StorageRegion,
+        sector_index: u32,
+    ) -> Result<(), StorageError>;
 
     /// 获取区域总大小 (字节)
     fn capacity(&self, region: StorageRegion) -> u32;

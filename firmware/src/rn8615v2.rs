@@ -34,74 +34,74 @@ const CHIP_ID_VALUE: u32 = 0x8615_5000;
 
 pub mod reg {
     // ── 系统寄存器 ──
-    pub const CHIP_ID:      u8 = 0x00;
-    pub const SOFT_RESET:   u8 = 0x01;
-    pub const SYSCON:       u8 = 0x02;
-    pub const EMU:          u8 = 0x03;
+    pub const CHIP_ID: u8 = 0x00;
+    pub const SOFT_RESET: u8 = 0x01;
+    pub const SYSCON: u8 = 0x02;
+    pub const EMU: u8 = 0x03;
     pub const STARTCURRENT: u8 = 0x04;
-    pub const PQ_CTRL:      u8 = 0x05;  // 电网质量控制寄存器 (V2新增)
+    pub const PQ_CTRL: u8 = 0x05; // 电网质量控制寄存器 (V2新增)
 
     // ── 有功功率 ──
-    pub const PA:           u8 = 0x10;
-    pub const PB:           u8 = 0x11;
-    pub const PC:           u8 = 0x12;
-    pub const PT:           u8 = 0x13;
+    pub const PA: u8 = 0x10;
+    pub const PB: u8 = 0x11;
+    pub const PC: u8 = 0x12;
+    pub const PT: u8 = 0x13;
 
     // ── 无功功率 ──
-    pub const QA:           u8 = 0x14;
-    pub const QB:           u8 = 0x15;
-    pub const QC:           u8 = 0x16;
-    pub const QT:           u8 = 0x17;
+    pub const QA: u8 = 0x14;
+    pub const QB: u8 = 0x15;
+    pub const QC: u8 = 0x16;
+    pub const QT: u8 = 0x17;
 
     // ── 视在功率 ──
-    pub const SA:           u8 = 0x18;
-    pub const SB:           u8 = 0x19;
-    pub const SC:           u8 = 0x1A;
-    pub const ST:           u8 = 0x1B;
+    pub const SA: u8 = 0x18;
+    pub const SB: u8 = 0x19;
+    pub const SC: u8 = 0x1A;
+    pub const ST: u8 = 0x1B;
 
     // ── 基波有功功率 (V2新增) ──
-    pub const PA_FUND:      u8 = 0x1C;
-    pub const PB_FUND:      u8 = 0x1D;
-    pub const PC_FUND:      u8 = 0x1E;
-    pub const PT_FUND:      u8 = 0x1F;
+    pub const PA_FUND: u8 = 0x1C;
+    pub const PB_FUND: u8 = 0x1D;
+    pub const PC_FUND: u8 = 0x1E;
+    pub const PT_FUND: u8 = 0x1F;
 
     // ── 电压有效值 ──
-    pub const UA_RMS:       u8 = 0x20;
-    pub const UB_RMS:       u8 = 0x21;
-    pub const UC_RMS:       u8 = 0x22;
+    pub const UA_RMS: u8 = 0x20;
+    pub const UB_RMS: u8 = 0x21;
+    pub const UC_RMS: u8 = 0x22;
 
     // ── 电流有效值 ──
-    pub const IA_RMS:       u8 = 0x23;
-    pub const IB_RMS:       u8 = 0x24;
-    pub const IC_RMS:       u8 = 0x25;
-    pub const IN_RMS:       u8 = 0x26;
+    pub const IA_RMS: u8 = 0x23;
+    pub const IB_RMS: u8 = 0x24;
+    pub const IC_RMS: u8 = 0x25;
+    pub const IN_RMS: u8 = 0x26;
 
     // ── 频率 / 功率因数 / 相角 ──
-    pub const FREQ:         u8 = 0x30;
-    pub const PFA:          u8 = 0x31;
-    pub const PFB:          u8 = 0x32;
-    pub const PFC:          u8 = 0x33;
-    pub const PFT:          u8 = 0x34;
-    pub const PHA_UA_IA:    u8 = 0x35;
-    pub const PHA_UB_IB:    u8 = 0x36;
-    pub const PHA_UC_IC:    u8 = 0x37;
+    pub const FREQ: u8 = 0x30;
+    pub const PFA: u8 = 0x31;
+    pub const PFB: u8 = 0x32;
+    pub const PFC: u8 = 0x33;
+    pub const PFT: u8 = 0x34;
+    pub const PHA_UA_IA: u8 = 0x35;
+    pub const PHA_UB_IB: u8 = 0x36;
+    pub const PHA_UC_IC: u8 = 0x37;
 
     // ── 电能寄存器 ──
-    pub const ACTIVE_IMPORT:    u8 = 0x40;
-    pub const ACTIVE_EXPORT:    u8 = 0x41;
-    pub const REACTIVE_IMPORT:  u8 = 0x42;
-    pub const REACTIVE_EXPORT:  u8 = 0x43;
-    pub const ACTIVE_IMPORT_A:  u8 = 0x44;  // V2: 分相电能
-    pub const ACTIVE_IMPORT_B:  u8 = 0x45;
-    pub const ACTIVE_IMPORT_C:  u8 = 0x46;
+    pub const ACTIVE_IMPORT: u8 = 0x40;
+    pub const ACTIVE_EXPORT: u8 = 0x41;
+    pub const REACTIVE_IMPORT: u8 = 0x42;
+    pub const REACTIVE_EXPORT: u8 = 0x43;
+    pub const ACTIVE_IMPORT_A: u8 = 0x44; // V2: 分相电能
+    pub const ACTIVE_IMPORT_B: u8 = 0x45;
+    pub const ACTIVE_IMPORT_C: u8 = 0x46;
 
     // ── 谐波分析 (扩展到 63 次) ──
-    pub const HARMONIC_UA:      u8 = 0x50;
-    pub const HARMONIC_UB:      u8 = 0x51;
-    pub const HARMONIC_UC:      u8 = 0x52;
-    pub const HARMONIC_IA:      u8 = 0x53;
-    pub const HARMONIC_IB:      u8 = 0x54;
-    pub const HARMONIC_IC:      u8 = 0x55;
+    pub const HARMONIC_UA: u8 = 0x50;
+    pub const HARMONIC_UB: u8 = 0x51;
+    pub const HARMONIC_UC: u8 = 0x52;
+    pub const HARMONIC_IA: u8 = 0x53;
+    pub const HARMONIC_IB: u8 = 0x54;
+    pub const HARMONIC_IC: u8 = 0x55;
 
     // ── 间谐波 (V2新增) ──
     pub const INTERHARMONIC_UA: u8 = 0x58;
@@ -112,59 +112,59 @@ pub mod reg {
     pub const INTERHARMONIC_IC: u8 = 0x5D;
 
     // ── THD ──
-    pub const THD_UA:     u8 = 0x60;
-    pub const THD_UB:     u8 = 0x61;
-    pub const THD_UC:     u8 = 0x62;
-    pub const THD_IA:     u8 = 0x63;
-    pub const THD_IB:     u8 = 0x64;
-    pub const THD_IC:     u8 = 0x65;
+    pub const THD_UA: u8 = 0x60;
+    pub const THD_UB: u8 = 0x61;
+    pub const THD_UC: u8 = 0x62;
+    pub const THD_IA: u8 = 0x63;
+    pub const THD_IB: u8 = 0x64;
+    pub const THD_IC: u8 = 0x65;
 
     // ── 电网质量 (V2新增) ──
-    pub const VOLTAGE_UNBALANCE:  u8 = 0x70;
-    pub const CURRENT_UNBALANCE:  u8 = 0x71;
-    pub const FLICKER_PST:        u8 = 0x72;  // 短时闪变
-    pub const FLICKER_PLT:        u8 = 0x73;  // 长时闪变
-    pub const DC_COMPONENT_UA:    u8 = 0x74;  // A相电压直流分量
-    pub const DC_COMPONENT_UB:    u8 = 0x75;
-    pub const DC_COMPONENT_UC:    u8 = 0x76;
+    pub const VOLTAGE_UNBALANCE: u8 = 0x70;
+    pub const CURRENT_UNBALANCE: u8 = 0x71;
+    pub const FLICKER_PST: u8 = 0x72; // 短时闪变
+    pub const FLICKER_PLT: u8 = 0x73; // 长时闪变
+    pub const DC_COMPONENT_UA: u8 = 0x74; // A相电压直流分量
+    pub const DC_COMPONENT_UB: u8 = 0x75;
+    pub const DC_COMPONENT_UC: u8 = 0x76;
 
     // ── 电压暂降/暂升事件 (V2新增) ──
-    pub const SAG_SWELL_STATUS:    u8 = 0x78;
-    pub const SAG_SWELL_CFG:       u8 = 0x79;
-    pub const SAG_UA_THRESHOLD:    u8 = 0x7A;
-    pub const SWELL_UA_THRESHOLD:  u8 = 0x7B;
-    pub const SAG_UB_THRESHOLD:    u8 = 0x7C;
-    pub const SWELL_UB_THRESHOLD:  u8 = 0x7D;
-    pub const SAG_UC_THRESHOLD:    u8 = 0x7E;
-    pub const SWELL_UC_THRESHOLD:  u8 = 0x7F;
+    pub const SAG_SWELL_STATUS: u8 = 0x78;
+    pub const SAG_SWELL_CFG: u8 = 0x79;
+    pub const SAG_UA_THRESHOLD: u8 = 0x7A;
+    pub const SWELL_UA_THRESHOLD: u8 = 0x7B;
+    pub const SAG_UB_THRESHOLD: u8 = 0x7C;
+    pub const SWELL_UB_THRESHOLD: u8 = 0x7D;
+    pub const SAG_UC_THRESHOLD: u8 = 0x7E;
+    pub const SWELL_UC_THRESHOLD: u8 = 0x7F;
 
     // ── 防窃电 (增强版) ──
-    pub const ANTI_TAMPER_STAT:    u8 = 0x80;
-    pub const ANTI_TAMPER_CFG:     u8 = 0x81;
-    pub const DC_TAMPER_CFG:       u8 = 0x82;  // V2: 直流窃电检测
+    pub const ANTI_TAMPER_STAT: u8 = 0x80;
+    pub const ANTI_TAMPER_CFG: u8 = 0x81;
+    pub const DC_TAMPER_CFG: u8 = 0x82; // V2: 直流窃电检测
 
     // ── 校准寄存器 ──
-    pub const UGAIN_A:    u8 = 0x90;
-    pub const UGAIN_B:    u8 = 0x91;
-    pub const UGAIN_C:    u8 = 0x92;
-    pub const IGAIN_A:    u8 = 0x93;
-    pub const IGAIN_B:    u8 = 0x94;
-    pub const IGAIN_C:    u8 = 0x95;
-    pub const PGAIN_A:    u8 = 0x96;
-    pub const PGAIN_B:    u8 = 0x97;
-    pub const PGAIN_C:    u8 = 0x98;
-    pub const QGAIN_A:    u8 = 0x99;
-    pub const QGAIN_B:    u8 = 0x9A;
-    pub const QGAIN_C:    u8 = 0x9B;
-    pub const PHCAL_A:    u8 = 0x9C;
-    pub const PHCAL_B:    u8 = 0x9D;
-    pub const PHCAL_C:    u8 = 0x9E;
-    pub const POFFSET_A:  u8 = 0x9F;
-    pub const POFFSET_B:  u8 = 0xA0;
-    pub const POFFSET_C:  u8 = 0xA1;
-    pub const QOFFSET_A:  u8 = 0xA2;
-    pub const QOFFSET_B:  u8 = 0xA3;
-    pub const QOFFSET_C:  u8 = 0xA4;
+    pub const UGAIN_A: u8 = 0x90;
+    pub const UGAIN_B: u8 = 0x91;
+    pub const UGAIN_C: u8 = 0x92;
+    pub const IGAIN_A: u8 = 0x93;
+    pub const IGAIN_B: u8 = 0x94;
+    pub const IGAIN_C: u8 = 0x95;
+    pub const PGAIN_A: u8 = 0x96;
+    pub const PGAIN_B: u8 = 0x97;
+    pub const PGAIN_C: u8 = 0x98;
+    pub const QGAIN_A: u8 = 0x99;
+    pub const QGAIN_B: u8 = 0x9A;
+    pub const QGAIN_C: u8 = 0x9B;
+    pub const PHCAL_A: u8 = 0x9C;
+    pub const PHCAL_B: u8 = 0x9D;
+    pub const PHCAL_C: u8 = 0x9E;
+    pub const POFFSET_A: u8 = 0x9F;
+    pub const POFFSET_B: u8 = 0xA0;
+    pub const POFFSET_C: u8 = 0xA1;
+    pub const QOFFSET_A: u8 = 0xA2;
+    pub const QOFFSET_B: u8 = 0xA3;
+    pub const QOFFSET_C: u8 = 0xA4;
 }
 
 /* ================================================================== */
@@ -199,7 +199,8 @@ fn spi_write(spi: &mut dyn SpiTransfer, addr: u8, data: u32) -> Result<(), Meter
     let dl = (data & 0xFF) as u8;
     let crc = crc8(&[addr_byte, dh, dm, dl]);
     let tx = [addr_byte, dh, dm, dl, crc];
-    spi.transfer(&tx, &mut [0; 5]).map_err(|_| MeteringError::SpiError)
+    spi.transfer(&tx, &mut [0; 5])
+        .map_err(|_| MeteringError::SpiError)
 }
 
 fn spi_read(spi: &mut dyn SpiTransfer, addr: u8) -> Result<u32, MeteringError> {
@@ -207,8 +208,10 @@ fn spi_read(spi: &mut dyn SpiTransfer, addr: u8) -> Result<u32, MeteringError> {
     let tx = [addr_byte, 0x00];
     let mut rx = [0u8; 6];
 
-    spi.transfer(&tx, &mut rx[..2]).map_err(|_| MeteringError::SpiError)?;
-    spi.transfer(&[0xFF; 4], &mut rx[2..]).map_err(|_| MeteringError::SpiError)?;
+    spi.transfer(&tx, &mut rx[..2])
+        .map_err(|_| MeteringError::SpiError)?;
+    spi.transfer(&[0xFF; 4], &mut rx[2..])
+        .map_err(|_| MeteringError::SpiError)?;
 
     let dh = rx[2];
     let dm = rx[3];
@@ -277,14 +280,18 @@ impl RN8615V2 {
 
         // 设置各相阈值
         let regs = [
-            reg::SAG_UA_THRESHOLD, reg::SAG_UB_THRESHOLD, reg::SAG_UC_THRESHOLD,
+            reg::SAG_UA_THRESHOLD,
+            reg::SAG_UB_THRESHOLD,
+            reg::SAG_UC_THRESHOLD,
         ];
         for (i, &reg_addr) in regs.iter().enumerate() {
             spi_write(self.spi, reg_addr, sag_threshold[i] as u32)?;
         }
 
         let regs = [
-            reg::SWELL_UA_THRESHOLD, reg::SWELL_UB_THRESHOLD, reg::SWELL_UC_THRESHOLD,
+            reg::SWELL_UA_THRESHOLD,
+            reg::SWELL_UB_THRESHOLD,
+            reg::SWELL_UC_THRESHOLD,
         ];
         for (i, &reg_addr) in regs.iter().enumerate() {
             spi_write(self.spi, reg_addr, swell_threshold[i] as u32)?;
@@ -324,7 +331,11 @@ impl RN8615V2 {
     }
 
     /// 读取间谐波 (指定相, 指定次数)
-    pub fn read_interharmonic_raw(&mut self, phase: Phase, order: u8) -> Result<u16, MeteringError> {
+    pub fn read_interharmonic_raw(
+        &mut self,
+        phase: Phase,
+        order: u8,
+    ) -> Result<u16, MeteringError> {
         if order > 63 {
             return Err(MeteringError::InvalidRegister);
         }
@@ -349,7 +360,13 @@ impl RN8615V2 {
             let swell_c = status & 0x20 != 0;
 
             if sag_a || sag_b || sag_c {
-                let phase = if sag_a { 0 } else if sag_b { 1 } else { 2 };
+                let phase = if sag_a {
+                    0
+                } else if sag_b {
+                    1
+                } else {
+                    2
+                };
                 // 清除事件
                 let _ = spi_write(self.spi, reg::SAG_SWELL_STATUS, 0);
                 return Some(PowerQualityEvent::VoltageSag {
@@ -359,7 +376,13 @@ impl RN8615V2 {
                 });
             }
             if swell_a || swell_b || swell_c {
-                let phase = if swell_a { 0 } else if swell_b { 1 } else { 2 };
+                let phase = if swell_a {
+                    0
+                } else if swell_b {
+                    1
+                } else {
+                    2
+                };
                 let _ = spi_write(self.spi, reg::SAG_SWELL_STATUS, 0);
                 return Some(PowerQualityEvent::VoltageSwell {
                     phase,
@@ -475,7 +498,9 @@ impl MeteringChip for RN8615V2 {
             reactive_power_total: signed24(qt_raw),
             frequency: if freq_raw > 0 {
                 (8192000.0 / (2.0 * freq_raw as f32) * 100.0) as u16
-            } else { 5000 },
+            } else {
+                5000
+            },
             power_factor_a: pf_convert(pfa_raw),
             power_factor_b: pf_convert(pfb_raw),
             power_factor_c: pf_convert(pfc_raw),

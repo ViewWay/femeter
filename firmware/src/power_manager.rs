@@ -13,10 +13,10 @@
 /* ================================================================== */
 
 use crate::board::pins;
-use crate::board::{gpio_read_pin, gpio_set_fcr, gpio_enable_input, gpio_enable_pullup};
+use crate::board::{gpio_enable_input, gpio_enable_pullup, gpio_read_pin, gpio_set_fcr};
+use crate::board::{read_reg, write_reg};
 use crate::fm33lg0;
 use crate::fm33lg0::base;
-use crate::board::{write_reg, read_reg};
 
 /* ================================================================== */
 /*  低功耗状态                                                         */
@@ -319,8 +319,10 @@ impl PowerManager {
 
             // 使能 GPIO 唤醒
             let gc = fm33lg0::gpio_common();
-            write_reg(&gc.pinwken as *const u32 as *mut u32,
-                read_reg(&gc.pinwken as *const u32) | 0x03);
+            write_reg(
+                &gc.pinwken as *const u32 as *mut u32,
+                read_reg(&gc.pinwken as *const u32) | 0x03,
+            );
         }
 
         cortex_m::asm::wfi();
@@ -359,8 +361,10 @@ impl PowerManager {
         unsafe {
             // GPIO 唤醒（按键）
             let gc = fm33lg0::gpio_common();
-            write_reg(&gc.pinwken as *const u32 as *mut u32,
-                read_reg(&gc.pinwken as *const u32) | 0x03);
+            write_reg(
+                &gc.pinwken as *const u32 as *mut u32,
+                read_reg(&gc.pinwken as *const u32) | 0x03,
+            );
 
             // LPUART 唤醒（DeepSleep 下 UART2 接收唤醒）
             if self.lpuart_wakeup {
@@ -401,7 +405,9 @@ impl PowerManager {
             let mut timeout = 10000u32;
             while (read_reg(&cmu.isr as *const u32) & 0x04) == 0 {
                 timeout -= 1;
-                if timeout == 0 { break; }
+                if timeout == 0 {
+                    break;
+                }
             }
         }
 
@@ -428,26 +434,35 @@ impl PowerManager {
             match target_state {
                 PowerState::LowPowerRun => {
                     // 关闭 SPI0, SPI1（计量和 Flash 不需要持续运行）
-                    write_reg(&cmu.pclken1 as *const u32 as *mut u32,
-                        read_reg(&cmu.pclken1 as *const u32) & !0x05);
+                    write_reg(
+                        &cmu.pclken1 as *const u32 as *mut u32,
+                        read_reg(&cmu.pclken1 as *const u32) & !0x05,
+                    );
                 }
                 PowerState::Sleep => {
                     // Sleep: 关闭 SPI, LCD
-                    write_reg(&cmu.pclken1 as *const u32 as *mut u32,
-                        read_reg(&cmu.pclken1 as *const u32)
-                        & !self.clock_gate.sleep_mask_pclken1);
+                    write_reg(
+                        &cmu.pclken1 as *const u32 as *mut u32,
+                        read_reg(&cmu.pclken1 as *const u32) & !self.clock_gate.sleep_mask_pclken1,
+                    );
                 }
                 PowerState::DeepSleep | PowerState::DeepSleepRamRetain => {
                     // DeepSleep: 仅保留 LPUART
-                    write_reg(&cmu.pclken1 as *const u32 as *mut u32,
+                    write_reg(
+                        &cmu.pclken1 as *const u32 as *mut u32,
                         read_reg(&cmu.pclken1 as *const u32)
-                        & !self.clock_gate.deep_sleep_mask_pclken1);
-                    write_reg(&cmu.pclken2 as *const u32 as *mut u32,
+                            & !self.clock_gate.deep_sleep_mask_pclken1,
+                    );
+                    write_reg(
+                        &cmu.pclken2 as *const u32 as *mut u32,
                         read_reg(&cmu.pclken2 as *const u32)
-                        & !self.clock_gate.deep_sleep_mask_pclken2);
-                    write_reg(&cmu.pclken3 as *const u32 as *mut u32,
+                            & !self.clock_gate.deep_sleep_mask_pclken2,
+                    );
+                    write_reg(
+                        &cmu.pclken3 as *const u32 as *mut u32,
                         read_reg(&cmu.pclken3 as *const u32)
-                        & !self.clock_gate.deep_sleep_mask_pclken3);
+                            & !self.clock_gate.deep_sleep_mask_pclken3,
+                    );
                 }
                 _ => {}
             }
@@ -458,12 +473,18 @@ impl PowerManager {
     fn restore_clock_gate(&self) {
         let cmu = fm33lg0::cmu();
         unsafe {
-            write_reg(&cmu.pclken1 as *const u32 as *mut u32,
-                read_reg(&cmu.pclken1 as *const u32) | 0x7F);
-            write_reg(&cmu.pclken2 as *const u32 as *mut u32,
-                read_reg(&cmu.pclken2 as *const u32) | 0x4D);
-            write_reg(&cmu.pclken3 as *const u32 as *mut u32,
-                read_reg(&cmu.pclken3 as *const u32) | 0x43);
+            write_reg(
+                &cmu.pclken1 as *const u32 as *mut u32,
+                read_reg(&cmu.pclken1 as *const u32) | 0x7F,
+            );
+            write_reg(
+                &cmu.pclken2 as *const u32 as *mut u32,
+                read_reg(&cmu.pclken2 as *const u32) | 0x4D,
+            );
+            write_reg(
+                &cmu.pclken3 as *const u32 as *mut u32,
+                read_reg(&cmu.pclken3 as *const u32) | 0x43,
+            );
         }
     }
 
@@ -549,7 +570,9 @@ impl PowerManager {
             let mut timeout = 10000u32;
             while (read_reg(&adc.isr as *const u32) & 0x01) == 0 {
                 timeout -= 1;
-                if timeout == 0 { return 0; }
+                if timeout == 0 {
+                    return 0;
+                }
             }
 
             let val = read_reg(&adc.dr as *const u32) & 0x0FFF;
@@ -648,12 +671,8 @@ pub fn freertos_pre_sleep_processing(pm: &PowerManager) -> u32 {
             // 低功耗运行：允许短时 WFI
             10
         }
-        PowerState::Sleep => {
-            1000
-        }
-        PowerState::DeepSleep | PowerState::DeepSleepRamRetain => {
-            u32::MAX
-        }
+        PowerState::Sleep => 1000,
+        PowerState::DeepSleep | PowerState::DeepSleepRamRetain => u32::MAX,
     }
 }
 

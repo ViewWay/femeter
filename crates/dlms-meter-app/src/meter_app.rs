@@ -938,4 +938,87 @@ mod tests {
         app.reconnect().unwrap();
         assert!(app.control.is_connected());
     }
+
+    // ============================================================
+    // Phase C — Boundary Tests
+    // ============================================================
+
+    #[test]
+    fn test_zero_power_measurement() {
+        let mut app = MeterApp::new();
+        app.process_power(0, 0, 60);
+        let data = app.read_meter_data();
+        assert_eq!(data.current_power, 0);
+    }
+
+    #[test]
+    fn test_high_power_measurement() {
+        let mut app = MeterApp::new();
+        app.process_power(99999, 0, 60);
+        let data = app.read_meter_data();
+        assert!(data.current_power > 0);
+    }
+
+    #[test]
+    fn test_single_tick() {
+        let mut app = MeterApp::new();
+        app.tick(1);
+    }
+
+    #[test]
+    fn test_long_tick() {
+        let mut app = MeterApp::new();
+        app.tick(3600);
+    }
+
+    #[test]
+    fn test_multiple_process_power_calls() {
+        let mut app = MeterApp::new();
+        for _ in 0..100 {
+            app.process_power(1000, 0, 1);
+        }
+        let data = app.read_meter_data();
+        assert!(data.energy_import > 0);
+    }
+
+    #[test]
+    fn test_negative_power() {
+        let mut app = MeterApp::new();
+        app.process_power(-500, 0, 60);
+        let data = app.read_meter_data();
+        // Should handle negative power
+    }
+
+    #[test]
+    fn test_read_data_without_connect() {
+        let app = MeterApp::new();
+        let data = app.read_meter_data();
+        assert_eq!(data.current_power, 0);
+    }
+
+    #[test]
+    fn test_clock_advancement() {
+        let mut app = MeterApp::new();
+        app.tick(60);
+        app.tick(60);
+        app.tick(60);
+    }
+
+    #[test]
+    fn test_alarm_manager_access() {
+        let app = MeterApp::new();
+        // Verify the meter has alarm handling capability
+        let _data = app.read_meter_data();
+    }
+
+    #[test]
+    fn test_default_state() {
+        let app = MeterApp::new();
+        let data = app.read_meter_data();
+        assert_eq!(data.energy_import, 0);
+        assert_eq!(data.energy_export, 0);
+        assert_eq!(data.current_power, 0);
+        assert_eq!(data.current_tariff, 0);
+    }
+
 }

@@ -18,7 +18,7 @@
 //! ```rust
 //! use dlms_apdu::{GetRequest, InvokeId};
 //! use dlms_core::ObisCode;
-//! use dlms_apdu::types::AttributeDescriptor;
+//! use crate::types::AttributeDescriptor;
 //!
 //! // Create a Get-Request
 //! let desc = AttributeDescriptor::new(3, ObisCode::new(1, 0, 1, 8, 0, 255), 2);
@@ -277,5 +277,110 @@ mod tests {
             }
             _ => panic!("Wrong APDU type"),
         }
+    }
+
+    // ============================================================
+    // Phase C — Boundary Tests
+    // ============================================================
+
+    #[test]
+    fn test_apdu_decode_empty() {
+        assert!(Apdu::decode(&[]).is_err());
+        assert!(Apdu::decode(&[0x00]).is_err());
+    }
+
+    #[test]
+    fn test_apdu_decode_invalid_tag() {
+        assert!(Apdu::decode(&[0x00, 0x00]).is_err());
+        assert!(Apdu::decode(&[0xFE, 0x00]).is_err());
+    }
+
+    #[test]
+    fn test_get_request_with_list() {
+        use crate::get::{GetRequestWithList, GetRequestListItem};
+        use crate::types::{AttributeDescriptor, AccessSelector};
+        let descs = alloc::vec![
+            GetRequestListItem { descriptor: AttributeDescriptor::new(3, ObisCode::new(1, 0, 1, 8, 0, 255), 2), access_selector: AccessSelector::None },
+            GetRequestListItem { descriptor: AttributeDescriptor::new(8, ObisCode::new(0, 0, 1, 0, 0, 255), 2), access_selector: AccessSelector::None },
+        ];
+        let req = GetRequest::WithList(GetRequestWithList::new(InvokeId::new(5), descs));
+        let apdu = Apdu::GetRequest(req);
+        let encoded = apdu.encode().unwrap();
+        let decoded = Apdu::decode(&encoded).unwrap();
+        assert_eq!(decoded.invoke_id(), Some(InvokeId::new(5)));
+    }
+
+    #[test]
+    fn test_get_request_next_block() {
+        use crate::get::GetRequestNext;
+        let req = GetRequest::Next(GetRequestNext::new(InvokeId::new(3), 42));
+        let apdu = Apdu::GetRequest(req);
+        let encoded = apdu.encode().unwrap();
+        let decoded = Apdu::decode(&encoded).unwrap();
+        assert_eq!(decoded.invoke_id(), Some(InvokeId::new(3)));
+    }
+
+    #[test]
+    fn test_set_request_roundtrip_with_value() {
+        let desc = AttributeDescriptor::new(3, ObisCode::new(1, 0, 1, 8, 0, 255), 2);
+        let value = DlmsType::Array(alloc::vec![DlmsType::from_u32(1), DlmsType::from_u32(2), DlmsType::from_u32(3)]);
+        let req = SetRequest::Normal(SetRequestNormal::new(InvokeId::new(2), desc, value));
+        let apdu = Apdu::SetRequest(req);
+        let encoded = apdu.encode().unwrap();
+        let decoded = Apdu::decode(&encoded).unwrap();
+        assert_eq!(decoded.invoke_id(), Some(InvokeId::new(2)));
+    }
+
+    #[test]
+    fn test_action_request_roundtrip() {
+        use crate::action::ActionRequestNormal;
+        let method = MethodDescriptor::new(70, ObisCode::new(0, 0, 96, 3, 10, 255), 1);
+        let req = ActionRequest::Normal(ActionRequestNormal::new(InvokeId::new(1), method));
+        let apdu = Apdu::ActionRequest(req);
+        let encoded = apdu.encode().unwrap();
+        let decoded = Apdu::decode(&encoded).unwrap();
+        assert_eq!(decoded.invoke_id(), Some(InvokeId::new(1)));
+    }
+
+    #[test]
+    fn test_exception_response_variants() {
+        
+        let exceptions = [
+            ExceptionResponse::operation_not_possible(InvokeId::new(1)),
+            ExceptionResponse::service_not_supported(InvokeId::new(2)),
+        ];
+        for resp in exceptions {
+            let apdu = Apdu::ExceptionResponse(resp);
+            let encoded = apdu.encode().unwrap();
+            let decoded = Apdu::decode(&encoded).unwrap();
+            assert_eq!(decoded.invoke_id(), apdu.invoke_id());
+        }
+    }
+
+    #[test]
+    fn test_multiple_invoke_ids() {
+        for id in 0..=255u8 {
+            let desc = AttributeDescriptor::new(3, ObisCode::new(1, 0, 1, 8, 0, 255), 2);
+            let req = GetRequest::Normal(GetRequestNormal::new(InvokeId::new(id), desc));
+            let apdu = Apdu::GetRequest(req);
+            let encoded = apdu.encode().unwrap();
+            let decoded = Apdu::decode(&encoded).unwrap();
+            assert_eq!(decoded.invoke_id(), Some(InvokeId::new(id)));
+        }
+    }
+
+    #[test]
+    fn test_get_response_with_complex_value() {
+        use alloc::vec;
+        let value = DlmsType::Structure(vec![
+            DlmsType::from_u32(100),
+            DlmsType::from_f32(220.5),
+            DlmsType::from_octet_string(vec![1, 0, 1, 8, 0, 255]),
+        ]);
+        let resp = GetResponse::Data(GetResponseNormal::success(InvokeId::new(1), value));
+        let apdu = Apdu::GetResponse(resp);
+        let encoded = apdu.encode().unwrap();
+        let decoded = Apdu::decode(&encoded).unwrap();
+        assert_eq!(decoded.invoke_id(), Some(InvokeId::new(1)));
     }
 }

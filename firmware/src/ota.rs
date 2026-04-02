@@ -41,12 +41,19 @@ pub struct FirmwareVersion {
 
 impl FirmwareVersion {
     pub const fn new(major: u8, minor: u8, patch: u8, build: u8) -> Self {
-        Self { major, minor, patch, build }
+        Self {
+            major,
+            minor,
+            patch,
+            build,
+        }
     }
 
     pub fn as_u32(&self) -> u32 {
-        (self.major as u32) << 24 | (self.minor as u32) << 16
-            | (self.patch as u32) << 8 | (self.build as u32)
+        (self.major as u32) << 24
+            | (self.minor as u32) << 16
+            | (self.patch as u32) << 8
+            | (self.build as u32)
     }
 
     pub fn to_str(&self) -> [u8; 16] {
@@ -54,13 +61,16 @@ impl FirmwareVersion {
         s[0] = b'v';
         let v2s = |v: u8| -> [u8; 2] { [b'0' + (v / 10), b'0' + (v % 10)] };
         let mj = v2s(self.major);
-        s[1] = mj[0]; s[2] = mj[1];
+        s[1] = mj[0];
+        s[2] = mj[1];
         s[3] = b'.';
         let mn = v2s(self.minor);
-        s[4] = mn[0]; s[5] = mn[1];
+        s[4] = mn[0];
+        s[5] = mn[1];
         s[6] = b'.';
         let pa = v2s(self.patch);
-        s[7] = pa[0]; s[8] = pa[1];
+        s[7] = pa[0];
+        s[8] = pa[1];
         s[9] = b'.';
         s[10] = b'0' + (self.build / 100);
         s[11] = b'0' + ((self.build / 10) % 10);
@@ -150,12 +160,24 @@ pub trait OtaFlash {
 /// 占位 OTA Flash 实现 — 后续替换为实际内部 Flash 驱动
 pub struct InternalFlash;
 impl OtaFlash for InternalFlash {
-    fn flash_read(_addr: u32, _buf: &mut [u8]) -> Result<(), ()> { Ok(()) }
-    fn flash_write(_addr: u32, _data: &[u8]) -> Result<(), ()> { Ok(()) }
-    fn flash_erase_sector(_addr: u32) -> Result<(), ()> { Ok(()) }
-    fn get_active_bank() -> u8 { 1 }
-    fn set_boot_bank(_bank: u8) -> Result<(), ()> { Ok(()) }
-    fn system_reset() -> ! { loop {} }
+    fn flash_read(_addr: u32, _buf: &mut [u8]) -> Result<(), ()> {
+        Ok(())
+    }
+    fn flash_write(_addr: u32, _data: &[u8]) -> Result<(), ()> {
+        Ok(())
+    }
+    fn flash_erase_sector(_addr: u32) -> Result<(), ()> {
+        Ok(())
+    }
+    fn get_active_bank() -> u8 {
+        1
+    }
+    fn set_boot_bank(_bank: u8) -> Result<(), ()> {
+        Ok(())
+    }
+    fn system_reset() -> ! {
+        loop {}
+    }
 }
 
 pub struct OtaManager<F: OtaFlash> {
@@ -180,7 +202,10 @@ impl<F: OtaFlash> OtaManager<F> {
                 history: [UpgradeRecord {
                     from_version: FirmwareVersion::new(0, 0, 0, 0),
                     to_version: FirmwareVersion::new(0, 0, 0, 0),
-                    timestamp: 0, result: 0, bank: 0, source: 0,
+                    timestamp: 0,
+                    result: 0,
+                    bank: 0,
+                    source: 0,
                     reserved: [0; 10],
                 }; 8],
             },
@@ -188,16 +213,24 @@ impl<F: OtaFlash> OtaManager<F> {
         }
     }
 
-    pub fn state(&self) -> OtaState { self.state }
-    pub fn active_bank(&self) -> u8 { self.upgrade_info.active_bank }
-    pub fn received_bytes(&self) -> u32 { self.received_bytes }
+    pub fn state(&self) -> OtaState {
+        self.state
+    }
+    pub fn active_bank(&self) -> u8 {
+        self.upgrade_info.active_bank
+    }
+    pub fn received_bytes(&self) -> u32 {
+        self.received_bytes
+    }
 
     pub fn upgrade_history(&self) -> &[UpgradeRecord] {
         &self.upgrade_info.history
     }
 
     pub fn start_receive(&mut self) -> Result<(), ()> {
-        if self.state != OtaState::Idle { return Err(()); }
+        if self.state != OtaState::Idle {
+            return Err(());
+        }
         self.state = OtaState::Receiving;
         self.received_bytes = 0;
         self.running_crc = 0;
@@ -205,7 +238,9 @@ impl<F: OtaFlash> OtaManager<F> {
     }
 
     pub fn write_chunk(&mut self, offset: u32, data: &[u8]) -> Result<(), ()> {
-        if self.state != OtaState::Receiving { return Err(()); }
+        if self.state != OtaState::Receiving {
+            return Err(());
+        }
         let write_addr = addr::OTA_START + offset;
         if write_addr + data.len() as u32 > addr::OTA_START + addr::OTA_SIZE {
             return Err(());
@@ -225,8 +260,35 @@ impl<F: OtaFlash> OtaManager<F> {
         Ok(())
     }
 
-    pub fn finalize_and_install(&mut self, source: u8) -> Result<OtaState, OtaState> {
-        if self.state != OtaState::Receiving { return Err(self.state); }
+    /// 版本降级检查: 新版本必须 >= 当前版本
+    /// `current_version`: 当前运行的固件版本
+    /// 返回 true 允许升级
+    pub fn check_version_allow(
+        current_version: &FirmwareVersion,
+        new_version: &FirmwareVersion,
+    ) -> bool {
+        new_version.as_u32() >= current_version.as_u32()
+    }
+
+    /// 获取升级进度百分比 (0~100)
+    pub fn progress_percent(&self) -> u8 {
+        if self.state == OtaState::Idle || self.received_bytes == 0 {
+            return 0;
+        }
+        // 估算: 假设最大固件大小为 APP_MAX_SIZE
+        let pct = ((self.received_bytes as u64 * 100) / addr::APP_MAX_SIZE as u64) as u8;
+        pct.min(100)
+    }
+
+    /// 带版本检查的 finalize_and_install
+    pub fn finalize_and_install_with_version_check(
+        &mut self,
+        source: u8,
+        current_version: &FirmwareVersion,
+    ) -> Result<OtaState, OtaState> {
+        if self.state != OtaState::Receiving {
+            return Err(self.state);
+        }
         self.state = OtaState::Received;
 
         let mut header_buf = [0u8; FirmwareHeader::SIZE];
@@ -242,6 +304,14 @@ impl<F: OtaFlash> OtaManager<F> {
             self.upgrade_info.error_code = 1;
             return Err(self.state);
         }
+
+        // 版本降级检查
+        if !Self::check_version_allow(current_version, &header.version) {
+            self.state = OtaState::Failed;
+            self.upgrade_info.error_code = 3; // 版本降级
+            return Err(self.state);
+        }
+
         if self.running_crc != header.crc32 {
             self.state = OtaState::Failed;
             self.upgrade_info.error_code = 2;
@@ -249,9 +319,21 @@ impl<F: OtaFlash> OtaManager<F> {
         }
 
         self.state = OtaState::Verified;
-        let target_bank = if self.upgrade_info.active_bank == 1 { 2 } else { 1 };
-        let target_addr = if target_bank == 1 { addr::APP1_START } else { addr::APP2_START };
-        let target_size = if target_bank == 1 { addr::APP1_SIZE } else { addr::APP2_SIZE };
+        let target_bank = if self.upgrade_info.active_bank == 1 {
+            2
+        } else {
+            1
+        };
+        let target_addr = if target_bank == 1 {
+            addr::APP1_START
+        } else {
+            addr::APP2_START
+        };
+        let target_size = if target_bank == 1 {
+            addr::APP1_SIZE
+        } else {
+            addr::APP2_SIZE
+        };
 
         self.state = OtaState::Installing;
         let mut erase_addr = target_addr;
@@ -276,7 +358,11 @@ impl<F: OtaFlash> OtaManager<F> {
                 self.upgrade_info.error_code = 5;
                 self.state
             })?;
-            F::flash_write(target_addr + (copy_addr - firmware_start), &buf[..chunk_size]).map_err(|_| {
+            F::flash_write(
+                target_addr + (copy_addr - firmware_start),
+                &buf[..chunk_size],
+            )
+            .map_err(|_| {
                 self.state = OtaState::Failed;
                 self.upgrade_info.error_code = 5;
                 self.state
@@ -305,7 +391,11 @@ impl<F: OtaFlash> OtaManager<F> {
     }
 
     pub fn rollback(&mut self) -> Result<(), ()> {
-        let rollback_bank = if self.upgrade_info.active_bank == 1 { 2 } else { 1 };
+        let rollback_bank = if self.upgrade_info.active_bank == 1 {
+            2
+        } else {
+            1
+        };
         F::set_boot_bank(rollback_bank)?;
         self.upgrade_info.active_bank = rollback_bank;
         Ok(())
@@ -322,10 +412,8 @@ impl<F: OtaFlash> OtaManager<F> {
 /* ── CRC32 ── */
 
 const CRC32_TABLE: [u32; 16] = [
-    0x00000000, 0x1DB71064, 0x3B6E20C8, 0x26D930AC,
-    0x76DC4190, 0x6B6B51F4, 0x4DB26158, 0x5005713C,
-    0xEDB88320, 0xF00F9344, 0xD6D6A3E8, 0xCB61B38C,
-    0x9B64C2B0, 0x86D3CE2D, 0xA00AE278, 0xBDBDF21C,
+    0x00000000, 0x1DB71064, 0x3B6E20C8, 0x26D930AC, 0x76DC4190, 0x6B6B51F4, 0x4DB26158, 0x5005713C,
+    0xEDB88320, 0xF00F9344, 0xD6D6A3E8, 0xCB61B38C, 0x9B64C2B0, 0x86D3CE2D, 0xA00AE278, 0xBDBDF21C,
 ];
 
 fn crc32_update(crc: u32, byte: u8) -> u32 {
@@ -356,12 +444,24 @@ mod tests {
 
     struct MockFlash;
     impl OtaFlash for MockFlash {
-        fn flash_read(_a: u32, _b: &mut [u8]) -> Result<(), ()> { Ok(()) }
-        fn flash_write(_a: u32, _b: &[u8]) -> Result<(), ()> { Ok(()) }
-        fn flash_erase_sector(_a: u32) -> Result<(), ()> { Ok(()) }
-        fn get_active_bank() -> u8 { 1 }
-        fn set_boot_bank(_b: u8) -> Result<(), ()> { Ok(()) }
-        fn system_reset() -> ! { loop {} }
+        fn flash_read(_a: u32, _b: &mut [u8]) -> Result<(), ()> {
+            Ok(())
+        }
+        fn flash_write(_a: u32, _b: &[u8]) -> Result<(), ()> {
+            Ok(())
+        }
+        fn flash_erase_sector(_a: u32) -> Result<(), ()> {
+            Ok(())
+        }
+        fn get_active_bank() -> u8 {
+            1
+        }
+        fn set_boot_bank(_b: u8) -> Result<(), ()> {
+            Ok(())
+        }
+        fn system_reset() -> ! {
+            loop {}
+        }
     }
 
     #[test]
@@ -373,8 +473,12 @@ mod tests {
 
     #[test]
     fn test_version_compare() {
-        assert!(FirmwareVersion::new(1, 3, 0, 0).as_u32() > FirmwareVersion::new(1, 2, 0, 0).as_u32());
-        assert!(FirmwareVersion::new(2, 0, 0, 0).as_u32() > FirmwareVersion::new(1, 9, 9, 9).as_u32());
+        assert!(
+            FirmwareVersion::new(1, 3, 0, 0).as_u32() > FirmwareVersion::new(1, 2, 0, 0).as_u32()
+        );
+        assert!(
+            FirmwareVersion::new(2, 0, 0, 0).as_u32() > FirmwareVersion::new(1, 9, 9, 9).as_u32()
+        );
     }
 
     #[test]
@@ -402,7 +506,10 @@ mod tests {
             magic: FirmwareHeader::MAGIC,
             version: FirmwareVersion::new(1, 0, 0, 0),
             firmware_size: 100000,
-            crc32: 0, target_bank: 1, flags: 0, timestamp: 0,
+            crc32: 0,
+            target_bank: 1,
+            flags: 0,
+            timestamp: 0,
             prev_version: FirmwareVersion::new(0, 9, 0, 0),
             reserved: [0; 16],
         };
@@ -415,7 +522,10 @@ mod tests {
             magic: 0xBAD00000,
             version: FirmwareVersion::new(1, 0, 0, 0),
             firmware_size: 100000,
-            crc32: 0, target_bank: 1, flags: 0, timestamp: 0,
+            crc32: 0,
+            target_bank: 1,
+            flags: 0,
+            timestamp: 0,
             prev_version: FirmwareVersion::new(0, 9, 0, 0),
             reserved: [0; 16],
         };
@@ -428,7 +538,10 @@ mod tests {
             magic: FirmwareHeader::MAGIC,
             version: FirmwareVersion::new(1, 0, 0, 0),
             firmware_size: addr::APP_MAX_SIZE + 1,
-            crc32: 0, target_bank: 1, flags: 0, timestamp: 0,
+            crc32: 0,
+            target_bank: 1,
+            flags: 0,
+            timestamp: 0,
             prev_version: FirmwareVersion::new(0, 9, 0, 0),
             reserved: [0; 16],
         };
@@ -487,5 +600,45 @@ mod tests {
     fn test_ota_state_values() {
         assert_eq!(OtaState::Idle as u8, 0);
         assert_eq!(OtaState::Failed as u8, 6);
+    }
+
+    #[test]
+    fn test_version_anti_rollback() {
+        let cur = FirmwareVersion::new(1, 2, 0, 0);
+        assert!(OtaManager::<MockFlash>::check_version_allow(
+            &cur,
+            &FirmwareVersion::new(1, 2, 0, 0)
+        ));
+        assert!(OtaManager::<MockFlash>::check_version_allow(
+            &cur,
+            &FirmwareVersion::new(1, 3, 0, 0)
+        ));
+        assert!(!OtaManager::<MockFlash>::check_version_allow(
+            &cur,
+            &FirmwareVersion::new(1, 1, 0, 0)
+        ));
+        assert!(!OtaManager::<MockFlash>::check_version_allow(
+            &cur,
+            &FirmwareVersion::new(0, 9, 0, 0)
+        ));
+    }
+
+    #[test]
+    fn test_progress_percent() {
+        let mut mgr = OtaManager::<MockFlash>::new();
+        assert_eq!(mgr.progress_percent(), 0);
+        mgr.start_receive().unwrap();
+        mgr.write_chunk(0, &[0; 1000]).unwrap();
+        assert!(mgr.progress_percent() > 0);
+    }
+
+    #[test]
+    fn test_rollback() {
+        let mut mgr = OtaManager::<MockFlash>::new();
+        assert_eq!(mgr.active_bank(), 1);
+        mgr.rollback().unwrap();
+        assert_eq!(mgr.active_bank(), 2);
+        mgr.rollback().unwrap();
+        assert_eq!(mgr.active_bank(), 1);
     }
 }

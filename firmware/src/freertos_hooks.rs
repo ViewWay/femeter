@@ -6,8 +6,8 @@
 /*  (c) 2026 FeMeter Project — ViewWay                                */
 /* ================================================================== */
 
-use defmt::{error, trace};
 use core::ffi::c_void;
+use defmt::{error, trace};
 
 /// 全局 tick 计数器 (供 Rust 侧使用)
 static mut TICK_COUNT: u64 = 0;

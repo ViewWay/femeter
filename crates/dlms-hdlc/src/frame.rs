@@ -240,4 +240,172 @@ mod tests {
         }
         assert!(HdlcFrame::decode(&bytes).is_err());
     }
+
+    // ============================================================
+    // Phase C — Boundary Tests
+    // ============================================================
+
+    #[test]
+    fn test_max_frame_size() {
+        // Test with maximum information field (128 bytes)
+        let addr = HdlcAddress::new(1, 1, 0);
+        let ctrl = ControlField::information(0, 0, true);
+        let data = vec![0xAA; 128];
+        let mut frame = HdlcFrame::new(addr, ctrl, data.clone());
+        let bytes = frame.encode();
+        let decoded = HdlcFrame::decode(&bytes).unwrap();
+        assert_eq!(decoded.information.len(), 128);
+        assert_eq!(decoded.information, data);
+    }
+
+    #[test]
+    fn test_large_frame_size() {
+        // Test with 200-byte payload (beyond default max)
+        let addr = HdlcAddress::new(1, 1, 0);
+        let ctrl = ControlField::information(0, 0, false);
+        let data = vec![0xBB; 200];
+        let mut frame = HdlcFrame::new(addr, ctrl, data.clone());
+        let bytes = frame.encode();
+        let decoded = HdlcFrame::decode(&bytes).unwrap();
+        assert_eq!(decoded.information.len(), 200);
+        assert_eq!(decoded.information, data);
+    }
+
+    #[test]
+    fn test_empty_information() {
+        // I-frame with empty information field
+        let addr = HdlcAddress::new(1, 1, 0);
+        let ctrl = ControlField::information(0, 0, false);
+        let mut frame = HdlcFrame::new(addr, ctrl, Vec::new());
+        let bytes = frame.encode();
+        let decoded = HdlcFrame::decode(&bytes).unwrap();
+        assert!(decoded.information.is_empty());
+        assert_eq!(decoded.control.frame_type, FrameType::I);
+    }
+
+    #[test]
+    fn test_sequence_numbers_wrap() {
+        // Test sequence number wrapping (modulo 8)
+        for seq in 0..8 {
+            let ctrl = ControlField::information(seq, seq, false);
+            let byte = ctrl.encode();
+            let decoded = ControlField::decode(byte);
+            assert_eq!(decoded.send_seq, seq);
+            assert_eq!(decoded.recv_seq, seq);
+        }
+    }
+
+    #[test]
+    fn test_all_control_types() {
+        let addr = HdlcAddress::new(1, 1, 0);
+        let types = [
+            ControlField::information(0, 0, true),
+            ControlField::rr(0, true),
+            ControlField::rnr(0, false),
+            ControlField::snrm(true),
+            ControlField::ua(true),
+            ControlField::disc(true),
+            ControlField::dm(false),
+        ];
+        for ctrl in &types {
+            let mut frame = HdlcFrame::new(addr, *ctrl, Vec::new());
+            let bytes = frame.encode();
+            let decoded = HdlcFrame::decode(&bytes).unwrap();
+            assert_eq!(decoded.control.frame_type, ctrl.frame_type);
+        }
+    }
+
+    #[test]
+    fn test_multiple_flags_between_frames() {
+        // Multiple flag bytes between frames should not cause issues
+        let addr = HdlcAddress::new(1, 1, 0);
+        let ctrl = ControlField::ua(true);
+        let mut frame = HdlcFrame::new(addr, ctrl, Vec::new());
+        let mut bytes = frame.encode();
+        // Insert extra flags
+        let original = bytes.clone();
+        bytes.insert(1, HDLC_FLAG);
+        bytes.insert(2, HDLC_FLAG);
+        // Decode should find the first valid frame
+        // Find end flag after opening flag
+        let end = bytes.iter().position(|&b| b == HDLC_FLAG).unwrap() + 1;
+        let next_end = bytes[end..].iter().position(|&b| b == HDLC_FLAG);
+        if let Some(offset) = next_end {
+            let frame_bytes = &bytes[..end + offset + 1];
+            // May fail due to extra flags, but shouldn't panic
+            let _ = HdlcFrame::decode(frame_bytes);
+        }
+        // Verify original still works
+        let decoded = HdlcFrame::decode(&original).unwrap();
+        assert_eq!(decoded.control.frame_type, FrameType::UA);
+    }
+
+    #[test]
+    fn test_data_with_all_special_bytes() {
+        // Test frame with all bytes that need escaping: 0x7E and 0x7D
+        let addr = HdlcAddress::new(1, 1, 0);
+        let ctrl = ControlField::information(0, 0, false);
+        let data = vec![0x7E, 0x7D, 0x7E, 0x7D, 0x00, 0xFF, 0x7E, 0x7D];
+        let mut frame = HdlcFrame::new(addr, ctrl, data.clone());
+        let bytes = frame.encode();
+        let decoded = HdlcFrame::decode(&bytes).unwrap();
+        assert_eq!(decoded.information, data);
+    }
+
+    #[test]
+    fn test_too_short_frame() {
+        assert!(HdlcFrame::decode(&[0x7E, 0x7E]).is_err());
+        assert!(HdlcFrame::decode(&[0x7E]).is_err());
+        assert!(HdlcFrame::decode(&[]).is_err());
+    }
+
+    #[test]
+    fn test_missing_closing_flag() {
+        let addr = HdlcAddress::new(1, 1, 0);
+        let ctrl = ControlField::ua(true);
+        let mut frame = HdlcFrame::new(addr, ctrl, Vec::new());
+        let mut bytes = frame.encode();
+        // Remove closing flag
+        bytes.pop();
+        assert!(HdlcFrame::decode(&bytes).is_err());
+    }
+
+    #[test]
+    fn test_invalid_escape_sequence() {
+        let data = [HDLC_FLAG, 0x03, 0x63, HDLC_ESCAPE, HDLC_FLAG];
+        assert!(HdlcFrame::decode(&data).is_err());
+    }
+
+    #[test]
+    fn test_broadcast_address() {
+        // Client=0 is broadcast
+        let addr = HdlcAddress::new(0, 0xFFFF, 0);
+        let ctrl = ControlField::snrm(true);
+        let mut frame = HdlcFrame::new(addr, ctrl, Vec::new());
+        let bytes = frame.encode();
+        let decoded = HdlcFrame::decode(&bytes).unwrap();
+        assert_eq!(decoded.address.client, 0);
+    }
+
+    #[test]
+    fn test_poll_final_bit_variants() {
+        // Test all combinations of poll/final bit
+        let addr = HdlcAddress::new(1, 1, 0);
+        for pf in [true, false] {
+            let ctrl = ControlField::information(0, 0, pf);
+            let byte = ctrl.encode();
+            let decoded = ControlField::decode(byte);
+            assert_eq!(decoded.poll_final, pf);
+
+            let ctrl = ControlField::rr(0, pf);
+            let byte = ctrl.encode();
+            let decoded = ControlField::decode(byte);
+            assert_eq!(decoded.poll_final, pf);
+
+            let ctrl = ControlField::ua(pf);
+            let byte = ctrl.encode();
+            let decoded = ControlField::decode(byte);
+            assert_eq!(decoded.poll_final, pf);
+        }
+    }
 }

@@ -16,10 +16,10 @@
 /*  (c) 2026 FeMeter Project — ViewWay                                */
 /* ================================================================== */
 
-use crate::hal::*;
 use crate::fm33lg0;
 use crate::fm33lg0::base;
-use crate::fm33lg0::{spi_cr1, spi_cr2, uart_csr, uart_isr, lcd_cr};
+use crate::fm33lg0::{lcd_cr, spi_cr1, spi_cr2, uart_csr, uart_isr};
+use crate::hal::*;
 
 /* ================================================================== */
 /*  辅助: 缺失的 GPIO 端口访问器                                       */
@@ -79,7 +79,10 @@ pub(crate) fn gpio_set_fcr(port: u8, pin: u8, mode: u32) {
     let prev = gpio.fcr;
     // Safety: atomic-like RMW in critical section not required for init
     unsafe {
-        core::ptr::write_volatile(&gpio.fcr as *const u32 as *mut u32, (prev & !mask) | ((mode & 0x03) << shift));
+        core::ptr::write_volatile(
+            &gpio.fcr as *const u32 as *mut u32,
+            (prev & !mask) | ((mode & 0x03) << shift),
+        );
     }
 }
 
@@ -91,7 +94,10 @@ fn gpio_set_dfs(port: u8, pin: u8, func: u32) {
     let mask = 0x03 << shift;
     let prev = gpio.dfs;
     unsafe {
-        core::ptr::write_volatile(&gpio.dfs as *const u32 as *mut u32, (prev & !mask) | ((func & 0x03) << shift));
+        core::ptr::write_volatile(
+            &gpio.dfs as *const u32 as *mut u32,
+            (prev & !mask) | ((func & 0x03) << shift),
+        );
     }
 }
 
@@ -182,13 +188,25 @@ fn cmu_enable_pclk() {
     let cmu = fm33lg0::cmu();
     unsafe {
         // PCLKEN1: GPIOA~GPIOG 全部使能
-        write_reg(&cmu.pclken1 as *const u32 as *mut u32, read_reg(&cmu.pclken1 as *const u32) | 0x7F);
+        write_reg(
+            &cmu.pclken1 as *const u32 as *mut u32,
+            read_reg(&cmu.pclken1 as *const u32) | 0x7F,
+        );
         // PCLKEN2: UART0~3, LPUART0
-        write_reg(&cmu.pclken2 as *const u32 as *mut u32, read_reg(&cmu.pclken2 as *const u32) | 0x0D); // bit0+bit2+bit3 = UART0,2,3; bit6=LPUART0
-        // PCLKEN3: SPI0, SPI1, LCD, ADC
-        write_reg(&cmu.pclken3 as *const u32 as *mut u32, read_reg(&cmu.pclken3 as *const u32) | 0x43); // bit0=SPI0, bit1=SPI1, bit5=LCD, bit6=ADC
-        // PCLKEN4: RTC
-        write_reg(&cmu.pclken4 as *const u32 as *mut u32, read_reg(&cmu.pclken4 as *const u32) | 0x04); // bit2=RTC
+        write_reg(
+            &cmu.pclken2 as *const u32 as *mut u32,
+            read_reg(&cmu.pclken2 as *const u32) | 0x0D,
+        ); // bit0+bit2+bit3 = UART0,2,3; bit6=LPUART0
+           // PCLKEN3: SPI0, SPI1, LCD, ADC
+        write_reg(
+            &cmu.pclken3 as *const u32 as *mut u32,
+            read_reg(&cmu.pclken3 as *const u32) | 0x43,
+        ); // bit0=SPI0, bit1=SPI1, bit5=LCD, bit6=ADC
+           // PCLKEN4: RTC
+        write_reg(
+            &cmu.pclken4 as *const u32 as *mut u32,
+            read_reg(&cmu.pclken4 as *const u32) | 0x04,
+        ); // bit2=RTC
     }
 }
 
@@ -245,12 +263,16 @@ fn uart_config_regs(ch: UartChannel, config: &UartConfig) {
     let uart = uart_regs(ch);
 
     // 禁用 TX/RX
-    unsafe { write_reg(&uart.csr as *const u32 as *mut u32, 0); }
+    unsafe {
+        write_reg(&uart.csr as *const u32 as *mut u32, 0);
+    }
 
     // 计算波特率分频: SPBRG = SYSCLK / baudrate
     let sysclk: u32 = 64_000_000; // After PLL init
     let spbrg = fm33lg0::calc_spbrg(sysclk, config.baudrate);
-    unsafe { write_reg(&uart.bgr as *const u32 as *mut u32, spbrg as u32); }
+    unsafe {
+        write_reg(&uart.bgr as *const u32 as *mut u32, spbrg as u32);
+    }
 
     // 配置 CSR: 数据位 + 校验 + 停止位
     let mut csr: u32 = 0;
@@ -278,7 +300,9 @@ fn uart_config_regs(ch: UartChannel, config: &UartConfig) {
     // 使能 TX + RX
     csr |= uart_csr::TXEN | uart_csr::RXEN;
 
-    unsafe { write_reg(&uart.csr as *const u32 as *mut u32, csr); }
+    unsafe {
+        write_reg(&uart.csr as *const u32 as *mut u32, csr);
+    }
 }
 
 /* ================================================================== */
@@ -309,86 +333,86 @@ pub mod pins {
 
     // ── SPI0 → 计量芯片 ──
     /// SPI0_SCK
-    pub const SPI0_SCK:   GpioPin = GpioPin::new(5, 14); // PF14
+    pub const SPI0_SCK: GpioPin = GpioPin::new(5, 14); // PF14
     /// SPI0_MISO
-    pub const SPI0_MISO:  GpioPin = GpioPin::new(5, 13); // PF13
+    pub const SPI0_MISO: GpioPin = GpioPin::new(5, 13); // PF13
     /// SPI0_MOSI
-    pub const SPI0_MOSI:  GpioPin = GpioPin::new(5, 12); // PF12
+    pub const SPI0_MOSI: GpioPin = GpioPin::new(5, 12); // PF12
     /// SPI0_CSN (计量芯片片选)
-    pub const SPI0_CSN:   GpioPin = GpioPin::new(5, 15); // PF15
+    pub const SPI0_CSN: GpioPin = GpioPin::new(5, 15); // PF15
 
     // ── SPI1 → 外部 Flash ──
-    pub const SPI1_SCK:   GpioPin = GpioPin::new(0, 5);  // PA5
-    pub const SPI1_MISO:  GpioPin = GpioPin::new(0, 6);  // PA6
-    pub const SPI1_MOSI:  GpioPin = GpioPin::new(0, 7);  // PA7
-    pub const SPI1_CSN:   GpioPin = GpioPin::new(0, 4);  // PA4
+    pub const SPI1_SCK: GpioPin = GpioPin::new(0, 5); // PA5
+    pub const SPI1_MISO: GpioPin = GpioPin::new(0, 6); // PA6
+    pub const SPI1_MOSI: GpioPin = GpioPin::new(0, 7); // PA7
+    pub const SPI1_CSN: GpioPin = GpioPin::new(0, 4); // PA4
 
     // ── UART0 → RS485 ──
-    pub const UART0_TX:   GpioPin = GpioPin::new(6, 9);  // PG9
-    pub const UART0_RX:   GpioPin = GpioPin::new(6, 8);  // PG8
+    pub const UART0_TX: GpioPin = GpioPin::new(6, 9); // PG9
+    pub const UART0_RX: GpioPin = GpioPin::new(6, 8); // PG8
     /// RS485 方向控制 (高=发送, 低=接收)
-    pub const RS485_DE:   GpioPin = GpioPin::new(5, 2);  // PF2
+    pub const RS485_DE: GpioPin = GpioPin::new(5, 2); // PF2
 
     // ── UART1 → 红外 ──
-    pub const UART1_TX:   GpioPin = GpioPin::new(4, 4);  // PE4
-    pub const UART1_RX:   GpioPin = GpioPin::new(4, 3);  // PE3
+    pub const UART1_TX: GpioPin = GpioPin::new(4, 4); // PE4
+    pub const UART1_RX: GpioPin = GpioPin::new(4, 3); // PE3
 
     // ── UART2 → LoRaWAN ──
-    pub const UART2_TX:   GpioPin = GpioPin::new(1, 3);  // PB3
-    pub const UART2_RX:   GpioPin = GpioPin::new(1, 2);  // PB2
+    pub const UART2_TX: GpioPin = GpioPin::new(1, 3); // PB3
+    pub const UART2_RX: GpioPin = GpioPin::new(1, 2); // PB2
 
     // ── UART3 → 蜂窝模组 ──
-    pub const UART3_TX:   GpioPin = GpioPin::new(1, 15); // PB15
-    pub const UART3_RX:   GpioPin = GpioPin::new(1, 14); // PB14
+    pub const UART3_TX: GpioPin = GpioPin::new(1, 15); // PB15
+    pub const UART3_RX: GpioPin = GpioPin::new(1, 14); // PB14
     /// 蜂窝模组电源控制
-    pub const CELL_PWRKEY:GpioPin = GpioPin::new(4, 2);  // PE2
+    pub const CELL_PWRKEY: GpioPin = GpioPin::new(4, 2); // PE2
     /// 蜂窝模组复位
-    pub const CELL_RESET: GpioPin = GpioPin::new(4, 7);  // PE7
+    pub const CELL_RESET: GpioPin = GpioPin::new(4, 7); // PE7
 
     // ── LED ──
     /// 电源指示 (绿)
-    pub const LED_POWER:  GpioPin = GpioPin::new(0, 8);  // PA8
+    pub const LED_POWER: GpioPin = GpioPin::new(0, 8); // PA8
     /// 通信指示 (黄)
-    pub const LED_COMM:   GpioPin = GpioPin::new(0, 9);  // PA9
+    pub const LED_COMM: GpioPin = GpioPin::new(0, 9); // PA9
     /// 告警指示 (红)
-    pub const LED_ALARM:  GpioPin = GpioPin::new(0, 10); // PA10
+    pub const LED_ALARM: GpioPin = GpioPin::new(0, 10); // PA10
     /// 有功脉冲 LED (红)
-    pub const LED_PULSE_P:GpioPin = GpioPin::new(0, 11); // PA11
+    pub const LED_PULSE_P: GpioPin = GpioPin::new(0, 11); // PA11
     /// 无功脉冲 LED (绿)
-    pub const LED_PULSE_Q:GpioPin = GpioPin::new(0, 12); // PA12
+    pub const LED_PULSE_Q: GpioPin = GpioPin::new(0, 12); // PA12
 
     // ── 蜂鸣器 ──
-    pub const BUZZER:     GpioPin = GpioPin::new(0, 15); // PA15
+    pub const BUZZER: GpioPin = GpioPin::new(0, 15); // PA15
 
     // ── 按键 ──
     /// 翻页键 (外部中断唤醒)
-    pub const KEY_PAGE:   GpioPin = GpioPin::new(1, 0);  // PB0
+    pub const KEY_PAGE: GpioPin = GpioPin::new(1, 0); // PB0
     /// 编程键
-    pub const KEY_PROG:   GpioPin = GpioPin::new(1, 1);  // PB1
+    pub const KEY_PROG: GpioPin = GpioPin::new(1, 1); // PB1
 
     // ── 脉冲输出 (光耦) ──
     /// 有功脉冲输出
-    pub const PULSE_P:    GpioPin = GpioPin::new(1, 4);  // PB4
+    pub const PULSE_P: GpioPin = GpioPin::new(1, 4); // PB4
     /// 无功脉冲输出
-    pub const PULSE_Q:    GpioPin = GpioPin::new(1, 5);  // PB5
+    pub const PULSE_Q: GpioPin = GpioPin::new(1, 5); // PB5
 
     // ── 防窃电检测 ──
     /// 上盖检测 (微动开关)
-    pub const COVER_DET:  GpioPin = GpioPin::new(3, 8);  // PD8
+    pub const COVER_DET: GpioPin = GpioPin::new(3, 8); // PD8
     /// 端子盖检测 (微动开关)
-    pub const TERMINAL_DET:GpioPin = GpioPin::new(3, 9); // PD9
+    pub const TERMINAL_DET: GpioPin = GpioPin::new(3, 9); // PD9
     /// 磁场检测 (霍尔传感器)
-    pub const MAGNETIC_DET:GpioPin = GpioPin::new(0, 13); // PA13
+    pub const MAGNETIC_DET: GpioPin = GpioPin::new(0, 13); // PA13
 
     // ── 电池 / 电源 ──
     /// 掉电检测 (外部比较器输出)
-    pub const POWER_FAIL: GpioPin = GpioPin::new(1, 1);  // PB1
+    pub const POWER_FAIL: GpioPin = GpioPin::new(1, 1); // PB1
     /// 电池电压 ADC 输入
-    pub const BAT_ADC:    GpioPin = GpioPin::new(5, 6);  // PF6 (ADC_IN5)
+    pub const BAT_ADC: GpioPin = GpioPin::new(5, 6); // PF6 (ADC_IN5)
 
     // ── SIM 卡 ──
     /// SIM 卡检测
-    pub const SIM_DET:    GpioPin = GpioPin::new(3, 7);  // PD7
+    pub const SIM_DET: GpioPin = GpioPin::new(3, 7); // PD7
 }
 
 /* ================================================================== */
@@ -565,7 +589,10 @@ impl<M: crate::hal::MeteringChip> Board<M> {
         unsafe {
             // ── Step 1: 使能外部高速晶振 XTHF ──
             // XTHFCR bit0 = EN
-            write_reg(&cmu.xthfcr as *const u32 as *mut u32, read_reg(&cmu.xthfcr as *const u32) | 0x01);
+            write_reg(
+                &cmu.xthfcr as *const u32 as *mut u32,
+                read_reg(&cmu.xthfcr as *const u32) | 0x01,
+            );
 
             // ── Step 2: 等待 XTHF 稳定 (bit1 = READY) ──
             // 超时约 2ms, 用循环等待
@@ -593,19 +620,28 @@ impl<M: crate::hal::MeteringChip> Board<M> {
             write_reg(&cmu.pll_hcr as *const u32 as *mut u32, pll_val);
 
             // 使能 PLL_H (bit0)
-            write_reg(&cmu.pll_hcr as *const u32 as *mut u32, read_reg(&cmu.pll_hcr as *const u32) | 0x01);
+            write_reg(
+                &cmu.pll_hcr as *const u32 as *mut u32,
+                read_reg(&cmu.pll_hcr as *const u32) | 0x01,
+            );
 
             // 等待 PLL_H 锁定 (轮询 CMU ISR bit for PLL ready)
             // FM33 使用 ISR 的 bit 来指示 PLL 就绪
             timeout = 10000;
-            while (read_reg(&cmu.isr as *const u32) & 0x04) == 0 { // bit2 = PLL_H ready
+            while (read_reg(&cmu.isr as *const u32) & 0x04) == 0 {
+                // bit2 = PLL_H ready
                 timeout -= 1;
-                if timeout == 0 { break; }
+                if timeout == 0 {
+                    break;
+                }
             }
 
             // ── Step 4: 切换系统时钟到 PLL_H ──
             // SYSCLKCR bits[2:0] = 3 → PLL_H
-            write_reg(&cmu.sysclkcr as *const u32 as *mut u32, (read_reg(&cmu.sysclkcr as *const u32) & !0x07) | 0x03);
+            write_reg(
+                &cmu.sysclkcr as *const u32 as *mut u32,
+                (read_reg(&cmu.sysclkcr as *const u32) & !0x07) | 0x03,
+            );
 
             // ── Step 5: 使能 XTLF (32.768kHz for RTC) ──
             // 通过 PMU 或 CMU 操作. XTLF 使能通常在 PMU 中
@@ -625,7 +661,7 @@ impl<M: crate::hal::MeteringChip> Board<M> {
         // ══════════════════════════════════════════════════
         for pin in &[pins::SPI0_SCK, pins::SPI0_MISO, pins::SPI0_MOSI] {
             gpio_set_fcr(pin.port, pin.pin, 0b10); // 数字功能
-            // DFS 配置: SPI0 功能编号 (查阅 FM33A0xxEV 引脚映射表)
+                                                   // DFS 配置: SPI0 功能编号 (查阅 FM33A0xxEV 引脚映射表)
             gpio_set_dfs(pin.port, pin.pin, 0b00); // SPI0 = DFS func 0 for these pins
             gpio_enable_input(pin.port, pin.pin);
         }
@@ -692,8 +728,13 @@ impl<M: crate::hal::MeteringChip> Board<M> {
         // ══════════════════════════════════════════════════
         // LED: PA8~PA12 → GPIO 推挽输出, 默认灭 (低)
         // ══════════════════════════════════════════════════
-        for led in &[pins::LED_POWER, pins::LED_COMM, pins::LED_ALARM,
-                     pins::LED_PULSE_P, pins::LED_PULSE_Q] {
+        for led in &[
+            pins::LED_POWER,
+            pins::LED_COMM,
+            pins::LED_ALARM,
+            pins::LED_PULSE_P,
+            pins::LED_PULSE_Q,
+        ] {
             gpio_set_fcr(led.port, led.pin, 0b01); // 输出
             gpio_clr(*led); // 默认灭
         }
@@ -737,10 +778,13 @@ impl<M: crate::hal::MeteringChip> Board<M> {
         // 电池 ADC: PF6 → 模拟功能
         // ══════════════════════════════════════════════════
         gpio_set_fcr(pins::BAT_ADC.port, pins::BAT_ADC.pin, 0b11); // 模拟
-        // ANEN 使能 (GPIO ANEN 寄存器)
+                                                                   // ANEN 使能 (GPIO ANEN 寄存器)
         let gpio = gpio_port(pins::BAT_ADC.port);
         unsafe {
-            write_reg(&gpio.anen as *const u32 as *mut u32, read_reg(&gpio.anen as *const u32) | (1u32 << pins::BAT_ADC.pin));
+            write_reg(
+                &gpio.anen as *const u32 as *mut u32,
+                read_reg(&gpio.anen as *const u32) | (1u32 << pins::BAT_ADC.pin),
+            );
         }
     }
 
@@ -779,8 +823,7 @@ impl<M: crate::hal::MeteringChip> Board<M> {
         let spi1 = fm33lg0::spi1();
         unsafe {
             let baud_div = 0b001; // /4 → 64MHz/4 = 16MHz
-            let cr1 = spi_cr1::MM
-                    | (baud_div << spi_cr1::BAUD_SHIFT);
+            let cr1 = spi_cr1::MM | (baud_div << spi_cr1::BAUD_SHIFT);
             write_reg(&spi1.cr1 as *const u32 as *mut u32, cr1);
 
             let cr2 = spi_cr2::TXOEN | spi_cr2::RXOEN;
@@ -913,7 +956,9 @@ impl UartDriver for UartChannelDriver {
             let mut timeout = 100_000u32;
             while (read_reg(&uart.isr as *const u32) & uart_isr::TXBE) == 0 {
                 timeout -= 1;
-                if timeout == 0 { break; }
+                if timeout == 0 {
+                    break;
+                }
             }
         }
 

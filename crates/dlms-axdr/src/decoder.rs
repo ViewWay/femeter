@@ -428,4 +428,113 @@ mod tests {
         let mut dec = AxdrDecoder::new(&[0xFE]);
         assert!(matches!(dec.decode(), Err(AxdrError::InvalidTag(0xFE))));
     }
+
+    // ============================================================
+    // Phase C — Boundary Tests
+    // ============================================================
+
+    #[test]
+    fn test_decode_empty_array() {
+        let mut enc = AxdrEncoder::new();
+        enc.encode(&DlmsType::Array(alloc::vec![])).unwrap();
+        let mut dec = AxdrDecoder::new(enc.to_bytes());
+        let decoded = dec.decode().unwrap();
+        assert!(matches!(decoded, DlmsType::Array(ref items) if items.is_empty()));
+    }
+
+    #[test]
+    fn test_decode_empty_structure() {
+        let mut enc = AxdrEncoder::new();
+        enc.encode(&DlmsType::Structure(alloc::vec![])).unwrap();
+        let mut dec = AxdrDecoder::new(enc.to_bytes());
+        let decoded = dec.decode().unwrap();
+        assert!(matches!(decoded, DlmsType::Structure(ref items) if items.is_empty()));
+    }
+
+    #[test]
+    fn test_decode_nested_structure_roundtrip() {
+        let inner = alloc::vec![DlmsType::from_u32(10), DlmsType::from_u32(20)];
+        let outer = alloc::vec![DlmsType::Structure(inner), DlmsType::from_u32(30)];
+        let original = DlmsType::Structure(outer);
+        let mut enc = AxdrEncoder::new();
+        enc.encode(&original).unwrap();
+        let mut dec = AxdrDecoder::new(enc.to_bytes());
+        let decoded = dec.decode().unwrap();
+        assert_eq!(decoded, original);
+    }
+
+    #[test]
+    fn test_decode_all_integer_types() {
+        let values = [
+            DlmsType::UInt8(0), DlmsType::UInt8(255),
+            DlmsType::Int8(-128), DlmsType::Int8(127),
+            DlmsType::UInt16(0), DlmsType::UInt16(65535),
+            DlmsType::Int16(-32768), DlmsType::Int16(32767),
+            DlmsType::UInt32(0), DlmsType::UInt32(u32::MAX),
+            DlmsType::Int32(i32::MIN), DlmsType::Int32(i32::MAX),
+            DlmsType::UInt64(0), DlmsType::UInt64(u64::MAX),
+            DlmsType::Int64(i64::MIN), DlmsType::Int64(i64::MAX),
+        ];
+        for v in &values {
+            let mut enc = AxdrEncoder::new();
+            enc.encode(v).unwrap();
+            let mut dec = AxdrDecoder::new(enc.to_bytes());
+            let decoded = dec.decode().unwrap();
+            assert_eq!(decoded, *v, "Roundtrip failed for {:?}", v);
+        }
+    }
+
+    #[test]
+    fn test_decode_empty_input() {
+        let mut dec = AxdrDecoder::new(&[]);
+        assert!(dec.decode().is_err());
+    }
+
+    #[test]
+    fn test_decode_truncated_data() {
+        // Tag byte present but not enough data
+        let mut dec = AxdrDecoder::new(&[0x0F]); // structure tag
+        assert!(dec.decode().is_err());
+    }
+
+    #[test]
+    fn test_decode_multiple_values() {
+        let mut enc = AxdrEncoder::new();
+        enc.encode(&DlmsType::from_u32(1)).unwrap();
+        enc.encode(&DlmsType::from_u32(2)).unwrap();
+        enc.encode(&DlmsType::from_u32(3)).unwrap();
+        let bytes = enc.to_bytes();
+        let mut dec = AxdrDecoder::new(&bytes);
+        assert_eq!(dec.decode().unwrap(), DlmsType::from_u32(1));
+        assert_eq!(dec.decode().unwrap(), DlmsType::from_u32(2));
+        assert_eq!(dec.decode().unwrap(), DlmsType::from_u32(3));
+        assert!(dec.decode().is_err()); // no more data
+    }
+
+    #[test]
+    fn test_decode_empty_octet_string() {
+        let mut enc = AxdrEncoder::new();
+        enc.encode(&DlmsType::from_octet_string(alloc::vec![])).unwrap();
+        let mut dec = AxdrDecoder::new(enc.to_bytes());
+        let decoded = dec.decode().unwrap();
+        assert!(matches!(decoded, DlmsType::OctetString(ref v) if v.is_empty()));
+    }
+
+    #[test]
+    fn test_decode_null_phase_c() {
+        let mut enc = AxdrEncoder::new();
+        enc.encode(&DlmsType::Null).unwrap();
+        let mut dec = AxdrDecoder::new(enc.to_bytes());
+        assert_eq!(dec.decode().unwrap(), DlmsType::Null);
+    }
+
+    #[test]
+    fn test_decode_boolean() {
+        for v in [true, false] {
+            let mut enc = AxdrEncoder::new();
+            enc.encode(&DlmsType::Boolean(v)).unwrap();
+            let mut dec = AxdrDecoder::new(enc.to_bytes());
+            assert_eq!(dec.decode().unwrap(), DlmsType::Boolean(v));
+        }
+    }
 }

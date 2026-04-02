@@ -462,4 +462,77 @@ mod tests {
 
         assert_eq!(decrypted, plaintext);
     }
+
+    // ============================================================
+    // Phase C — Boundary Tests
+    // ============================================================
+
+    #[test]
+    fn test_empty_key() {
+        let ctx = SecurityContext::new(TEST_SYSTEM_TITLE)
+            .with_level(SecurityLevel::AesGcm128)
+            .with_frame_counter(0);
+        // No dedicated key set — should fail
+        let result = encrypt(&ctx, b"test", None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_wrong_key_decryption_fails() {
+        let ctx1 = create_test_context();
+        let ctx2 = SecurityContext::new(TEST_SYSTEM_TITLE)
+            .with_level(SecurityLevel::AesGcm128)
+            .with_dedicated_key([0xFF; 16])
+            .with_frame_counter(0);
+
+        let plaintext = b"Wrong key test".to_vec();
+        let ciphertext = encrypt(&ctx1, &plaintext, None).unwrap();
+        assert!(decrypt(&ctx2, &ciphertext, None).is_err());
+    }
+
+    #[test]
+    fn test_security_level_unknown() {
+        assert_eq!(SecurityLevel::from_u8(255), None);
+        assert_eq!(SecurityLevel::from_u8(5), None);
+    }
+
+    #[test]
+    fn test_counter_overflow() {
+        let mut ctx = create_test_context().with_frame_counter(u32::MAX);
+        let result = ctx.increment_counter();
+        let _ = result;
+    }
+
+    #[test]
+    fn test_gmac_auth_with_different_challenges() {
+        let ctx = create_test_context();
+        let c1 = b"challenge_one".to_vec();
+        let c2 = b"challenge_two".to_vec();
+        let a1 = compute_auth_value(&ctx, &c1).unwrap();
+        let a2 = compute_auth_value(&ctx, &c2).unwrap();
+        assert_ne!(a1, a2);
+    }
+
+    #[test]
+    fn test_auth_empty_challenge() {
+        let ctx = create_test_context();
+        let challenge: alloc::vec::Vec<u8> = alloc::vec![];
+        let _ = compute_auth_value(&ctx, &challenge);
+    }
+
+    #[test]
+    fn test_security_control_all_bits() {
+        let info = crate::control::parse_security_control(0xFF);
+        assert_eq!(info.as_byte() & 0x08, 0);
+        let info = crate::control::parse_security_control(0x00);
+        assert_eq!(info.as_byte(), 0x00);
+    }
+
+    #[test]
+    fn test_key_selection_variants() {
+        let ctx = create_test_context();
+        for sel in [KeySelection::Global, KeySelection::Dedicated] {
+            let _key = ctx.get_key(sel);
+        }
+    }
 }

@@ -23,8 +23,8 @@
 #![no_main]
 #![no_std]
 
-use defmt_rtt as _; // 确保 defmt-rtt transport 被链接
 use cortex_m_rt::entry;
+use defmt_rtt as _; // 确保 defmt-rtt transport 被链接
 use panic_halt as _;
 
 // defmt 要求用户提供 _defmt_timestamp 实现
@@ -35,15 +35,15 @@ unsafe extern "C" fn _defmt_timestamp() {}
 /*  Flash 分区地址常量                                                  */
 /* ================================================================== */
 
-const FLASH_BASE: u32    = 0x0000_0000;
-const BOOT_BASE: u32     = 0x0000_0000;
-const BOOT_SIZE: u32     = 16 * 1024;       // 16KB
-const NORMAL_BASE: u32   = 0x0000_4000;
-const NORMAL_SIZE: u32   = 128 * 1024;      // 128KB
-const OTA_BASE: u32      = 0x0002_4000;
-const OTA_SIZE: u32      = 128 * 1024;      // 128KB
-const PARAM_BASE: u32    = 0x0004_4000;
-const PARAM_SIZE: u32    = 16 * 1024;       // 16KB
+const FLASH_BASE: u32 = 0x0000_0000;
+const BOOT_BASE: u32 = 0x0000_0000;
+const BOOT_SIZE: u32 = 16 * 1024; // 16KB
+const NORMAL_BASE: u32 = 0x0000_4000;
+const NORMAL_SIZE: u32 = 128 * 1024; // 128KB
+const OTA_BASE: u32 = 0x0002_4000;
+const OTA_SIZE: u32 = 128 * 1024; // 128KB
+const PARAM_BASE: u32 = 0x0004_4000;
+const PARAM_SIZE: u32 = 16 * 1024; // 16KB
 
 /// OTA 固件头 (存放在 OTA 区开头)
 #[repr(C)]
@@ -353,7 +353,9 @@ fn boot_sequence() -> BootStatus {
     // 4. 保存旧 Normal 区的 CRC (用于回滚)
     let old_normal_ptr = unsafe { NORMAL_BASE as *const u8 };
     // 注意: 旧固件可能不完整, 取前 firmware_size 字节做 CRC
-    let old_normal_data = unsafe { core::slice::from_raw_parts(old_normal_ptr, firmware_size.min(NORMAL_SIZE as usize)) };
+    let old_normal_data = unsafe {
+        core::slice::from_raw_parts(old_normal_ptr, firmware_size.min(NORMAL_SIZE as usize))
+    };
     let old_crc = crc32(old_normal_data);
 
     // 5. 搬运 OTA → Normal
@@ -369,12 +371,16 @@ fn boot_sequence() -> BootStatus {
     } else {
         // 7. 搬运失败, 尝试回滚
         //    这里简单处理: 如果旧 CRC 仍然匹配, 说明旧固件还在
-        let current_normal = unsafe { core::slice::from_raw_parts(old_normal_ptr, firmware_size.min(NORMAL_SIZE as usize)) };
+        let current_normal = unsafe {
+            core::slice::from_raw_parts(old_normal_ptr, firmware_size.min(NORMAL_SIZE as usize))
+        };
         let current_crc = crc32(current_normal);
 
         if current_crc == old_crc {
             // 旧固件完好, 可以启动
-            unsafe { flash_erase_sector(OTA_BASE); }
+            unsafe {
+                flash_erase_sector(OTA_BASE);
+            }
             BootStatus::OtaFailedRollback
         } else {
             // 旧固件也坏了, 严重错误

@@ -8,7 +8,7 @@
 /*  (c) 2026 FeMeter Project — ViewWay                                */
 /* ================================================================== */
 
-use core::ffi::{c_void, c_char};
+use core::ffi::{c_char, c_void};
 use core::ptr;
 #[allow(unused_imports)]
 use core::time::Duration;
@@ -63,7 +63,7 @@ extern "C" {
         pvParameters: *mut c_void,
         uxPriority: u32,
         pxCreatedTask: *mut TaskHandle,
-    ) -> i32;  // pdPASS = 1
+    ) -> i32; // pdPASS = 1
     pub fn vTaskDelete(pxTask: TaskHandle);
     pub fn vTaskDelay(xTicksToDelay: TickType);
     pub fn xTaskGetTickCount() -> TickType;
@@ -73,7 +73,8 @@ extern "C" {
 
     /* ── 队列 ── */
     /* FreeRTOS 11.x: xQueueCreate 是宏 → xQueueGenericCreate */
-    pub fn xQueueGenericCreate(uxQueueLength: u32, uxItemSize: u32, ucQueueType: u8) -> QueueHandle;
+    pub fn xQueueGenericCreate(uxQueueLength: u32, uxItemSize: u32, ucQueueType: u8)
+        -> QueueHandle;
     /* FreeRTOS 11.x: xQueueSend 是宏 → xQueueGenericSend */
     pub fn xQueueGenericSend(
         xQueue: QueueHandle,
@@ -81,11 +82,8 @@ extern "C" {
         xTicksToWait: TickType,
         xCopyPosition: u32,
     ) -> i32;
-    pub fn xQueueReceive(
-        xQueue: QueueHandle,
-        pvBuffer: *mut c_void,
-        xTicksToWait: TickType,
-    ) -> i32;
+    pub fn xQueueReceive(xQueue: QueueHandle, pvBuffer: *mut c_void, xTicksToWait: TickType)
+        -> i32;
     /* FreeRTOS 11.x: xQueueSendFromISR 是宏 → xQueueGenericSendFromISR */
     pub fn xQueueGenericSendFromISR(
         xQueue: QueueHandle,
@@ -135,7 +133,11 @@ extern "C" {
     pub fn xTimerStart(xTimer: TimerHandle, xTicksToWait: TickType) -> i32;
     pub fn xTimerStop(xTimer: TimerHandle, xTicksToWait: TickType) -> i32;
     pub fn xTimerReset(xTimer: TimerHandle, xTicksToWait: TickType) -> i32;
-    pub fn xTimerChangePeriod(xTimer: TimerHandle, xNewPeriod: TickType, xTicksToWait: TickType) -> i32;
+    pub fn xTimerChangePeriod(
+        xTimer: TimerHandle,
+        xNewPeriod: TickType,
+        xTicksToWait: TickType,
+    ) -> i32;
     pub fn pvTimerGetTimerID(xTimer: TimerHandle) -> *mut c_void;
     pub fn vTimerSetTimerID(xTimer: TimerHandle, pvNewID: *mut c_void);
 
@@ -162,10 +164,7 @@ pub struct TaskParams {
 /// 创建并启动 FreeRTOS 任务
 ///
 /// 返回 Ok(句柄) 或 Err(()) (创建失败, 通常是内存不足)
-pub fn task_create(
-    func: TaskFunction,
-    params: TaskParams,
-) -> Result<TaskHandle, ()> {
+pub fn task_create(func: TaskFunction, params: TaskParams) -> Result<TaskHandle, ()> {
     let mut handle: TaskHandle = ptr::null_mut();
     // 确保名称以 null 结尾
     let name_bytes: [u8; 16] = {
@@ -187,7 +186,8 @@ pub fn task_create(
         )
     };
 
-    if result == 1 {  // pdPASS
+    if result == 1 {
+        // pdPASS
         Ok(handle)
     } else {
         Err(())
@@ -239,7 +239,13 @@ impl<T> Queue<T> {
     /// 创建队列
     /// capacity: 队列深度
     pub fn new(capacity: u32) -> Option<Self> {
-        let handle = unsafe { xQueueGenericCreate(capacity, core::mem::size_of::<T>() as u32, Self::QUEUE_TYPE_BASE) };
+        let handle = unsafe {
+            xQueueGenericCreate(
+                capacity,
+                core::mem::size_of::<T>() as u32,
+                Self::QUEUE_TYPE_BASE,
+            )
+        };
         if handle.is_null() {
             None
         } else {
@@ -253,14 +259,23 @@ impl<T> Queue<T> {
     /// 发送数据到队列 (ISR 中使用 send_from_isr)
     pub fn send(&self, item: &T, timeout_ms: u32) -> bool {
         unsafe {
-            xQueueGenericSend(self.handle, item as *const T as *const c_void, ms_to_ticks(timeout_ms), Self::SEND_TO_BACK) == 1
+            xQueueGenericSend(
+                self.handle,
+                item as *const T as *const c_void,
+                ms_to_ticks(timeout_ms),
+                Self::SEND_TO_BACK,
+            ) == 1
         }
     }
 
     /// 从队列接收数据
     pub fn receive(&self, buf: &mut T, timeout_ms: u32) -> bool {
         unsafe {
-            xQueueReceive(self.handle, buf as *mut T as *mut c_void, ms_to_ticks(timeout_ms)) == 1
+            xQueueReceive(
+                self.handle,
+                buf as *mut T as *mut c_void,
+                ms_to_ticks(timeout_ms),
+            ) == 1
         }
     }
 
@@ -422,31 +437,31 @@ unsafe impl Sync for EventGroup {}
 
 pub mod events {
     /// 计量数据更新完成
-    pub const METERING_READY: u32      = (1 << 0);
+    pub const METERING_READY: u32 = (1 << 0);
     /// RS485 收到帧
     pub const RS485_FRAME_RECEIVED: u32 = (1 << 1);
     /// 红外收到帧
-    pub const IR_FRAME_RECEIVED: u32   = (1 << 2);
+    pub const IR_FRAME_RECEIVED: u32 = (1 << 2);
     /// 按键按下
-    pub const KEY_PRESSED: u32         = (1 << 3);
+    pub const KEY_PRESSED: u32 = (1 << 3);
     /// 编程键按下
-    pub const PROG_KEY_PRESSED: u32    = (1 << 4);
+    pub const PROG_KEY_PRESSED: u32 = (1 << 4);
     /// 防窃电事件
-    pub const TAMPER_EVENT: u32        = (1 << 5);
+    pub const TAMPER_EVENT: u32 = (1 << 5);
     /// 上盖打开
-    pub const COVER_OPENED: u32        = (1 << 6);
+    pub const COVER_OPENED: u32 = (1 << 6);
     /// 端子盖打开
-    pub const TERMINAL_OPENED: u32     = (1 << 7);
+    pub const TERMINAL_OPENED: u32 = (1 << 7);
     /// 磁场检测
-    pub const MAGNETIC_DETECTED: u32   = (1 << 8);
+    pub const MAGNETIC_DETECTED: u32 = (1 << 8);
     /// LCD 需要刷新
-    pub const LCD_REFRESH: u32         = (1 << 9);
+    pub const LCD_REFRESH: u32 = (1 << 9);
     /// 数据就绪 (metering → display/storage)
-    pub const DATA_READY: u32          = (1 << 10);
+    pub const DATA_READY: u32 = (1 << 10);
     /// 事件日志需要保存
-    pub const EVENT_LOG_SAVE: u32      = (1 << 11);
+    pub const EVENT_LOG_SAVE: u32 = (1 << 11);
     /// 事件检测完成
-    pub const EVENTS_DETECTED: u32     = (1 << 12);
+    pub const EVENTS_DETECTED: u32 = (1 << 12);
     /// LoRaWAN NTP 同步请求
-    pub const LORA_NTP_SYNC: u32       = (1 << 13);
+    pub const LORA_NTP_SYNC: u32 = (1 << 13);
 }

@@ -16,8 +16,8 @@
 /*  (c) 2026 FeMeter Project — ViewWay                                */
 /* ================================================================== */
 
-use crate::hal::*;
 use crate::fm33lg0::SpiRegs;
+use crate::hal::*;
 use core::ops::Deref;
 
 // ══════════════════════════════════════════════════════════════════
@@ -45,89 +45,89 @@ const CHIP_ID_VALUE: u32 = 0x8302_2000;
 pub mod reg {
     // ── 系统寄存器 ──
     /// 芯片标识
-    pub const CHIP_ID:     u8 = 0x00;
+    pub const CHIP_ID: u8 = 0x00;
     /// 软件复位 (写 0xA5)
-    pub const SOFT_RESET:  u8 = 0x01;
+    pub const SOFT_RESET: u8 = 0x01;
     /// 系统配置
-    pub const SYSCON:      u8 = 0x02;
+    pub const SYSCON: u8 = 0x02;
     /// EMU 配置
-    pub const EMU:         u8 = 0x03;
+    pub const EMU: u8 = 0x03;
     /// 起始电流/启动功率
-    pub const STARTCURRENT:u8 = 0x04;
+    pub const STARTCURRENT: u8 = 0x04;
 
     // ── 有功功率 ──
     /// A 相有功功率
-    pub const PA:          u8 = 0x10;
+    pub const PA: u8 = 0x10;
     /// B 相有功功率
-    pub const PB:          u8 = 0x11;
+    pub const PB: u8 = 0x11;
     /// C 相有功功率
-    pub const PC:          u8 = 0x12;
+    pub const PC: u8 = 0x12;
     /// 合相有功功率
-    pub const PT:          u8 = 0x13;
+    pub const PT: u8 = 0x13;
 
     // ── 无功功率 ──
     /// A 相无功功率
-    pub const QA:          u8 = 0x14;
+    pub const QA: u8 = 0x14;
     /// B 相无功功率
-    pub const QB:          u8 = 0x15;
+    pub const QB: u8 = 0x15;
     /// C 相无功功率
-    pub const QC:          u8 = 0x16;
+    pub const QC: u8 = 0x16;
     /// 合相无功功率
-    pub const QT:          u8 = 0x17;
+    pub const QT: u8 = 0x17;
 
     // ── 视在功率 ──
     /// A 相视在功率
-    pub const SA:          u8 = 0x18;
+    pub const SA: u8 = 0x18;
     /// B 相视在功率
-    pub const SB:          u8 = 0x19;
+    pub const SB: u8 = 0x19;
     /// C 相视在功率
-    pub const SC:          u8 = 0x1A;
+    pub const SC: u8 = 0x1A;
     /// 合相视在功率
-    pub const ST:          u8 = 0x1B;
+    pub const ST: u8 = 0x1B;
 
     // ── 电压有效值 ──
     /// A 相电压 RMS
-    pub const UA_RMS:      u8 = 0x20;
+    pub const UA_RMS: u8 = 0x20;
     /// B 相电压 RMS
-    pub const UB_RMS:      u8 = 0x21;
+    pub const UB_RMS: u8 = 0x21;
     /// C 相电压 RMS
-    pub const UC_RMS:      u8 = 0x22;
+    pub const UC_RMS: u8 = 0x22;
 
     // ── 电流有效值 ──
     /// A 相电流 RMS
-    pub const IA_RMS:      u8 = 0x23;
+    pub const IA_RMS: u8 = 0x23;
     /// B 相电流 RMS
-    pub const IB_RMS:      u8 = 0x24;
+    pub const IB_RMS: u8 = 0x24;
     /// C 相电流 RMS
-    pub const IC_RMS:      u8 = 0x25;
+    pub const IC_RMS: u8 = 0x25;
     /// 零线电流 RMS
-    pub const IN_RMS:      u8 = 0x26;
+    pub const IN_RMS: u8 = 0x26;
 
     // ── 频率 / 功率因数 ──
     /// 电网频率
-    pub const FREQ:        u8 = 0x30;
+    pub const FREQ: u8 = 0x30;
     /// A 相功率因数
-    pub const PFA:         u8 = 0x31;
+    pub const PFA: u8 = 0x31;
     /// B 相功率因数
-    pub const PFB:         u8 = 0x32;
+    pub const PFB: u8 = 0x32;
     /// C 相功率因数
-    pub const PFC:         u8 = 0x33;
+    pub const PFC: u8 = 0x33;
     /// 合相功率因数
-    pub const PFT:         u8 = 0x34;
+    pub const PFT: u8 = 0x34;
 
     // ── 相角 ──
     /// A 相电压-电流相角
-    pub const PHA_UA_IA:   u8 = 0x35;
+    pub const PHA_UA_IA: u8 = 0x35;
     /// B 相电压-电流相角
-    pub const PHA_UB_IB:   u8 = 0x36;
+    pub const PHA_UB_IB: u8 = 0x36;
     /// C 相电压-电流相角
-    pub const PHA_UC_IC:   u8 = 0x37;
+    pub const PHA_UC_IC: u8 = 0x37;
 
     // ── 电能寄存器 ──
     /// 正向有功电能
-    pub const ACTIVE_IMPORT:   u8 = 0x40;
+    pub const ACTIVE_IMPORT: u8 = 0x40;
     /// 反向有功电能
-    pub const ACTIVE_EXPORT:   u8 = 0x41;
+    pub const ACTIVE_EXPORT: u8 = 0x41;
     /// 正向无功电能
     pub const REACTIVE_IMPORT: u8 = 0x42;
     /// 反向无功电能
@@ -135,81 +135,80 @@ pub mod reg {
 
     // ── 谐波分析 ──
     /// A 相电压谐波 (基波 + 1~51 次)
-    pub const HARMONIC_UA:     u8 = 0x50;
+    pub const HARMONIC_UA: u8 = 0x50;
     /// B 相电压谐波
-    pub const HARMONIC_UB:     u8 = 0x51;
+    pub const HARMONIC_UB: u8 = 0x51;
     /// C 相电压谐波
-    pub const HARMONIC_UC:     u8 = 0x52;
+    pub const HARMONIC_UC: u8 = 0x52;
     /// A 相电流谐波
-    pub const HARMONIC_IA:     u8 = 0x53;
+    pub const HARMONIC_IA: u8 = 0x53;
     /// B 相电流谐波
-    pub const HARMONIC_IB:     u8 = 0x54;
+    pub const HARMONIC_IB: u8 = 0x54;
     /// C 相电流谐波
-    pub const HARMONIC_IC:     u8 = 0x55
-    ;
+    pub const HARMONIC_IC: u8 = 0x55;
     // ── THD ──
     /// A 相电压 THD
-    pub const THD_UA:          u8 = 0x60;
+    pub const THD_UA: u8 = 0x60;
     /// B 相电压 THD
-    pub const THD_UB:          u8 = 0x61;
+    pub const THD_UB: u8 = 0x61;
     /// C 相电压 THD
-    pub const THD_UC:          u8 = 0x62;
+    pub const THD_UC: u8 = 0x62;
     /// A 相电流 THD
-    pub const THD_IA:          u8 = 0x63;
+    pub const THD_IA: u8 = 0x63;
     /// B 相电流 THD
-    pub const THD_IB:          u8 = 0x64;
+    pub const THD_IB: u8 = 0x64;
     /// C 相电流 THD
-    pub const THD_IC:          u8 = 0x65;
+    pub const THD_IC: u8 = 0x65;
 
     // ── 防窃电 ──
     /// 防窃电状态
-    pub const ANTI_TAMPER_STAT:u8 = 0x70;
+    pub const ANTI_TAMPER_STAT: u8 = 0x70;
     /// 防窃电配置
     pub const ANTI_TAMPER_CFG: u8 = 0x71;
 
     // ── 校准寄存器 ──
     /// A 相电压增益
-    pub const UGAIN_A:    u8 = 0x80;
+    pub const UGAIN_A: u8 = 0x80;
     /// B 相电压增益
-    pub const UGAIN_B:    u8 = 0x81;
+    pub const UGAIN_B: u8 = 0x81;
     /// C 相电压增益
-    pub const UGAIN_C:    u8 = 0x82;
+    pub const UGAIN_C: u8 = 0x82;
     /// A 相电流增益
-    pub const IGAIN_A:    u8 = 0x83;
+    pub const IGAIN_A: u8 = 0x83;
     /// B 相电流增益
-    pub const IGAIN_B:    u8 = 0x84;
+    pub const IGAIN_B: u8 = 0x84;
     /// C 相电流增益
-    pub const IGAIN_C:    u8 = 0x85;
+    pub const IGAIN_C: u8 = 0x85;
     /// A 相有功功率增益
-    pub const PGAIN_A:    u8 = 0x86;
+    pub const PGAIN_A: u8 = 0x86;
     /// B 相有功功率增益
-    pub const PGAIN_B:    u8 = 0x87;
+    pub const PGAIN_B: u8 = 0x87;
     /// C 相有功功率增益
-    pub const PGAIN_C:    u8 = 0x88;
+    pub const PGAIN_C: u8 = 0x88;
     /// A 相无功功率增益
-    pub const QGAIN_A:    u8 = 0x89;
+    pub const QGAIN_A: u8 = 0x89;
     /// B 相无功功率增益
-    pub const QGAIN_B:    u8 = 0x8A;
+    pub const QGAIN_B: u8 = 0x8A;
     /// C 相无功功率增益
-    pub const QGAIN_C:    u8 = 0x8B;
+    pub const QGAIN_C: u8 = 0x8B;
     /// A 相角差校正
-    pub const PHCAL_A:    u8 = 0x8C;
+    pub const PHCAL_A: u8 = 0x8C;
     /// B 相角差校正
-    pub const PHCAL_B:    u8 = 0x8D;
+    pub const PHCAL_B: u8 = 0x8D;
     /// C 相角差校正
-    pub const PHCAL_C:    u8 = 0x8E;
+    pub const PHCAL_C: u8 = 0x8E;
     /// 有功功率偏置 A
-    pub const POFFSET_A:  u8 = 0x8F;
+    pub const POFFSET_A: u8 = 0x8F;
     /// 有功功率偏置 B
-    pub const POFFSET_B:  u8 = 0x90;
+    pub const POFFSET_B: u8 = 0x90;
     /// 有功功率偏置 C
-    pub const POFFSET_C:  u8 = 0x91;
+    pub const POFFSET_C: u8 = 0x91;
     /// 无功功率偏置 A
-    pub const QOFFSET_A:  u8 = 0x92;
+    pub const QOFFSET_A: u8 = 0x92;
     /// 无功功率偏置 B
-    pub const QOFFSET_B:  u8 = 0x93;
+    pub const QOFFSET_B: u8 = 0x93;
     /// 无功功率偏置 C
-    pub const QOFFSET_C:  u8 = 0x94;
+    pub const QOFFSET_C: u8 = 0x94;
 }
 
 /* ================================================================== */
@@ -644,7 +643,10 @@ mod tests {
     fn test_crc8() {
         // 验证 CRC-8 计算
         assert_eq!(crc8(&[0x00]), 0x00);
-        assert_eq!(crc8(&[0x80, 0x00, 0x00, 0xA5]), crc8(&[0x80, 0x00, 0x00, 0xA5]));
+        assert_eq!(
+            crc8(&[0x80, 0x00, 0x00, 0xA5]),
+            crc8(&[0x80, 0x00, 0x00, 0xA5])
+        );
     }
 
     #[test]

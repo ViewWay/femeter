@@ -18,9 +18,9 @@ const SERV_KEY: u32 = 0x12345678;
 
 /// 超时对应的预分频值（LSI ≈ 32kHz）
 /// TODO: 根据 FM33A0XXEV 手册确认精确分频值
-const CFGR_DIV_256:   u32 = 0x00; // ~1s
-const CFGR_DIV_1024:  u32 = 0x01; // ~2s
-const CFGR_DIV_4096:  u32 = 0x02; // ~4s
+const CFGR_DIV_256: u32 = 0x00; // ~1s
+const CFGR_DIV_1024: u32 = 0x01; // ~2s
+const CFGR_DIV_4096: u32 = 0x02; // ~4s
 const CFGR_DIV_16384: u32 = 0x03; // ~8s
 
 // ══════════════════════════════════════════════════════════════════
@@ -36,12 +36,7 @@ pub enum IwdtTimeout {
     Sec8 = 3,
 }
 
-const TIMEOUT_DIV: [u32; 4] = [
-    CFGR_DIV_256,
-    CFGR_DIV_1024,
-    CFGR_DIV_4096,
-    CFGR_DIV_16384,
-];
+const TIMEOUT_DIV: [u32; 4] = [CFGR_DIV_256, CFGR_DIV_1024, CFGR_DIV_4096, CFGR_DIV_16384];
 
 // ══════════════════════════════════════════════════════════════════
 // 寄存器读写辅助
@@ -85,7 +80,7 @@ static mut TASK_COUNT: usize = 0;
 pub fn init(timeout: IwdtTimeout) {
     let div = TIMEOUT_DIV[timeout as usize];
     unsafe {
-        iwdt_write(0x04, div);      // CFGR: 设置预分频
+        iwdt_write(0x04, div); // CFGR: 设置预分频
         iwdt_write(0x00, SERV_KEY); // 首次喂狗，启动计数器
     }
     defmt::info!("IWDT 初始化完成, 超时={}s", timeout as u8 + 1);
@@ -93,7 +88,9 @@ pub fn init(timeout: IwdtTimeout) {
 
 /// 喂狗 — 必须在超时前调用
 pub fn feed() {
-    unsafe { iwdt_write(0x00, SERV_KEY); }
+    unsafe {
+        iwdt_write(0x00, SERV_KEY);
+    }
 }
 
 /// 读取当前看门狗计数值（调试用）
@@ -138,7 +135,11 @@ pub fn task_register(timeout_ticks: u32) -> usize {
         }
         count
     });
-    defmt::info!("task_watchdog: 注册任务 id={}, timeout={} ticks", id, timeout_ticks);
+    defmt::info!(
+        "task_watchdog: 注册任务 id={}, timeout={} ticks",
+        id,
+        timeout_ticks
+    );
     id
 }
 
@@ -176,7 +177,11 @@ pub fn task_check_and_feed() -> bool {
                 if let Some(ref task) = TASKS[i] {
                     let elapsed = now.wrapping_sub(task.last_feed);
                     if elapsed > task.timeout_ticks {
-                        defmt::error!("task_watchdog: 任务 {} 卡死，超时 {} ticks", i, task.timeout_ticks);
+                        defmt::error!(
+                            "task_watchdog: 任务 {} 卡死，超时 {} ticks",
+                            i,
+                            task.timeout_ticks
+                        );
                         return false; // 停止喂狗，触发复位
                     }
                 }
@@ -257,7 +262,159 @@ pub fn create_watchdog_task(priority: u32) {
     #[cfg(not(feature = "freertos"))]
     {
         // In bare-metal mode, watchdog runs inline
-        // No task creation needed, just call watchdog_task_entry() directly
         defmt::warn!("create_watchdog_task: 无操作（裸机模式）");
+    }
+}
+
+/* ================================================================== */
+/*  复位原因记录                                                        */
+/* ================================================================== */
+
+/// 复位原因标志位
+#[derive(Clone, Copy, Debug)]
+pub struct ResetFlags(u32);
+
+impl ResetFlags {
+    pub const POR: u32 = 0x01;
+    pub const WDR: u32 = 0x02;
+    pub const SWR: u32 = 0x04;
+    pub const BOR: u32 = 0x08;
+    pub const PIN: u32 = 0x10;
+
+    pub fn new() -> Self {
+        Self(0)
+    }
+    pub fn bits(&self) -> u32 {
+        self.0
+    }
+    pub fn is_por(&self) -> bool {
+        self.0 & Self::POR != 0
+    }
+    pub fn is_wdr(&self) -> bool {
+        self.0 & Self::WDR != 0
+    }
+    pub fn is_swr(&self) -> bool {
+        self.0 & Self::SWR != 0
+    }
+    pub fn is_bor(&self) -> bool {
+        self.0 & Self::BOR != 0
+    }
+    pub fn set(&mut self, flag: u32) {
+        self.0 |= flag;
+    }
+    pub fn clear(&mut self, flag: u32) {
+        self.0 &= !flag;
+    }
+}
+
+impl Default for ResetFlags {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// 复位原因记录
+#[derive(Clone, Copy, Debug, Default)]
+#[repr(C)]
+pub struct ResetRecord {
+    pub flags: u32,
+    pub uptime_sec: u32,
+    pub active_tasks: u8,
+    pub pc: u32,
+    pub wdr_count: u8,
+    pub crc: u32,
+}
+
+impl ResetRecord {
+    pub fn update_crc(&mut self) {
+        let bytes: &[u8] = unsafe {
+            core::slice::from_raw_parts(
+                self as *const _ as *const u8,
+                core::mem::size_of::<Self>() - 4,
+            )
+        };
+        self.crc = crc32_standalone(bytes);
+    }
+
+    pub fn verify_crc(&self) -> bool {
+        let bytes: &[u8] = unsafe {
+            core::slice::from_raw_parts(
+                self as *const _ as *const u8,
+                core::mem::size_of::<Self>() - 4,
+            )
+        };
+        crc32_standalone(bytes) == self.crc
+    }
+}
+
+fn crc32_standalone(data: &[u8]) -> u32 {
+    let mut crc: u32 = 0xFFFFFFFF;
+    for &byte in data {
+        crc ^= byte as u32;
+        for _ in 0..8 {
+            if crc & 1 != 0 {
+                crc = (crc >> 1) ^ 0xEDB88320;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    !crc
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_timeout_enum_values() {
+        assert_eq!(IwdtTimeout::Sec1 as u8, 0);
+        assert_eq!(IwdtTimeout::Sec8 as u8, 3);
+    }
+
+    #[test]
+    fn test_serv_key() {
+        assert_eq!(SERV_KEY, 0x12345678);
+    }
+
+    #[test]
+    fn test_max_watched_tasks() {
+        assert_eq!(MAX_WATCHED_TASKS, 8);
+    }
+
+    #[test]
+    fn test_reset_flags_new() {
+        let flags = ResetFlags::new();
+        assert_eq!(flags.bits(), 0);
+        assert!(!flags.is_por());
+        assert!(!flags.is_wdr());
+    }
+
+    #[test]
+    fn test_reset_flags_set_clear() {
+        let mut flags = ResetFlags::new();
+        flags.set(ResetFlags::WDR);
+        assert!(flags.is_wdr());
+        flags.set(ResetFlags::POR);
+        assert!(flags.is_por());
+        flags.clear(ResetFlags::WDR);
+        assert!(!flags.is_wdr());
+        assert!(flags.is_por());
+    }
+
+    #[test]
+    fn test_reset_record_crc() {
+        let mut record = ResetRecord {
+            flags: ResetFlags::WDR,
+            uptime_sec: 3600,
+            active_tasks: 5,
+            pc: 0x08001234,
+            wdr_count: 3,
+            crc: 0,
+        };
+        record.update_crc();
+        assert!(record.verify_crc());
+        record.uptime_sec = 0;
+        assert!(!record.verify_crc());
     }
 }

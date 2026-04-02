@@ -14,22 +14,16 @@
 
 extern crate alloc;
 
-use alloc::vec::Vec;
 use crate::hal::{EnergyData, PhaseData};
+use alloc::vec::Vec;
 use dlms_apdu::{
     get::{GetRequest, GetRequestNormal, GetResponse, GetResponseNormal},
     initiate::{conformance, InitiateRequest, InitiateResponse},
     types::{AccessRequest, AttributeDescriptor, InvokeId},
     Apdu,
 };
-use dlms_core::{
-    DataAccessError,
-    DlmsType,
-    ObisCode,
-};
-use dlms_hdlc::{
-    frame::{HdlcFrame, HDLC_ESCAPE, HDLC_ESCAPE_MASK, HDLC_FLAG},
-};
+use dlms_core::{DataAccessError, DlmsType, ObisCode};
+use dlms_hdlc::frame::{HdlcFrame, HDLC_ESCAPE, HDLC_ESCAPE_MASK, HDLC_FLAG};
 
 /* ================================================================== */
 /*  数据提供 trait — 解耦计量层与协议层                                */
@@ -273,19 +267,15 @@ impl<'a, P: DlmsDataProvider> DlmsStack<'a, P> {
             | Apdu::EventNotification(_)
             | Apdu::GeneralBlockTransfer(_) => {
                 // 只读设备：写/动作/事件/块传输不支持
-                Apdu::ExceptionResponse(
-                    dlms_apdu::ExceptionResponse::service_not_supported(
-                        apdu.invoke_id().unwrap_or(InvokeId::new(0)),
-                    ),
-                )
+                Apdu::ExceptionResponse(dlms_apdu::ExceptionResponse::service_not_supported(
+                    apdu.invoke_id().unwrap_or(InvokeId::new(0)),
+                ))
             }
             _ => {
                 // 其他类型不处理
-                Apdu::ExceptionResponse(
-                    dlms_apdu::ExceptionResponse::service_not_supported(
-                        apdu.invoke_id().unwrap_or(InvokeId::new(0)),
-                    ),
-                )
+                Apdu::ExceptionResponse(dlms_apdu::ExceptionResponse::service_not_supported(
+                    apdu.invoke_id().unwrap_or(InvokeId::new(0)),
+                ))
             }
         }
     }
@@ -308,16 +298,18 @@ impl<'a, P: DlmsDataProvider> DlmsStack<'a, P> {
                     let attr = item.descriptor.attribute_id;
                     self.read_cosem_attribute(invoke_id, obis, attr)
                 } else {
-                    Apdu::GetResponse(GetResponse::Data(
-                        GetResponseNormal::error(invoke_id, DataAccessError::TemporaryFailure),
-                    ))
+                    Apdu::GetResponse(GetResponse::Data(GetResponseNormal::error(
+                        invoke_id,
+                        DataAccessError::TemporaryFailure,
+                    )))
                 }
             }
             GetRequest::Next(_) => {
                 // 块传输续传：不支持
-                Apdu::GetResponse(GetResponse::Data(
-                    GetResponseNormal::error(invoke_id, DataAccessError::DataBlockUnavailable),
-                ))
+                Apdu::GetResponse(GetResponse::Data(GetResponseNormal::error(
+                    invoke_id,
+                    DataAccessError::DataBlockUnavailable,
+                )))
             }
         }
     }
@@ -367,12 +359,15 @@ impl<'a, P: DlmsDataProvider> DlmsStack<'a, P> {
             DlmsType::from_i64(energy.active_import as i64)
         } else {
             // 不支持的 OBIS 码：返回 object-undefined 错误
-            return Apdu::GetResponse(GetResponse::Data(
-                GetResponseNormal::error(invoke_id, DataAccessError::ObjectUndefined),
-            ));
+            return Apdu::GetResponse(GetResponse::Data(GetResponseNormal::error(
+                invoke_id,
+                DataAccessError::ObjectUndefined,
+            )));
         };
 
-        Apdu::GetResponse(GetResponse::Data(GetResponseNormal::success(invoke_id, value)))
+        Apdu::GetResponse(GetResponse::Data(GetResponseNormal::success(
+            invoke_id, value,
+        )))
     }
 
     /// 解码 HDLC 帧（带 CRC 校验）

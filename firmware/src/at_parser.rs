@@ -114,7 +114,12 @@ pub enum UrcEvent {
     /// LoRaWAN: 加入成功
     LorawanJoined,
     /// LoRaWAN: 收到下行数据
-    LorawanRxReceived { port: u8, rssi: i16, snr: i8, data: heapless::Vec<u8, 256> },
+    LorawanRxReceived {
+        port: u8,
+        rssi: i16,
+        snr: i8,
+        data: heapless::Vec<u8, 256>,
+    },
     /// LoRaWAN: 发送完成
     LorawanTxDone { status: u8 },
     /// Ring 指示 (来电/数据)
@@ -144,7 +149,9 @@ pub struct AtParser<T: UartTransport, const LINE_BUF: usize = 256, const MAX_LIN
     tick_ms: u32,
 }
 
-impl<T: UartTransport, const LINE_BUF: usize, const MAX_LINES: usize> AtParser<T, LINE_BUF, MAX_LINES> {
+impl<T: UartTransport, const LINE_BUF: usize, const MAX_LINES: usize>
+    AtParser<T, LINE_BUF, MAX_LINES>
+{
     pub fn new(transport: T) -> Self {
         Self {
             transport,
@@ -316,7 +323,8 @@ impl<T: UartTransport, const LINE_BUF: usize, const MAX_LINES: usize> AtParser<T
         }
 
         // 前缀匹配 URC
-        if line.starts_with("+CREG:") || line.starts_with("+CGREG:") || line.starts_with("+CEREG:") {
+        if line.starts_with("+CREG:") || line.starts_with("+CGREG:") || line.starts_with("+CEREG:")
+        {
             // +CREG: <n>,<stat> 或 +CREG: <stat>
             let stat = parse_last_number(line).unwrap_or(0) as u8;
             return Some(UrcEvent::NetworkRegChanged { stat });
@@ -330,8 +338,14 @@ impl<T: UartTransport, const LINE_BUF: usize, const MAX_LINES: usize> AtParser<T
         if line.starts_with("+QIURC:") {
             if line.contains("recv") || line.contains("\"recv\"") {
                 let parts: heapless::Vec<&str, 4> = line.split(',').collect();
-                let conn_id = parts.get(1).and_then(|s| s.trim().parse::<u8>().ok()).unwrap_or(0);
-                let size = parts.get(2).and_then(|s| s.trim().parse::<usize>().ok()).unwrap_or(0);
+                let conn_id = parts
+                    .get(1)
+                    .and_then(|s| s.trim().parse::<u8>().ok())
+                    .unwrap_or(0);
+                let size = parts
+                    .get(2)
+                    .and_then(|s| s.trim().parse::<usize>().ok())
+                    .unwrap_or(0);
                 return Some(UrcEvent::DataReceived { conn_id, size });
             }
             if line.contains("closed") {
@@ -451,7 +465,13 @@ pub trait MqttOps: CellularModule {
     /// 配置 MQTT 用户名/密码
     fn mqtt_set_auth(&mut self, user: &str, pass: &str) -> Result<(), AtError>;
     /// 配置遗嘱消息
-    fn mqtt_set_will(&mut self, topic: &str, msg: &[u8], qos: QoS, retain: bool) -> Result<(), AtError>;
+    fn mqtt_set_will(
+        &mut self,
+        topic: &str,
+        msg: &[u8],
+        qos: QoS,
+        retain: bool,
+    ) -> Result<(), AtError>;
     /// 连接 MQTT broker
     fn mqtt_connect(&mut self) -> Result<(), AtError>;
     /// 断开 MQTT
@@ -477,7 +497,12 @@ pub trait LorawanOps: ModuleBase {
     /// OTAA 入网
     fn join_otaa(&mut self) -> Result<(), AtError>;
     /// ABP 入网 (设置 NwkSKey/AppSKey/DevAddr)
-    fn join_abp(&mut self, dev_addr: &[u8; 4], nwk_skey: &[u8; 16], app_s_key: &[u8; 16]) -> Result<(), AtError>;
+    fn join_abp(
+        &mut self,
+        dev_addr: &[u8; 4],
+        nwk_skey: &[u8; 16],
+        app_s_key: &[u8; 16],
+    ) -> Result<(), AtError>;
     /// 发送数据 (确认)
     fn send_confirmed(&mut self, port: u8, data: &[u8]) -> Result<(), AtError>;
     /// 发送数据 (非确认)
@@ -532,11 +557,11 @@ pub enum SimStatus {
 
 #[derive(Debug, Clone, Copy)]
 pub struct SignalInfo {
-    pub rssi: i16,   // dBm, 负值
-    pub ber: u8,      // 0~7
-    pub rsrp: i16,    // dBm (LTE)
-    pub rsrq: i16,    // dB (LTE)
-    pub snr: i16,     // dB (LTE)
+    pub rssi: i16, // dBm, 负值
+    pub ber: u8,   // 0~7
+    pub rsrp: i16, // dBm (LTE)
+    pub rsrq: i16, // dB (LTE)
+    pub snr: i16,  // dB (LTE)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -592,7 +617,11 @@ pub enum PowerMode {
 // ============================================================
 
 fn hex_digit(n: u8) -> u8 {
-    if n < 10 { b'0' + n } else { b'A' + n - 10 }
+    if n < 10 {
+        b'0' + n
+    } else {
+        b'A' + n - 10
+    }
 }
 
 fn parse_last_number(s: &str) -> Option<u32> {
@@ -604,7 +633,8 @@ fn parse_last_number(s: &str) -> Option<u32> {
 
 fn parse_csq(s: &str) -> (u8, u8) {
     // +CSQ: <rssi>,<ber>
-    let parts: heapless::Vec<&str, 4> = s.split(|c: char| c == ':' || c == ',')
+    let parts: heapless::Vec<&str, 4> = s
+        .split(|c: char| c == ':' || c == ',')
         .map(|p| p.trim())
         .filter(|p| !p.is_empty())
         .collect();
@@ -667,7 +697,9 @@ pub mod ec800n {
 
     // 实现 ModuleBase
     impl<T: UartTransport, PWR: PinControl, RST: PinControl> ModuleBase for Ec800n<T, PWR, RST> {
-        fn module_type(&self) -> ModuleType { ModuleType::LteCat1 }
+        fn module_type(&self) -> ModuleType {
+            ModuleType::LteCat1
+        }
 
         fn test_at(&mut self) -> Result<(), AtError> {
             self.at.send_cmd("AT")?;
@@ -720,7 +752,13 @@ pub mod ec800n {
             self.at.send_cmd("AT+CSQ")?;
             // TODO: 解析 +CSQ: <rssi>,<ber>
             // LTE 模组还支持 AT+QENG="servingcell" 获取 RSRP/RSRQ/SINR
-            Ok(SignalInfo { rssi: -99, ber: 0, rsrp: 0, rsrq: 0, snr: 0 })
+            Ok(SignalInfo {
+                rssi: -99,
+                ber: 0,
+                rsrp: 0,
+                rsrq: 0,
+                snr: 0,
+            })
         }
 
         fn get_network_reg(&mut self) -> Result<NetworkStatus, AtError> {
@@ -810,7 +848,13 @@ pub mod ec800n {
             Ok(())
         }
 
-        fn mqtt_set_will(&mut self, topic: &str, msg: &[u8], qos: QoS, retain: bool) -> Result<(), AtError> {
+        fn mqtt_set_will(
+            &mut self,
+            topic: &str,
+            msg: &[u8],
+            qos: QoS,
+            retain: bool,
+        ) -> Result<(), AtError> {
             // AT+QMTCFG="will",0,<qos>,<retain>,"<topic>","<msg>"
             let _ = (topic, msg, qos, retain);
             Ok(())
@@ -909,7 +953,9 @@ pub mod asr6601 {
     }
 
     impl<T: UartTransport> ModuleBase for Asr6601<T> {
-        fn module_type(&self) -> ModuleType { ModuleType::Lorawan }
+        fn module_type(&self) -> ModuleType {
+            ModuleType::Lorawan
+        }
 
         fn test_at(&mut self) -> Result<(), AtError> {
             self.at.send_cmd("AT")?;
@@ -972,7 +1018,12 @@ pub mod asr6601 {
             Ok(())
         }
 
-        fn join_abp(&mut self, dev_addr: &[u8; 4], nwk_skey: &[u8; 16], app_s_key: &[u8; 16]) -> Result<(), AtError> {
+        fn join_abp(
+            &mut self,
+            dev_addr: &[u8; 4],
+            nwk_skey: &[u8; 16],
+            app_s_key: &[u8; 16],
+        ) -> Result<(), AtError> {
             // AT+LORAJOIN=ABP
             // AT+LORAKEY=NWKSKEY,<hex32>
             // AT+LORAKEY=APPSKEY,<hex32>
@@ -1046,7 +1097,7 @@ pub enum ChannelId {
 #[derive(Debug, Clone)]
 pub struct ChannelMessage {
     pub source: ChannelId,
-    pub obis: [u8; 6],       // OBIS 短码
+    pub obis: [u8; 6], // OBIS 短码
     pub value: ChannelValue,
     pub timestamp: Option<u32>,
 }
@@ -1141,7 +1192,12 @@ where
     L: LorawanChannel,
 {
     pub fn new(rs485: R, irda: I, cat1: C, lora: L) -> Self {
-        Self { rs485, irda, cat1, lora }
+        Self {
+            rs485,
+            irda,
+            cat1,
+            lora,
+        }
     }
 
     /// 上行数据路由 — 优先级: Cat.1 > LoRaWAN > RS485 > 红外

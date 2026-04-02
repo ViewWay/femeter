@@ -35,10 +35,10 @@ fn build_freertos() {
         .includes(&[
             "third_party/freertos/include",
             &port_dir,
-            ".",  // FreeRTOSConfig.h is here
+            ".", // FreeRTOSConfig.h is here
         ])
         .warnings_into_errors(false)
-        .opt_level_str("s")  // size optimization
+        .opt_level_str("s") // size optimization
         .compile("freertos_hooks");
 
     let mut build = cc::Build::new();
@@ -63,7 +63,7 @@ fn build_freertos() {
         .includes(&[
             "third_party/freertos/include",
             &port_dir,
-            ".",  // FreeRTOSConfig.h
+            ".", // FreeRTOSConfig.h
         ])
         .warnings_into_errors(false)
         .opt_level_str("s")
@@ -80,7 +80,13 @@ fn build_freertos() {
         .output()
         .expect("arm-none-eabi-gcc not found");
     let libgcc_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    println!("cargo:rustc-link-search=native={}", std::path::Path::new(&libgcc_path).parent().unwrap().display());
+    println!(
+        "cargo:rustc-link-search=native={}",
+        std::path::Path::new(&libgcc_path)
+            .parent()
+            .unwrap()
+            .display()
+    );
     println!("cargo:rustc-link-lib=static=gcc");
 
     // Rebuild if FreeRTOS sources or config change

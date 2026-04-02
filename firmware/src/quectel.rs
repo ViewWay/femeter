@@ -53,62 +53,85 @@ impl QuectelModel {
     /// 从 AT+GMR 或 AT+CGMM 响应自动识别型号
     pub fn from_ident_response(resp: &str) -> Self {
         let s = resp.to_uppercase();
-        if s.contains("EC20") { Self::Ec20 }
-        else if s.contains("EC25") { Self::Ec25 }
-        else if s.contains("EC200T") { Self::Ec200T }
-        else if s.contains("EC200S") { Self::Ec200S }
-        else if s.contains("EC800N") { Self::Ec800N }
-        else if s.contains("EC800G") { Self::Ec800G }
-        else if s.contains("EC200U") { Self::Ec200U }
-        else if s.contains("EC800E") { Self::Ec800E }
-        else if s.contains("BC260") { Self::Bc260Y }
-        else if s.contains("BC28") { Self::Bc28F }
-        else if s.contains("BC95") { Self::Bc95 }
-        else if s.contains("M26") { Self::M26 }
-        else if s.contains("M35") { Self::M35 }
-        else if s.contains("MC60") { Self::Mc60 }
-        else if s.contains("M66") { Self::M66 }
-        else if s.contains("AG35") { Self::Ag35 }
-        else if s.contains("AG215") { Self::Ag215 }
-        else if s.contains("AG52") { Self::Ag52 }
-        else { Self::Unknown }
+        if s.contains("EC20") {
+            Self::Ec20
+        } else if s.contains("EC25") {
+            Self::Ec25
+        } else if s.contains("EC200T") {
+            Self::Ec200T
+        } else if s.contains("EC200S") {
+            Self::Ec200S
+        } else if s.contains("EC800N") {
+            Self::Ec800N
+        } else if s.contains("EC800G") {
+            Self::Ec800G
+        } else if s.contains("EC200U") {
+            Self::Ec200U
+        } else if s.contains("EC800E") {
+            Self::Ec800E
+        } else if s.contains("BC260") {
+            Self::Bc260Y
+        } else if s.contains("BC28") {
+            Self::Bc28F
+        } else if s.contains("BC95") {
+            Self::Bc95
+        } else if s.contains("M26") {
+            Self::M26
+        } else if s.contains("M35") {
+            Self::M35
+        } else if s.contains("MC60") {
+            Self::Mc60
+        } else if s.contains("M66") {
+            Self::M66
+        } else if s.contains("AG35") {
+            Self::Ag35
+        } else if s.contains("AG215") {
+            Self::Ag215
+        } else if s.contains("AG52") {
+            Self::Ag52
+        } else {
+            Self::Unknown
+        }
     }
 
     /// 模组能力集
     pub fn capabilities(&self) -> QuectelCapabilities {
         match self {
             // Cat.4 — 全功能: TCP/UDP + MQTT + SMS + 语音 + GNSS(部分)
-            Self::Ec20 | Self::Ec25 | Self::Ec200T | Self::Ec200S
-            | Self::Ag35 | Self::Ag52 => QuectelCapabilities {
-                cellular_type: CellularType::LteCat4,
-                socket: true,
-                mqtt: true,
-                mqtt_ssl: true,
-                coap: false,
-                ftp: true,
-                http: true,
-                ssl: true,
-                sms: true,
-                voice: true,
-                gnss: matches!(self, Self::Ec25 | Self::Ag52),
-                max_baud: 460800,
-            },
+            Self::Ec20 | Self::Ec25 | Self::Ec200T | Self::Ec200S | Self::Ag35 | Self::Ag52 => {
+                QuectelCapabilities {
+                    cellular_type: CellularType::LteCat4,
+                    socket: true,
+                    mqtt: true,
+                    mqtt_ssl: true,
+                    coap: false,
+                    ftp: true,
+                    http: true,
+                    ssl: true,
+                    sms: true,
+                    voice: true,
+                    gnss: matches!(self, Self::Ec25 | Self::Ag52),
+                    max_baud: 460800,
+                }
+            }
 
             // Cat.1 — 中速率: TCP/UDP + MQTT + SMS
-            Self::Ec800N | Self::Ec800G | Self::Ec200U | Self::Ec800E | Self::Ag215 => QuectelCapabilities {
-                cellular_type: CellularType::LteCat1,
-                socket: true,
-                mqtt: true,
-                mqtt_ssl: true,
-                coap: false,
-                ftp: true,
-                http: true,
-                ssl: true,
-                sms: true,
-                voice: matches!(self, Self::Ec800N | Self::Ec800G),
-                gnss: matches!(self, Self::Ec800G),
-                max_baud: 460800,
-            },
+            Self::Ec800N | Self::Ec800G | Self::Ec200U | Self::Ec800E | Self::Ag215 => {
+                QuectelCapabilities {
+                    cellular_type: CellularType::LteCat1,
+                    socket: true,
+                    mqtt: true,
+                    mqtt_ssl: true,
+                    coap: false,
+                    ftp: true,
+                    http: true,
+                    ssl: true,
+                    sms: true,
+                    voice: matches!(self, Self::Ec800N | Self::Ec800G),
+                    gnss: matches!(self, Self::Ec800G),
+                    max_baud: 460800,
+                }
+            }
 
             // NB-IoT — 低功耗: TCP/UDP + MQTT + CoAP (无语音)
             Self::Bc260Y | Self::Bc28F | Self::Bc95 => QuectelCapabilities {
@@ -144,9 +167,17 @@ impl QuectelModel {
 
             Self::Unknown => QuectelCapabilities {
                 cellular_type: CellularType::Unknown,
-                socket: false, mqtt: false, mqtt_ssl: false, coap: false,
-                ftp: false, http: false, ssl: false, sms: false, voice: false,
-                gnss: false, max_baud: 115200,
+                socket: false,
+                mqtt: false,
+                mqtt_ssl: false,
+                coap: false,
+                ftp: false,
+                http: false,
+                ssl: false,
+                sms: false,
+                voice: false,
+                gnss: false,
+                max_baud: 115200,
             },
         }
     }
@@ -154,9 +185,9 @@ impl QuectelModel {
     /// PWRKEY 拉低时间 (开机)
     pub fn pwrkey_on_ms(&self) -> u32 {
         match self {
-            Self::Bc260Y | Self::Bc28F | Self::Bc95 => 500,  // NB-IoT: ≥500ms
+            Self::Bc260Y | Self::Bc28F | Self::Bc95 => 500, // NB-IoT: ≥500ms
             Self::M26 | Self::M35 | Self::Mc60 | Self::M66 => 1000, // GPRS: ≥1000ms
-            _ => 500, // Cat.1/Cat.4: ≥500ms
+            _ => 500,                                       // Cat.1/Cat.4: ≥500ms
         }
     }
 
@@ -334,12 +365,19 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
     // ========================================
 
     /// 完整初始化序列 (开机 → 等待就绪 → 配置)
-    pub fn full_init<D: Delay>(&mut self, delay: &mut D, get_ms: impl Fn() -> u32 + Copy) -> Result<(), AtError> {
+    pub fn full_init<D: Delay>(
+        &mut self,
+        delay: &mut D,
+        get_ms: impl Fn() -> u32 + Copy,
+    ) -> Result<(), AtError> {
         // 1. 硬件开机
         self.hardware_power_on(delay);
 
         // 2. 等待 RDY
-        if !self.at.wait_exact("RDY", self.model.boot_ready_timeout_ms(), &get_ms) {
+        if !self
+            .at
+            .wait_exact("RDY", self.model.boot_ready_timeout_ms(), &get_ms)
+        {
             // 某些模组不发送 RDY, 尝试 AT 测试
             delay.delay_ms(3000);
         }
@@ -359,8 +397,12 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
         match resp {
             AtResponse::OkWithLines(lines) => {
                 for line in &lines {
-                    if line.contains("READY") { break; }
-                    if line.contains("SIM") { return Err(AtError::SimError); }
+                    if line.contains("READY") {
+                        break;
+                    }
+                    if line.contains("SIM") {
+                        return Err(AtError::SimError);
+                    }
                 }
             }
             AtResponse::Error(_) => return Err(AtError::SimError),
@@ -416,10 +458,10 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
     fn configure_pdp(&mut self, get_ms: &(impl Fn() -> u32)) -> Result<(), AtError> {
         // AT+QICSGP=<ctx>,1,"<apn>","<user>","<pass>",1
         let apn = match self.caps.cellular_type {
-            CellularType::NbIoT => "CTNB",         // 电信NB
-            CellularType::LteCat1 => "CTNET",       // 电信Cat.1
+            CellularType::NbIoT => "CTNB",    // 电信NB
+            CellularType::LteCat1 => "CTNET", // 电信Cat.1
             CellularType::LteCat4 => "CTNET",
-            CellularType::Gprs => "CMNET",          // 移动GPRS
+            CellularType::Gprs => "CMNET", // 移动GPRS
             CellularType::Unknown => "CMNET",
         };
         let cmd = heapless::String::<64>::from("AT+QICSGP=1,1,\"");
@@ -440,8 +482,17 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
 
     /// 打开 Socket 连接 (TCP/UDP)
     /// AT+QIOPEN=<ctx>,<conn_id>,"<service_type>","<addr>",<port>,0,0
-    pub fn socket_open(&mut self, conn_id: u8, proto: SocketProto, addr: &str, port: u16, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.socket { return Err(AtError::NotSupported); }
+    pub fn socket_open(
+        &mut self,
+        conn_id: u8,
+        proto: SocketProto,
+        addr: &str,
+        port: u16,
+        get_ms: impl Fn() -> u32,
+    ) -> Result<(), AtError> {
+        if !self.caps.socket {
+            return Err(AtError::NotSupported);
+        }
         let proto_str = match proto {
             SocketProto::Tcp => "TCP",
             SocketProto::Udp => "UDP",
@@ -456,8 +507,15 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
 
     /// 发送数据 (Socket)
     /// AT+QISEND=<conn_id>,<len>
-    pub fn socket_send(&mut self, conn_id: u8, data: &[u8], get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.socket { return Err(AtError::NotSupported); }
+    pub fn socket_send(
+        &mut self,
+        conn_id: u8,
+        data: &[u8],
+        get_ms: impl Fn() -> u32,
+    ) -> Result<(), AtError> {
+        if !self.caps.socket {
+            return Err(AtError::NotSupported);
+        }
         // 方式1: 直接指定长度
         // AT+QISEND=0,100
         // > (提示符)
@@ -469,16 +527,30 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
 
     /// 发送数据 (十六进制模式)
     /// AT+QISEND=<conn_id>,<len>,"<hex>"
-    pub fn socket_send_hex(&mut self, conn_id: u8, hex_data: &str, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.socket { return Err(AtError::NotSupported); }
+    pub fn socket_send_hex(
+        &mut self,
+        conn_id: u8,
+        hex_data: &str,
+        get_ms: impl Fn() -> u32,
+    ) -> Result<(), AtError> {
+        if !self.caps.socket {
+            return Err(AtError::NotSupported);
+        }
         let _ = (conn_id, hex_data);
         Ok(())
     }
 
     /// 读取数据 (Socket)
     /// AT+QIRD=<conn_id>,<len>
-    pub fn socket_recv(&mut self, conn_id: u8, buf: &mut [u8], get_ms: impl Fn() -> u32) -> Result<usize, AtError> {
-        if !self.caps.socket { return Err(AtError::NotSupported); }
+    pub fn socket_recv(
+        &mut self,
+        conn_id: u8,
+        buf: &mut [u8],
+        get_ms: impl Fn() -> u32,
+    ) -> Result<usize, AtError> {
+        if !self.caps.socket {
+            return Err(AtError::NotSupported);
+        }
         // AT+QIRD=0,512
         // +QIRD: <actual_len>\r\n<data>\r\nOK
         let _ = (conn_id, buf);
@@ -488,7 +560,9 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
     /// 关闭 Socket
     /// AT+QICLOSE=<conn_id>,<timeout>
     pub fn socket_close(&mut self, conn_id: u8, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.socket { return Err(AtError::NotSupported); }
+        if !self.caps.socket {
+            return Err(AtError::NotSupported);
+        }
         self.at.send_cmd("AT+QICLOSE=0,10")?;
         self.at.wait_ok(10000, &get_ms)?;
         Ok(())
@@ -496,8 +570,14 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
 
     /// 查询 Socket 状态
     /// AT+QISTATE=1,<conn_id>
-    pub fn socket_status(&mut self, conn_id: u8, get_ms: impl Fn() -> u32) -> Result<SocketState, AtError> {
-        if !self.caps.socket { return Err(AtError::NotSupported); }
+    pub fn socket_status(
+        &mut self,
+        conn_id: u8,
+        get_ms: impl Fn() -> u32,
+    ) -> Result<SocketState, AtError> {
+        if !self.caps.socket {
+            return Err(AtError::NotSupported);
+        }
         let _ = conn_id;
         Ok(SocketState::Connected)
     }
@@ -507,8 +587,15 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
     // ========================================
 
     /// 配置 MQTT broker 并连接
-    pub fn mqtt_open(&mut self, broker: &str, port: u16, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.mqtt { return Err(AtError::NotSupported); }
+    pub fn mqtt_open(
+        &mut self,
+        broker: &str,
+        port: u16,
+        get_ms: impl Fn() -> u32,
+    ) -> Result<(), AtError> {
+        if !self.caps.mqtt {
+            return Err(AtError::NotSupported);
+        }
 
         // 1. 配置 MQTT 版本 (3.1.1)
         self.at.send_cmd("AT+QMTCFG=\"version\",0,4")?;
@@ -528,8 +615,16 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
     }
 
     /// MQTT 登录
-    pub fn mqtt_login(&mut self, client_id: &str, user: Option<&str>, pass: Option<&str>, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.mqtt { return Err(AtError::NotSupported); }
+    pub fn mqtt_login(
+        &mut self,
+        client_id: &str,
+        user: Option<&str>,
+        pass: Option<&str>,
+        get_ms: impl Fn() -> u32,
+    ) -> Result<(), AtError> {
+        if !self.caps.mqtt {
+            return Err(AtError::NotSupported);
+        }
         // AT+QMTCONN=0,"client_id","user","pass"
         // 等待 +QMTCONN: 0,0,0 (client, result, retcode)
         let _ = (client_id, user, pass);
@@ -537,8 +632,16 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
     }
 
     /// MQTT 发布
-    pub fn mqtt_publish(&mut self, topic: &str, data: &[u8], qos: QoS, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.mqtt { return Err(AtError::NotSupported); }
+    pub fn mqtt_publish(
+        &mut self,
+        topic: &str,
+        data: &[u8],
+        qos: QoS,
+        get_ms: impl Fn() -> u32,
+    ) -> Result<(), AtError> {
+        if !self.caps.mqtt {
+            return Err(AtError::NotSupported);
+        }
         // AT+QMTPUB=0,<pktid>,<qos>,0,"<topic>"
         // 等待 > 提示符
         // 发送数据 + CTRL+Z
@@ -548,8 +651,15 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
     }
 
     /// MQTT 订阅
-    pub fn mqtt_subscribe(&mut self, topic: &str, qos: QoS, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.mqtt { return Err(AtError::NotSupported); }
+    pub fn mqtt_subscribe(
+        &mut self,
+        topic: &str,
+        qos: QoS,
+        get_ms: impl Fn() -> u32,
+    ) -> Result<(), AtError> {
+        if !self.caps.mqtt {
+            return Err(AtError::NotSupported);
+        }
         // AT+QMTSUB=0,<pktid>,"<topic>",<qos>
         // 等待 +QMTSUB: 0,<pktid>,<result>,<qos>
         let _ = (topic, qos);
@@ -557,8 +667,14 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
     }
 
     /// MQTT 取消订阅
-    pub fn mqtt_unsubscribe(&mut self, topic: &str, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.mqtt { return Err(AtError::NotSupported); }
+    pub fn mqtt_unsubscribe(
+        &mut self,
+        topic: &str,
+        get_ms: impl Fn() -> u32,
+    ) -> Result<(), AtError> {
+        if !self.caps.mqtt {
+            return Err(AtError::NotSupported);
+        }
         // AT+QMTUNS=0,<pktid>,"<topic>"
         let _ = topic;
         Ok(())
@@ -566,7 +682,9 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
 
     /// MQTT 断开
     pub fn mqtt_disconnect(&mut self, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.mqtt { return Err(AtError::NotSupported); }
+        if !self.caps.mqtt {
+            return Err(AtError::NotSupported);
+        }
         self.at.send_cmd("AT+QMTDISC=0")?;
         self.at.wait_ok(5000, &get_ms)?;
         Ok(())
@@ -578,7 +696,9 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
 
     /// CoAP 创建实例
     pub fn coap_create(&mut self, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.coap { return Err(AtError::NotSupported); }
+        if !self.caps.coap {
+            return Err(AtError::NotSupported);
+        }
         // AT+QCOAPCREATE=<contextID>
         self.at.send_cmd("AT+QCOAPCREATE=1")?;
         self.at.wait_ok(5000, &get_ms)?;
@@ -586,8 +706,15 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
     }
 
     /// CoAP POST
-    pub fn coap_post(&mut self, uri: &str, data: &[u8], get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.coap { return Err(AtError::NotSupported); }
+    pub fn coap_post(
+        &mut self,
+        uri: &str,
+        data: &[u8],
+        get_ms: impl Fn() -> u32,
+    ) -> Result<(), AtError> {
+        if !self.caps.coap {
+            return Err(AtError::NotSupported);
+        }
         // AT+QCOAPPOST=0,"coap://server/uri",<len>
         // > <data>
         let _ = (uri, data);
@@ -596,7 +723,9 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
 
     /// CoAP GET
     pub fn coap_get(&mut self, uri: &str, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.coap { return Err(AtError::NotSupported); }
+        if !self.caps.coap {
+            return Err(AtError::NotSupported);
+        }
         // AT+QCOAPGET=0,"coap://server/uri"
         let _ = uri;
         Ok(())
@@ -608,7 +737,9 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
 
     /// HTTP GET
     pub fn http_get(&mut self, url: &str, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.http { return Err(AtError::NotSupported); }
+        if !self.caps.http {
+            return Err(AtError::NotSupported);
+        }
         // AT+QHTTPURL=<len>
         // > <url>
         // AT+QHTTPGET=80
@@ -619,8 +750,16 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
     }
 
     /// HTTP POST
-    pub fn http_post(&mut self, url: &str, content_type: &str, data: &[u8], get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.http { return Err(AtError::NotSupported); }
+    pub fn http_post(
+        &mut self,
+        url: &str,
+        content_type: &str,
+        data: &[u8],
+        get_ms: impl Fn() -> u32,
+    ) -> Result<(), AtError> {
+        if !self.caps.http {
+            return Err(AtError::NotSupported);
+        }
         // AT+QHTTPURL=<len>
         // AT+QHTTPPOST=<data_len>,80,"<content_type>"
         // > <data>
@@ -633,8 +772,17 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
     // ========================================
 
     /// FTP 连接
-    pub fn ftp_open(&mut self, server: &str, port: u16, user: &str, pass: &str, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.ftp { return Err(AtError::NotSupported); }
+    pub fn ftp_open(
+        &mut self,
+        server: &str,
+        port: u16,
+        user: &str,
+        pass: &str,
+        get_ms: impl Fn() -> u32,
+    ) -> Result<(), AtError> {
+        if !self.caps.ftp {
+            return Err(AtError::NotSupported);
+        }
         // AT+QFTPCFG="account","<user>","<pass>"
         // AT+QFTPCFG="contextid",1
         // AT+QFTPOPEN="<server>",<port>
@@ -644,7 +792,9 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
 
     /// FTP 下载文件
     pub fn ftp_get(&mut self, remote_path: &str, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.ftp { return Err(AtError::NotSupported); }
+        if !self.caps.ftp {
+            return Err(AtError::NotSupported);
+        }
         // AT+QFTPGET="<remote_path>"
         let _ = remote_path;
         Ok(())
@@ -655,8 +805,15 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
     // ========================================
 
     /// 发送 SMS
-    pub fn sms_send(&mut self, number: &str, text: &str, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.sms { return Err(AtError::NotSupported); }
+    pub fn sms_send(
+        &mut self,
+        number: &str,
+        text: &str,
+        get_ms: impl Fn() -> u32,
+    ) -> Result<(), AtError> {
+        if !self.caps.sms {
+            return Err(AtError::NotSupported);
+        }
         // AT+CMGF=1 (文本模式)
         // AT+CMGS="<number>"
         // > <text> + CTRL+Z
@@ -670,7 +827,9 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
 
     /// 开启 GNSS
     pub fn gnss_start(&mut self, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.gnss { return Err(AtError::NotSupported); }
+        if !self.caps.gnss {
+            return Err(AtError::NotSupported);
+        }
         // AT+QGPS=1
         self.at.send_cmd("AT+QGPS=1")?;
         self.at.wait_ok(3000, &get_ms)?;
@@ -679,7 +838,9 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
 
     /// 获取 GNSS 定位信息
     pub fn gnss_get_position(&mut self, get_ms: impl Fn() -> u32) -> Result<GnssInfo, AtError> {
-        if !self.caps.gnss { return Err(AtError::NotSupported); }
+        if !self.caps.gnss {
+            return Err(AtError::NotSupported);
+        }
         // AT+QGPSLOC=2
         // +QGPSLOC: <UTC>,<lat>,<lon>,<hdop>,<altitude>,<fix>,<cog>,<spkm>,<spkn>,<date>,<nsat>
         self.at.send_cmd("AT+QGPSLOC=2")?;
@@ -692,8 +853,15 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
     // ========================================
 
     /// 配置 SSL 证书
-    pub fn ssl_config(&mut self, ssl_ctx: u8, ca_cert: &[u8], get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if !self.caps.ssl { return Err(AtError::NotSupported); }
+    pub fn ssl_config(
+        &mut self,
+        ssl_ctx: u8,
+        ca_cert: &[u8],
+        get_ms: impl Fn() -> u32,
+    ) -> Result<(), AtError> {
+        if !self.caps.ssl {
+            return Err(AtError::NotSupported);
+        }
         // AT+QSSLCFG="seclevel",<sslCtx>,2
         // AT+QSSLCFG="cacert",<sslCtx>,"<path>"
         let _ = (ssl_ctx, ca_cert);
@@ -723,8 +891,15 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> QuectelModule<T, PWR, R
     }
 
     /// 配置 PSM/eDRX (NB-IoT 低功耗)
-    pub fn configure_psm(&mut self, t3324: u32, t3412: u32, get_ms: impl Fn() -> u32) -> Result<(), AtError> {
-        if self.caps.cellular_type != CellularType::NbIoT { return Err(AtError::NotSupported); }
+    pub fn configure_psm(
+        &mut self,
+        t3324: u32,
+        t3412: u32,
+        get_ms: impl Fn() -> u32,
+    ) -> Result<(), AtError> {
+        if self.caps.cellular_type != CellularType::NbIoT {
+            return Err(AtError::NotSupported);
+        }
         // AT+QCFG="psm",1,"<T3412>","<T3324>"
         // AT+QCFG="edrx",1,"<act>","<requested_eDRX>"
         let _ = (t3324, t3412);
@@ -914,7 +1089,9 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> ModuleBase for QuectelM
     }
 }
 
-impl<T: UartTransport, PWR: PinControl, RST: PinControl> CellularModule for QuectelModule<T, PWR, RST> {
+impl<T: UartTransport, PWR: PinControl, RST: PinControl> CellularModule
+    for QuectelModule<T, PWR, RST>
+{
     fn get_sim_status(&mut self) -> Result<SimStatus, AtError> {
         self.at.send_cmd("AT+CPIN?")?;
         Ok(SimStatus::Ready)
@@ -927,7 +1104,13 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> CellularModule for Quec
 
     fn get_signal(&mut self) -> Result<SignalInfo, AtError> {
         self.at.send_cmd("AT+CSQ")?;
-        Ok(SignalInfo { rssi: -99, ber: 0, rsrp: 0, rsrq: 0, snr: 0 })
+        Ok(SignalInfo {
+            rssi: -99,
+            ber: 0,
+            rsrp: 0,
+            rsrq: 0,
+            snr: 0,
+        })
     }
 
     fn get_network_reg(&mut self) -> Result<NetworkStatus, AtError> {
@@ -996,7 +1179,13 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> MqttOps for QuectelModu
         let _ = (user, pass);
         Ok(())
     }
-    fn mqtt_set_will(&mut self, topic: &str, msg: &[u8], qos: QoS, retain: bool) -> Result<(), AtError> {
+    fn mqtt_set_will(
+        &mut self,
+        topic: &str,
+        msg: &[u8],
+        qos: QoS,
+        retain: bool,
+    ) -> Result<(), AtError> {
         let _ = (topic, msg, qos, retain);
         Ok(())
     }
@@ -1023,7 +1212,9 @@ impl<T: UartTransport, PWR: PinControl, RST: PinControl> MqttOps for QuectelModu
     }
 }
 
-impl<T: UartTransport, PWR: PinControl, RST: PinControl> PowerControl for QuectelModule<T, PWR, RST> {
+impl<T: UartTransport, PWR: PinControl, RST: PinControl> PowerControl
+    for QuectelModule<T, PWR, RST>
+{
     fn sleep(&mut self) -> Result<(), AtError> {
         self.at.send_cmd("AT+QSCLK=0")?;
         Ok(())

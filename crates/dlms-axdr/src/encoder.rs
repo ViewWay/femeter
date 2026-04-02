@@ -477,4 +477,139 @@ mod tests {
         assert_eq!(enc.to_bytes()[1], 0x81); // long form marker
         assert_eq!(enc.to_bytes()[2], 200);
     }
+
+    // ============================================================
+    // Phase C — Boundary Tests
+    // ============================================================
+
+    #[test]
+    fn test_empty_array() {
+        let mut enc = AxdrEncoder::new();
+        enc.encode(&DlmsType::Array(alloc::vec![])).unwrap();
+        let bytes = enc.to_bytes();
+        assert_eq!(bytes[0], 1); // array tag
+        assert_eq!(bytes[1], 0); // length = 0
+    }
+
+    #[test]
+    fn test_empty_structure() {
+        let mut enc = AxdrEncoder::new();
+        enc.encode(&DlmsType::Structure(alloc::vec![])).unwrap();
+        let bytes = enc.to_bytes();
+        assert_eq!(bytes[0], 2); // structure tag
+        assert_eq!(bytes[1], 0); // length = 0
+    }
+
+    #[test]
+    fn test_nested_structure() {
+        let inner = alloc::vec![DlmsType::from_u32(1), DlmsType::from_u32(2)];
+        let outer = alloc::vec![DlmsType::Structure(inner), DlmsType::from_u32(3)];
+        let mut enc = AxdrEncoder::new();
+        enc.encode(&DlmsType::Structure(outer)).unwrap();
+        assert!(!enc.to_bytes().is_empty());
+    }
+
+    #[test]
+    fn test_deeply_nested_array() {
+        // 3 levels of nesting
+        let level3 = alloc::vec![DlmsType::from_u32(42)];
+        let level2 = alloc::vec![DlmsType::Array(level3)];
+        let level1 = alloc::vec![DlmsType::Array(level2)];
+        let mut enc = AxdrEncoder::new();
+        enc.encode(&DlmsType::Array(level1)).unwrap();
+        assert!(!enc.to_bytes().is_empty());
+    }
+
+    #[test]
+    fn test_empty_octet_string() {
+        let mut enc = AxdrEncoder::new();
+        enc.encode(&DlmsType::from_octet_string(alloc::vec![])).unwrap();
+        let bytes = enc.to_bytes();
+        assert_eq!(bytes[0], 9); // octet-string tag
+        assert_eq!(bytes[1], 0); // length = 0
+    }
+
+    #[test]
+    fn test_empty_visible_string() {
+        let mut enc = AxdrEncoder::new();
+        enc.encode(&DlmsType::VisibleString(alloc::vec![])).unwrap();
+        let bytes = enc.to_bytes();
+        assert_eq!(bytes[0], 10); // visible-string tag
+    }
+
+    #[test]
+    fn test_all_integer_boundaries() {
+        let values = [
+            DlmsType::UInt8(0),
+            DlmsType::UInt8(255),
+            DlmsType::Int8(-128),
+            DlmsType::Int8(127),
+            DlmsType::UInt16(0),
+            DlmsType::UInt16(65535),
+            DlmsType::Int16(-32768),
+            DlmsType::Int16(32767),
+            DlmsType::UInt32(0),
+            DlmsType::UInt32(u32::MAX),
+            DlmsType::Int32(i32::MIN),
+            DlmsType::Int32(i32::MAX),
+            DlmsType::UInt64(0),
+            DlmsType::UInt64(u64::MAX),
+            DlmsType::Int64(i64::MIN),
+            DlmsType::Int64(i64::MAX),
+        ];
+        let mut enc = AxdrEncoder::new();
+        for v in &values {
+            enc.encode(v).unwrap();
+        }
+        assert!(!enc.to_bytes().is_empty());
+    }
+
+    #[test]
+    fn test_float_special_values() {
+        let floats = [
+            DlmsType::Float32(0.0),
+            DlmsType::Float32(f32::MIN),
+            DlmsType::Float32(f32::MAX),
+            DlmsType::Float32(f32::INFINITY),
+            DlmsType::Float32(f32::NEG_INFINITY),
+            DlmsType::Float64(0.0),
+            DlmsType::Float64(f64::MAX),
+        ];
+        let mut enc = AxdrEncoder::new();
+        for f in &floats {
+            enc.encode(f).unwrap();
+        }
+        assert!(!enc.to_bytes().is_empty());
+    }
+
+    #[test]
+    fn test_null_and_enum() {
+        let mut enc = AxdrEncoder::new();
+        enc.encode(&DlmsType::Null).unwrap();
+        enc.encode(&DlmsType::Enum(0)).unwrap();
+        enc.encode(&DlmsType::Enum(255)).unwrap();
+        enc.encode(&DlmsType::Boolean(true)).unwrap();
+        enc.encode(&DlmsType::Boolean(false)).unwrap();
+        assert!(!enc.to_bytes().is_empty());
+    }
+
+    #[test]
+    fn test_bit_string_boundaries() {
+        let mut enc = AxdrEncoder::new();
+        enc.encode(&DlmsType::BitString(alloc::vec![])).unwrap();
+        enc.encode(&DlmsType::BitString(alloc::vec![0xFF])).unwrap();
+        enc.encode(&DlmsType::BitString(alloc::vec![0x00; 100])).unwrap();
+        assert!(!enc.to_bytes().is_empty());
+    }
+
+    #[test]
+    fn test_large_octet_string() {
+        let data = alloc::vec![0xAA; 500];
+        let mut enc = AxdrEncoder::new();
+        enc.encode(&DlmsType::from_octet_string(data.clone())).unwrap();
+        let bytes = enc.to_bytes();
+        assert_eq!(bytes[0], 9); // octet-string tag
+        // Should use 2-byte length for 500 bytes
+        assert_eq!(bytes[1], 0x82); // 2-byte length
+    }
 }

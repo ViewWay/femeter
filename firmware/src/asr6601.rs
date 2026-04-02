@@ -22,63 +22,63 @@ use core::fmt::Write;
 
 mod at {
     /// 测试 AT 连接
-    pub const TEST:       &str = "AT\r\n";
+    pub const TEST: &str = "AT\r\n";
     /// 软件复位
-    pub const RESET:      &str = "ATZ\r\n";
+    pub const RESET: &str = "ATZ\r\n";
     /// 恢复出厂设置
-    pub const RESTORE:    &str = "AT+FDEFAULT\r\n";
+    pub const RESTORE: &str = "AT+FDEFAULT\r\n";
     /// 查询固件版本
-    pub const VERSION:    &str = "AT+VER?\r\n";
+    pub const VERSION: &str = "AT+VER?\r\n";
     /// 查询设备 EUI
-    pub const DEVEUI:     &str = "AT+ID=DevEui\r\n";
+    pub const DEVEUI: &str = "AT+ID=DevEui\r\n";
     /// 设置设备 EUI
     pub const SET_DEVEUI: &str = "AT+ID=DevEui,\"";
     /// 查询应用 EUI
-    pub const APPEUI:     &str = "AT+ID=AppEui\r\n";
+    pub const APPEUI: &str = "AT+ID=AppEui\r\n";
     /// 设置应用 EUI
     pub const SET_APPEUI: &str = "AT+ID=AppEui,\"";
     /// 设置应用密钥
     pub const SET_APPKEY: &str = "AT+KEY=AppKey,\"";
     /// 设置入网模式: OTAA
-    pub const SET_OTAA:   &str = "AT+MODE=LWOTAA\r\n";
+    pub const SET_OTAA: &str = "AT+MODE=LWOTAA\r\n";
     /// 设置入网模式: ABP
-    pub const SET_ABP:    &str = "AT+MODE=LWABP\r\n";
+    pub const SET_ABP: &str = "AT+MODE=LWABP\r\n";
     /// 加入网络
-    pub const JOIN:       &str = "AT+JOIN\r\n";
+    pub const JOIN: &str = "AT+JOIN\r\n";
     /// 发送数据 (不确认)
-    pub const SEND_UC:    &str = "AT+MSG=";
+    pub const SEND_UC: &str = "AT+MSG=";
     /// 发送数据 (确认)
-    pub const SEND_CF:    &str = "AT+CMSG=";
+    pub const SEND_CF: &str = "AT+CMSG=";
     /// 查询信号强度
-    pub const RSSI:       &str = "AT+RSSI?\r\n";
+    pub const RSSI: &str = "AT+RSSI?\r\n";
     /// 设置串口波特率
-    pub const BAUDRATE:   &str = "AT+UART=BAUDRATE,";
+    pub const BAUDRATE: &str = "AT+UART=BAUDRATE,";
 
     // ABP 模式设置
     /// 设置设备地址
-    pub const SET_DEVADDR:&str = "AT+ID=DevAddr,\"";
+    pub const SET_DEVADDR: &str = "AT+ID=DevAddr,\"";
     /// 设置网络会话密钥
-    pub const SET_NWKSKEY:&str = "AT+KEY=NwkSKey,\"";
+    pub const SET_NWKSKEY: &str = "AT+KEY=NwkSKey,\"";
     /// 设置应用会话密钥
-    pub const SET_APPSKEY:&str = "AT+KEY=AppSKey,\"";
+    pub const SET_APPSKEY: &str = "AT+KEY=AppSKey,\"";
 
     // LoRa 配置
     /// 设置频段 (CN470)
-    pub const SET_BAND:   &str = "AT+BAND=CN470\r\n";
+    pub const SET_BAND: &str = "AT+BAND=CN470\r\n";
     /// 设置数据速率 (DR0~DR5)
-    pub const SET_DR:     &str = "AT+DR=";
+    pub const SET_DR: &str = "AT+DR=";
     /// 设置发射功率 (0~14, 对应 2~22dBm)
-    pub const SET_PWR:    &str = "AT+POWER=";
+    pub const SET_PWR: &str = "AT+POWER=";
     /// 设置 ADR (自适应速率)
-    pub const SET_ADR:    &str = "AT+ADR=";
+    pub const SET_ADR: &str = "AT+ADR=";
     /// 设置 Class (A/B/C)
-    pub const SET_CLASS:  &str = "AT+CLASS=";
+    pub const SET_CLASS: &str = "AT+CLASS=";
 
     // 省电
     /// 设置休眠模式
-    pub const SLEEP:      &str = "AT+SLEEP=ON\r\n";
+    pub const SLEEP: &str = "AT+SLEEP=ON\r\n";
     /// 唤醒
-    pub const WAKEUP:     &str = "AT\r\n";
+    pub const WAKEUP: &str = "AT\r\n";
 }
 
 /* ================================================================== */
@@ -149,7 +149,8 @@ impl Asr6601 {
         self.rx_buf = [0; AT_BUF_SIZE];
 
         // 发送 AT 指令
-        self.uart.write(cmd.as_bytes())
+        self.uart
+            .write(cmd.as_bytes())
             .map_err(|_| LorawanError::AtError)?;
 
         // 等待响应 (读到 "\r\n" 结尾或超时)
@@ -261,8 +262,7 @@ impl LorawanDriver for Asr6601 {
             stop_bits: 1,
             parity: Parity::None,
         };
-        self.uart.init(&config)
-            .map_err(|_| LorawanError::AtError)?;
+        self.uart.init(&config).map_err(|_| LorawanError::AtError)?;
 
         // 2. 测试 AT 连接
         self.send_at_ok(at::TEST, 1000)?;
@@ -292,28 +292,46 @@ impl LorawanDriver for Asr6601 {
                 let mut cmd_buf = [0u8; 64];
                 let prefix = at::SET_DEVEUI.as_bytes();
                 let mut pos = 0;
-                for &b in prefix { cmd_buf[pos] = b; pos += 1; }
-                for &b in hex_str { cmd_buf[pos] = b; pos += 1; }
-                cmd_buf[pos] = b'"'; pos += 1;
-                cmd_buf[pos] = b'\r'; pos += 1;
-                cmd_buf[pos] = b'\n'; pos += 1;
+                for &b in prefix {
+                    cmd_buf[pos] = b;
+                    pos += 1;
+                }
+                for &b in hex_str {
+                    cmd_buf[pos] = b;
+                    pos += 1;
+                }
+                cmd_buf[pos] = b'"';
+                pos += 1;
+                cmd_buf[pos] = b'\r';
+                pos += 1;
+                cmd_buf[pos] = b'\n';
+                pos += 1;
                 self.send_at_ok(
                     core::str::from_utf8(&cmd_buf[..pos]).unwrap_or("AT\r\n"),
-                    1000
+                    1000,
                 )?;
 
                 // 设置 AppEUI
                 let hex_str = Self::bytes_to_hex(&config.app_eui, &mut hex_buf);
                 let mut pos = 0;
                 let prefix = at::SET_APPEUI.as_bytes();
-                for &b in prefix { cmd_buf[pos] = b; pos += 1; }
-                for &b in hex_str { cmd_buf[pos] = b; pos += 1; }
-                cmd_buf[pos] = b'"'; pos += 1;
-                cmd_buf[pos] = b'\r'; pos += 1;
-                cmd_buf[pos] = b'\n'; pos += 1;
+                for &b in prefix {
+                    cmd_buf[pos] = b;
+                    pos += 1;
+                }
+                for &b in hex_str {
+                    cmd_buf[pos] = b;
+                    pos += 1;
+                }
+                cmd_buf[pos] = b'"';
+                pos += 1;
+                cmd_buf[pos] = b'\r';
+                pos += 1;
+                cmd_buf[pos] = b'\n';
+                pos += 1;
                 self.send_at_ok(
                     core::str::from_utf8(&cmd_buf[..pos]).unwrap_or("AT\r\n"),
-                    1000
+                    1000,
                 )?;
 
                 // 设置 AppKey
@@ -321,14 +339,23 @@ impl LorawanDriver for Asr6601 {
                 let hex_str = Self::bytes_to_hex(&config.app_key, &mut key_hex);
                 let prefix = at::SET_APPKEY.as_bytes();
                 let mut pos = 0;
-                for &b in prefix { cmd_buf[pos] = b; pos += 1; }
-                for &b in hex_str { cmd_buf[pos] = b; pos += 1; }
-                cmd_buf[pos] = b'"'; pos += 1;
-                cmd_buf[pos] = b'\r'; pos += 1;
-                cmd_buf[pos] = b'\n'; pos += 1;
+                for &b in prefix {
+                    cmd_buf[pos] = b;
+                    pos += 1;
+                }
+                for &b in hex_str {
+                    cmd_buf[pos] = b;
+                    pos += 1;
+                }
+                cmd_buf[pos] = b'"';
+                pos += 1;
+                cmd_buf[pos] = b'\r';
+                pos += 1;
+                cmd_buf[pos] = b'\n';
+                pos += 1;
                 self.send_at_ok(
                     core::str::from_utf8(&cmd_buf[..pos]).unwrap_or("AT\r\n"),
-                    1000
+                    1000,
                 )?;
             }
             LorawanJoinMode::Abp => {
@@ -372,22 +399,36 @@ impl LorawanDriver for Asr6601 {
         let mut cmd_buf = [0u8; 256];
         let mut pos = 0;
 
-        let prefix = if confirmed { at::SEND_CF.as_bytes() } else { at::SEND_UC.as_bytes() };
-        for &b in prefix { cmd_buf[pos] = b; pos += 1; }
-        cmd_buf[pos] = b'"'; pos += 1;
+        let prefix = if confirmed {
+            at::SEND_CF.as_bytes()
+        } else {
+            at::SEND_UC.as_bytes()
+        };
+        for &b in prefix {
+            cmd_buf[pos] = b;
+            pos += 1;
+        }
+        cmd_buf[pos] = b'"';
+        pos += 1;
 
         // 数据转十六进制
         let mut hex_buf = [0u8; 128];
         let data_hex = Self::bytes_to_hex(data, &mut hex_buf);
-        for &b in data_hex { cmd_buf[pos] = b; pos += 1; }
+        for &b in data_hex {
+            cmd_buf[pos] = b;
+            pos += 1;
+        }
 
-        cmd_buf[pos] = b'"'; pos += 1;
-        cmd_buf[pos] = b'\r'; pos += 1;
-        cmd_buf[pos] = b'\n'; pos += 1;
+        cmd_buf[pos] = b'"';
+        pos += 1;
+        cmd_buf[pos] = b'\r';
+        pos += 1;
+        cmd_buf[pos] = b'\n';
+        pos += 1;
 
         let len = self.send_at(
             core::str::from_utf8(&cmd_buf[..pos]).unwrap_or("AT\r\n"),
-            10_000
+            10_000,
         )?;
 
         // 检查发送结果

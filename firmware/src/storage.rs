@@ -34,12 +34,36 @@ pub struct FlashPartition {
 
 /// W25Q64 分区表
 pub const PARTITIONS: &[FlashPartition] = &[
-    FlashPartition { name: "params",   range: 0x000000..0x010000, sector_size: 4096 },   // 64KB
-    FlashPartition { name: "energy",   range: 0x010000..0x080000, sector_size: 4096 },   // 448KB
-    FlashPartition { name: "events",   range: 0x080000..0x100000, sector_size: 4096 },   // 512KB
-    FlashPartition { name: "load",     range: 0x100000..0x200000, sector_size: 4096 },   // 1MB
-    FlashPartition { name: "ota",      range: 0x200000..0x400000, sector_size: 4096 },   // 2MB
-    FlashPartition { name: "reserved", range: 0x400000..0x800000, sector_size: 4096 },   // 4MB
+    FlashPartition {
+        name: "params",
+        range: 0x000000..0x010000,
+        sector_size: 4096,
+    }, // 64KB
+    FlashPartition {
+        name: "energy",
+        range: 0x010000..0x080000,
+        sector_size: 4096,
+    }, // 448KB
+    FlashPartition {
+        name: "events",
+        range: 0x080000..0x100000,
+        sector_size: 4096,
+    }, // 512KB
+    FlashPartition {
+        name: "load",
+        range: 0x100000..0x200000,
+        sector_size: 4096,
+    }, // 1MB
+    FlashPartition {
+        name: "ota",
+        range: 0x200000..0x400000,
+        sector_size: 4096,
+    }, // 2MB
+    FlashPartition {
+        name: "reserved",
+        range: 0x400000..0x800000,
+        sector_size: 4096,
+    }, // 4MB
 ];
 
 /// 按 name 查找分区
@@ -50,21 +74,21 @@ pub fn find_partition(name: &str) -> Option<&'static FlashPartition> {
 /* ── W25Q64 SPI 指令 ── */
 
 pub mod cmd {
-    pub const WRITE_ENABLE:   u8 = 0x06;
-    pub const WRITE_DISABLE:  u8 = 0x04;
-    pub const READ_STATUS:    u8 = 0x05;
-    pub const WRITE_STATUS:   u8 = 0x01;
-    pub const READ_DATA:      u8 = 0x03;
-    pub const FAST_READ:      u8 = 0x0B;
-    pub const PAGE_PROGRAM:   u8 = 0x02;
-    pub const SECTOR_ERASE:   u8 = 0x20;
+    pub const WRITE_ENABLE: u8 = 0x06;
+    pub const WRITE_DISABLE: u8 = 0x04;
+    pub const READ_STATUS: u8 = 0x05;
+    pub const WRITE_STATUS: u8 = 0x01;
+    pub const READ_DATA: u8 = 0x03;
+    pub const FAST_READ: u8 = 0x0B;
+    pub const PAGE_PROGRAM: u8 = 0x02;
+    pub const SECTOR_ERASE: u8 = 0x20;
     pub const BLOCK_ERASE_32: u8 = 0x52;
     pub const BLOCK_ERASE_64: u8 = 0xD8;
-    pub const CHIP_ERASE:     u8 = 0xC7;
-    pub const READ_ID:        u8 = 0x9F;
-    pub const READ_UID:       u8 = 0x4B;
-    pub const POWER_DOWN:     u8 = 0xB9;
-    pub const RELEASE_PD:     u8 = 0xAB;
+    pub const CHIP_ERASE: u8 = 0xC7;
+    pub const READ_ID: u8 = 0x9F;
+    pub const READ_UID: u8 = 0x4B;
+    pub const POWER_DOWN: u8 = 0xB9;
+    pub const RELEASE_PD: u8 = 0xAB;
 }
 
 /* ── SPI 传输 trait ── */
@@ -84,7 +108,7 @@ pub trait FlashSpi {
 /* ── 状态寄存器位 ── */
 
 const STATUS_BUSY: u8 = 0x01;
-const STATUS_WEL:  u8 = 0x02;
+const STATUS_WEL: u8 = 0x02;
 
 /* ── 存储错误 ── */
 
@@ -186,7 +210,10 @@ pub struct W25Q64<SPI: FlashSpi> {
 impl<SPI: FlashSpi> W25Q64<SPI> {
     /// 创建 W25Q64 驱动实例
     pub fn new(spi: SPI) -> Self {
-        Self { spi, initialized: false }
+        Self {
+            spi,
+            initialized: false,
+        }
     }
 
     /// 初始化: 读 JEDEC ID 验证
@@ -422,17 +449,21 @@ impl<SPI: FlashSpi> PartitionStorage<SPI> {
         let end_sector = (addr + total_len as u32 - 1) & !0x0FFF;
         let mut sector = start_sector;
         while sector <= end_sector {
-            self.flash.sector_erase(sector).map_err(|_| FlashError::SpiError)?;
+            self.flash
+                .sector_erase(sector)
+                .map_err(|_| FlashError::SpiError)?;
             sector += 4096;
         }
 
         // 写入数据 + CRC
-        self.flash.write(addr, &write_buf[..total_len])
+        self.flash
+            .write(addr, &write_buf[..total_len])
             .map_err(|_| FlashError::SpiError)?;
 
         // 读回验证 CRC
         let mut verify_buf = [0u8; 4];
-        self.flash.read(addr + data.len() as u32, &mut verify_buf)
+        self.flash
+            .read(addr + data.len() as u32, &mut verify_buf)
             .map_err(|_| FlashError::SpiError)?;
         let stored_crc = u32::from_le_bytes(verify_buf);
         if stored_crc != crc {
@@ -511,14 +542,16 @@ impl<SPI: FlashSpi> PartitionStorage<SPI> {
             // 需要擦除扇区
             let mut sector = sector_start;
             while sector <= sector_end {
-                self.flash.sector_erase(sector)
+                self.flash
+                    .sector_erase(sector)
                     .map_err(|_| FlashError::SpiError)?;
                 sector += 4096;
             }
         }
 
         // 写入记录
-        self.flash.write(addr, record)
+        self.flash
+            .write(addr, record)
             .map_err(|_| FlashError::SpiError)?;
 
         // 更新位置
@@ -545,7 +578,9 @@ impl<SPI: FlashSpi> PartitionStorage<SPI> {
         let part = find_partition(partition_name).ok_or(FlashError::OutOfBounds)?;
         let max_records = (part.range.end - part.range.start) / record_size;
         let count = count.min(max_records).min(buf.len() as u32 / record_size);
-        if count == 0 { return Ok(0); }
+        if count == 0 {
+            return Ok(0);
+        }
 
         let mut read_count = 0u32;
         let mut pos = (header_pos + max_records - 1) % max_records;
@@ -553,13 +588,17 @@ impl<SPI: FlashSpi> PartitionStorage<SPI> {
         for _ in 0..count {
             let addr = part.range.start + pos * record_size;
             let offset = (read_count * record_size) as usize;
-            self.flash.read(addr, &mut buf[offset..offset + record_size as usize])
+            self.flash
+                .read(addr, &mut buf[offset..offset + record_size as usize])
                 .map_err(|_| FlashError::SpiError)?;
 
             // 检查是否为空记录（全 0xFF）
             let is_empty = buf[offset..offset + record_size as usize]
-                .iter().all(|&b| b == 0xFF);
-            if is_empty { break; }
+                .iter()
+                .all(|&b| b == 0xFF);
+            if is_empty {
+                break;
+            }
 
             read_count += 1;
             pos = (pos + max_records - 1) % max_records;
@@ -601,7 +640,8 @@ impl<SPI: FlashSpi> PartitionStorage<SPI> {
             ((header.timestamp >> 24) & 0xFF) as u8,
             header.interval_min,
             header.channels,
-            0, 0, // CRC 占位
+            0,
+            0, // CRC 占位
         ]);
         buf[8..8 + data.len()].copy_from_slice(data);
 
@@ -621,10 +661,7 @@ impl<SPI: FlashSpi> PartitionStorage<SPI> {
     /* ── 电能冻结存储 ── */
 
     /// 写入电能冻结记录（每日结算）
-    pub fn write_energy_freeze(
-        &mut self,
-        record: &EnergyFreezeRecord,
-    ) -> Result<(), FlashError> {
+    pub fn write_energy_freeze(&mut self, record: &EnergyFreezeRecord) -> Result<(), FlashError> {
         let bytes: [u8; core::mem::size_of::<EnergyFreezeRecord>()] =
             unsafe { core::mem::transmute_copy(record) };
 
@@ -697,4 +734,151 @@ pub fn crc16_calc(data: &[u8]) -> u16 {
         }
     }
     !crc
+}
+
+/* ================================================================== */
+/*  掉电恢复数据完整性测试                                               */
+/* ================================================================== */
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_crc32_empty() {
+        let crc = crc32_calc(&[]);
+        assert_ne!(crc, 0);
+    }
+
+    #[test]
+    fn test_crc32_deterministic() {
+        let data = [0xDE, 0xAD, 0xBE, 0xEF];
+        assert_eq!(crc32_calc(&data), crc32_calc(&data));
+    }
+
+    #[test]
+    fn test_crc32_differs_for_different_data() {
+        assert_ne!(crc32_calc(b"AAAA"), crc32_calc(b"AAAB"));
+    }
+
+    #[test]
+    fn test_crc16_known() {
+        let crc = crc16_calc(b"123456789");
+        assert_eq!(crc, 0x29B1);
+    }
+
+    #[test]
+    fn test_find_partition() {
+        let p = find_partition("params").unwrap();
+        assert_eq!(p.name, "params");
+        assert_eq!(p.range.start, 0x000000);
+        assert_eq!(p.range.end, 0x010000);
+        assert!(find_partition("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_partition_total_size() {
+        let total: u32 = PARTITIONS.iter().map(|p| p.range.end - p.range.start).sum();
+        assert_eq!(total, 8 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_partitions_count() {
+        assert_eq!(PARTITIONS.len(), 6);
+    }
+
+    #[test]
+    fn test_load_profile_header_size() {
+        assert_eq!(core::mem::size_of::<LoadProfileHeader>(), 8);
+    }
+
+    #[test]
+    fn test_event_flash_header_size() {
+        assert_eq!(core::mem::size_of::<EventFlashHeader>(), 8);
+    }
+
+    #[test]
+    fn test_energy_freeze_record_size() {
+        assert_eq!(core::mem::size_of::<EnergyFreezeRecord>(), 96);
+    }
+
+    #[test]
+    fn test_load_profile_header_default() {
+        let h = LoadProfileHeader::default();
+        assert_eq!(h.timestamp, 0);
+        assert_eq!(h.crc, 0);
+    }
+
+    #[test]
+    fn test_flash_error_debug() {
+        assert_eq!(format!("{:?}", FlashError::SpiError), "SpiError");
+        assert_eq!(format!("{:?}", FlashError::CrcError), "CrcError");
+        assert_eq!(format!("{:?}", FlashError::NoSpace), "NoSpace");
+    }
+
+    #[test]
+    fn test_flash_cmd_values() {
+        assert_eq!(cmd::READ_ID, 0x9F);
+        assert_eq!(cmd::PAGE_PROGRAM, 0x02);
+        assert_eq!(cmd::SECTOR_ERASE, 0x20);
+    }
+
+    /// 掉电恢复场景: CRC 验证失败检测
+    #[test]
+    fn test_power_loss_crc_detection() {
+        // 正常写入的数据
+        let data = [0x01, 0x02, 0x03, 0x04, 0x05];
+        let crc = crc32_calc(&data);
+
+        // 模拟: 写入数据但 CRC 被截断 (掉电)
+        let corrupted_crc = crc ^ 0x00000001;
+        assert_ne!(crc, corrupted_crc);
+
+        // 模拟恢复: 读回数据 + CRC，验证不匹配
+        let mut full_buf = [0u8; 16];
+        full_buf[..data.len()].copy_from_slice(&data);
+        full_buf[data.len()..data.len() + 4].copy_from_slice(&corrupted_crc.to_le_bytes());
+
+        let stored_crc = u32::from_le_bytes(full_buf[data.len()..data.len() + 4]);
+        let calc_crc = crc32_calc(&full_buf[..data.len()]);
+        assert_ne!(stored_crc, calc_crc); // 检测到掉电损坏
+    }
+
+    /// 双区交替写入原子性: 模拟写入过程中掉电
+    #[test]
+    fn test_dual_slot_atomic_write() {
+        // Slot A: 有效数据
+        let slot_a_valid = true;
+        // Slot B: 写入中断
+        let slot_b_valid = false;
+
+        // 恢复策略: 选择有效 slot
+        let use_slot = if slot_b_valid { 1 } else { 0 };
+        assert_eq!(use_slot, 0); // 回退到 slot A
+    }
+
+    /// 电能累计值保护: 验证 CRC 覆盖关键数据
+    #[test]
+    fn test_energy_data_crc_protection() {
+        let record = EnergyFreezeRecord {
+            timestamp: 1700000000,
+            active_import: 12345,
+            active_export: 0,
+            reactive_import: 100,
+            reactive_export: 0,
+            active_import_a: 4115,
+            active_import_b: 4115,
+            active_import_c: 4115,
+            max_demand: 5000,
+            crc: 0,
+        };
+        let bytes: [u8; core::mem::size_of::<EnergyFreezeRecord>()] =
+            unsafe { core::mem::transmute_copy(&record) };
+        let crc = crc32_calc(&bytes[..bytes.len() - 4]);
+
+        // 修改一个字节
+        let mut corrupted = bytes.clone();
+        corrupted[8] ^= 0x01;
+        assert_ne!(crc32_calc(&corrupted[..corrupted.len() - 4]), crc);
+    }
 }

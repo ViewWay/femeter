@@ -162,8 +162,7 @@ impl HdlcFrame {
         let payload_len = frame.len as usize - 2;
         let fcs_offset = payload_len;
         let computed = fcs16(&frame.data[..payload_len]);
-        let received = frame.data[fcs_offset] as u16
-            | ((frame.data[fcs_offset + 1] as u16) << 8);
+        let received = frame.data[fcs_offset] as u16 | ((frame.data[fcs_offset + 1] as u16) << 8);
 
         if computed != received {
             return Err(HdlcError::FcsError);
@@ -178,12 +177,7 @@ impl HdlcFrame {
     /// Build an HDLC frame with byte-stuffing and FCS.
     ///
     /// Returns the total length written to `out` (including flags).
-    pub fn build(
-        address: &[u8],
-        control: u8,
-        information: &[u8],
-        out: &mut [u8],
-    ) -> usize {
+    pub fn build(address: &[u8], control: u8, information: &[u8], out: &mut [u8]) -> usize {
         // Calculate FCS over address + control + information
         let mut fcs_buf: [u8; 256] = [0; 256];
         let mut fcs_len = 0;
@@ -205,17 +199,23 @@ impl HdlcFrame {
 
         // Build output: FLAG + (byte-stuffed payload+FCS) + FLAG
         let mut pos = 0;
-        if pos >= out.len() { return pos; }
+        if pos >= out.len() {
+            return pos;
+        }
         out[pos] = HDLC_FLAG;
         pos += 1;
 
         for i in 0..fcs_len {
-            if pos >= out.len() { return pos; }
+            if pos >= out.len() {
+                return pos;
+            }
             let b = fcs_buf[i];
             if b == HDLC_FLAG || b == HDLC_ESCAPE {
                 out[pos] = HDLC_ESCAPE;
                 pos += 1;
-                if pos >= out.len() { return pos; }
+                if pos >= out.len() {
+                    return pos;
+                }
                 out[pos] = b ^ HDLC_ESCAPE_MASK;
             } else {
                 out[pos] = b;
@@ -223,7 +223,9 @@ impl HdlcFrame {
             pos += 1;
         }
 
-        if pos >= out.len() { return pos; }
+        if pos >= out.len() {
+            return pos;
+        }
         out[pos] = HDLC_FLAG;
         pos += 1;
 
@@ -585,7 +587,12 @@ impl Iec62056Parser {
 
     /// Build identification message response.
     /// Format: /XXXYYYY<CR><LF>
-    pub fn build_ident(manufacturer: &[u8; 3], meter_type: u8, baud_char: u8, out: &mut [u8]) -> usize {
+    pub fn build_ident(
+        manufacturer: &[u8; 3],
+        meter_type: u8,
+        baud_char: u8,
+        out: &mut [u8],
+    ) -> usize {
         if out.len() < 6 {
             return 0;
         }
@@ -684,7 +691,11 @@ impl<U: UartDriver, D: Rs485DirControl> CommManager<U, D> {
     }
 
     /// Initialize with custom configs.
-    pub fn init_with(&mut self, rs485_cfg: &UartConfig, ir_cfg: &UartConfig) -> Result<(), UartError> {
+    pub fn init_with(
+        &mut self,
+        rs485_cfg: &UartConfig,
+        ir_cfg: &UartConfig,
+    ) -> Result<(), UartError> {
         self.rs485.init(rs485_cfg)?;
         self.infrared.init(ir_cfg)?;
         Ok(())
@@ -762,7 +773,12 @@ impl<U: UartDriver, D: Rs485DirControl> CommManager<U, D> {
     }
 
     /// Build and send an HDLC frame via RS-485 with direction control.
-    pub fn send_hdlc_frame(&mut self, address: &[u8], control: u8, info: &[u8]) -> Result<(), UartError> {
+    pub fn send_hdlc_frame(
+        &mut self,
+        address: &[u8],
+        control: u8,
+        info: &[u8],
+    ) -> Result<(), UartError> {
         let mut tx_buf: [u8; 512] = [0u8; 512];
         let len = HdlcFrame::build(address, control, info, &mut tx_buf);
 
@@ -891,7 +907,11 @@ mod tests {
         // The stuffed bytes should not contain raw 0x7E/0x7D in the payload
         // (only at boundaries as flags)
         for i in 1..len - 1 {
-            assert_ne!(tx[i], HDLC_FLAG, "Unescaped FLAG found in payload at idx {}", i);
+            assert_ne!(
+                tx[i], HDLC_FLAG,
+                "Unescaped FLAG found in payload at idx {}",
+                i
+            );
             // Note: HDLC_ESCAPE is allowed as the escape marker itself
         }
 
@@ -927,7 +947,9 @@ mod tests {
         let mut tx = [0u8; 64];
         let len = HdlcFrame::build(&addr, ctrl_ua, &[], &mut tx);
         let mut rx = HdlcReceiver::new();
-        for i in 0..len { rx.feed(tx[i]); }
+        for i in 0..len {
+            rx.feed(tx[i]);
+        }
         let frame = rx.parse_frame().unwrap();
         assert!(frame.is_u_frame());
     }

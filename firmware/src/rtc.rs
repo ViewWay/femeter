@@ -13,24 +13,24 @@ use crate::fm33lg0;
 const WER_WEN: u32 = 1 << 0;
 
 /// IER (中断使能)
-const IER_ALMIE: u32 = 1 << 0;   // 闹钟中断使能
-const IER_SCIE:  u32 = 1 << 1;   // 秒中断使能
+const IER_ALMIE: u32 = 1 << 0; // 闹钟中断使能
+const IER_SCIE: u32 = 1 << 1; // 秒中断使能
 
 /// ISR (中断标志)
-const ISR_ALMF: u32 = 1 << 0;    // 闹钟标志
-const ISR_SCF:  u32 = 1 << 1;    // 秒标志
+const ISR_ALMF: u32 = 1 << 0; // 闹钟标志
+const ISR_SCF: u32 = 1 << 1; // 秒标志
 
 /// CR (控制)
-const CR_RTCEN:  u32 = 1 << 0;   // RTC 使能
-const CR_CALEN:  u32 = 1 << 1;   // 校准使能
-const CR_SELCK:  u32 = 1 << 2;   // 时钟选择: 0=外部32.768k, 1=内部低速
-const CR_CNTMD:  u32 = 1 << 3;   // 计数器模式: 1=日历模式, 0=纯计数
+const CR_RTCEN: u32 = 1 << 0; // RTC 使能
+const CR_CALEN: u32 = 1 << 1; // 校准使能
+const CR_SELCK: u32 = 1 << 2; // 时钟选择: 0=外部32.768k, 1=内部低速
+const CR_CNTMD: u32 = 1 << 3; // 计数器模式: 1=日历模式, 0=纯计数
 
 /// 闹钟匹配控制位
-const ALM_EN_HOURLY: u32 = 1 << 24;  // 每小时匹配
-const ALM_EN_DAILY:   u32 = 1 << 25;  // 每天匹配
-const ALM_EN_WEEKDAY: u32 = 1 << 26;  // 星期匹配使能
-const ALM_EN_SUBSEC:  u32 = 1 << 27;  // 亚秒匹配使能
+const ALM_EN_HOURLY: u32 = 1 << 24; // 每小时匹配
+const ALM_EN_DAILY: u32 = 1 << 25; // 每天匹配
+const ALM_EN_WEEKDAY: u32 = 1 << 26; // 星期匹配使能
+const ALM_EN_SUBSEC: u32 = 1 << 27; // 亚秒匹配使能
 
 // ══════════════════════════════════════════════════════════════════
 // 数据结构
@@ -40,30 +40,30 @@ const ALM_EN_SUBSEC:  u32 = 1 << 27;  // 亚秒匹配使能
 #[derive(Clone, Copy, Debug)]
 pub struct RtcTime {
     /// 年 (2000~2099)
-    pub year:    u16,
+    pub year: u16,
     /// 月 (1~12)
-    pub month:   u8,
+    pub month: u8,
     /// 日 (1~31)
-    pub day:     u8,
+    pub day: u8,
     /// 星期 (1=周一 ~ 7=周日)
     pub weekday: u8,
     /// 时 (0~23)
-    pub hour:    u8,
+    pub hour: u8,
     /// 分 (0~59)
-    pub minute:  u8,
+    pub minute: u8,
     /// 秒 (0~59)
-    pub second:  u8,
+    pub second: u8,
 }
 
 /// RTC 闹钟配置
 #[derive(Clone, Copy, Debug)]
 pub struct RtcAlarm {
     /// 时 (0~23)
-    pub hour:    u8,
+    pub hour: u8,
     /// 分 (0~59)
-    pub minute:  u8,
+    pub minute: u8,
     /// 秒 (0~59)
-    pub second:  u8,
+    pub second: u8,
     /// 星期匹配，0 = 不匹配星期
     pub weekday: u8,
     /// 亚秒匹配值（可选，0xFFFF 表示不匹配亚秒）
@@ -175,8 +175,7 @@ pub fn bcd2dec(v: u8) -> u8 {
 /// BCD 16-bit 转十进制（年寄存器）
 #[inline]
 fn bcd2dec_u16(v: u32) -> u16 {
-    bcd2dec(((v >> 4) & 0x0F) as u8) as u16 * 10
-        + bcd2dec((v & 0x0F) as u8) as u16
+    bcd2dec(((v >> 4) & 0x0F) as u8) as u16 * 10 + bcd2dec((v & 0x0F) as u8) as u16
 }
 
 /// 16-bit 十进制转 BCD（年寄存器）
@@ -202,8 +201,12 @@ impl defmt::Format for RtcTime {
         defmt::write!(
             f,
             "{:04}-{:02}-{:02} {:02}:{:02}:{:02} (w{})",
-            self.year, self.month, self.day,
-            self.hour, self.minute, self.second,
+            self.year,
+            self.month,
+            self.day,
+            self.hour,
+            self.minute,
+            self.second,
             self.weekday,
         );
     }
@@ -234,9 +237,13 @@ pub fn init() {
 
         // 设置默认时间
         let default_time = RtcTime {
-            year: 2000, month: 1, day: 1,
+            year: 2000,
+            month: 1,
+            day: 1,
             weekday: 6, // 2000-01-01 是周六
-            hour: 0, minute: 0, second: 0,
+            hour: 0,
+            minute: 0,
+            second: 0,
         };
         set_time_inner(rtc, &default_time);
 
@@ -261,12 +268,12 @@ pub fn get_time() -> RtcTime {
     let rtc = fm33lg0::rtc();
 
     unsafe {
-        let sec  = (reg_read(rtc, 0x0C) & 0x7F) as u8;
-        let min  = (reg_read(rtc, 0x10) & 0x7F) as u8;
+        let sec = (reg_read(rtc, 0x0C) & 0x7F) as u8;
+        let min = (reg_read(rtc, 0x10) & 0x7F) as u8;
         let hour = (reg_read(rtc, 0x14) & 0x3F) as u8;
-        let day  = (reg_read(rtc, 0x18) & 0x3F) as u8;
+        let day = (reg_read(rtc, 0x18) & 0x3F) as u8;
         let week = (reg_read(rtc, 0x1C) & 0x07) as u8;
-        let mon  = (reg_read(rtc, 0x20) & 0x1F) as u8;
+        let mon = (reg_read(rtc, 0x20) & 0x1F) as u8;
         let year = bcd2dec_u16(reg_read(rtc, 0x24) & 0xFF);
 
         // BCD 合法性检查
@@ -280,13 +287,13 @@ pub fn get_time() -> RtcTime {
         );
 
         RtcTime {
-            year:    2000 + year,
-            month:   mon,
-            day:     day,
+            year: 2000 + year,
+            month: mon,
+            day: day,
             weekday: week,
-            hour:    hour,
-            minute:  min,
-            second:  sec,
+            hour: hour,
+            minute: min,
+            second: sec,
         }
     }
 }
@@ -362,8 +369,8 @@ pub fn get_subsecond_raw() -> u16 {
 ///
 /// `cb`: 闹钟触发时调用的函数指针，`None` 禁用回调。
 pub fn set_alarm_callback(cb: Option<AlarmCallback>) {
-    cortex_m::interrupt::free(|_| {
-        unsafe { ALARM_CB = cb; }
+    cortex_m::interrupt::free(|_| unsafe {
+        ALARM_CB = cb;
     });
 }
 
@@ -377,16 +384,22 @@ pub fn enable_alarm(alarm: &RtcAlarm) {
 
         // 写入闹钟时间 (BCD)
         let alarm_val = (dec2bcd(alarm.hour) as u32) << 16
-                      | (dec2bcd(alarm.minute) as u32) << 8
-                      | (dec2bcd(alarm.second) as u32);
+            | (dec2bcd(alarm.minute) as u32) << 8
+            | (dec2bcd(alarm.second) as u32);
 
         // 添加匹配控制位
         let mut ctrl = 0u32;
         match alarm.mode {
             AlarmMode::Once => {}
-            AlarmMode::Daily => { ctrl |= ALM_EN_DAILY; }
-            AlarmMode::Weekly => { ctrl |= ALM_EN_DAILY | ALM_EN_WEEKDAY; }
-            AlarmMode::Hourly => { ctrl |= ALM_EN_HOURLY; }
+            AlarmMode::Daily => {
+                ctrl |= ALM_EN_DAILY;
+            }
+            AlarmMode::Weekly => {
+                ctrl |= ALM_EN_DAILY | ALM_EN_WEEKDAY;
+            }
+            AlarmMode::Hourly => {
+                ctrl |= ALM_EN_HOURLY;
+            }
         }
 
         // 亚秒匹配
@@ -433,11 +446,9 @@ pub fn irq_handler() {
         }
     }
 
-    cortex_m::interrupt::free(|_| {
-        unsafe {
-            if let Some(cb) = ALARM_CB {
-                cb();
-            }
+    cortex_m::interrupt::free(|_| unsafe {
+        if let Some(cb) = ALARM_CB {
+            cb();
         }
     });
 }
@@ -509,15 +520,13 @@ pub fn sync_from_ntp(unix_ts: u32, offset_ms: i32) {
     }
 
     // 更新同步状态
-    cortex_m::interrupt::free(|_| {
-        unsafe {
-            SYNC_STATUS = SyncStatus {
-                source: SyncSource::Ntp,
-                last_sync_timestamp: get_timestamp(),
-                last_offset_ms: offset_ms,
-                synced: true,
-            };
-        }
+    cortex_m::interrupt::free(|_| unsafe {
+        SYNC_STATUS = SyncStatus {
+            source: SyncSource::Ntp,
+            last_sync_timestamp: get_timestamp(),
+            last_offset_ms: offset_ms,
+            synced: true,
+        };
     });
 
     defmt::info!("RTC NTP 同步完成, offset={}ms", offset_ms);
@@ -533,7 +542,9 @@ pub fn sync_from_pps(pps_ts: u32) {
     let rtc = fm33lg0::rtc();
 
     const UNIX_TO_RTC_OFFSET: u32 = 946684800;
-    if pps_ts < UNIX_TO_RTC_OFFSET { return; }
+    if pps_ts < UNIX_TO_RTC_OFFSET {
+        return;
+    }
 
     let rtc_ts = pps_ts - UNIX_TO_RTC_OFFSET;
     let time_of_day = rtc_ts % 86400;
@@ -550,15 +561,13 @@ pub fn sync_from_pps(pps_ts: u32) {
         reg_write(rtc, 0x00, 0);
     }
 
-    cortex_m::interrupt::free(|_| {
-        unsafe {
-            SYNC_STATUS = SyncStatus {
-                source: SyncSource::Pps,
-                last_sync_timestamp: get_timestamp(),
-                last_offset_ms: 0,
-                synced: true,
-            };
-        }
+    cortex_m::interrupt::free(|_| unsafe {
+        SYNC_STATUS = SyncStatus {
+            source: SyncSource::Pps,
+            last_sync_timestamp: get_timestamp(),
+            last_offset_ms: 0,
+            synced: true,
+        };
     });
 
     defmt::info!("RTC PPS 同步完成");
@@ -570,23 +579,31 @@ pub fn sync_from_pps(pps_ts: u32) {
 /// `chip_time`: 从计量芯片读取的 BCD 时间数据 (秒/分/时寄存器值)。
 pub fn sync_from_metering_chip(chip_time: &RtcTime) {
     // 验证时间合法性
-    if chip_time.month < 1 || chip_time.month > 12 { return; }
-    if chip_time.day < 1 || chip_time.day > 31 { return; }
-    if chip_time.hour > 23 { return; }
-    if chip_time.minute > 59 { return; }
-    if chip_time.second > 59 { return; }
+    if chip_time.month < 1 || chip_time.month > 12 {
+        return;
+    }
+    if chip_time.day < 1 || chip_time.day > 31 {
+        return;
+    }
+    if chip_time.hour > 23 {
+        return;
+    }
+    if chip_time.minute > 59 {
+        return;
+    }
+    if chip_time.second > 59 {
+        return;
+    }
 
     set_time(chip_time);
 
-    cortex_m::interrupt::free(|_| {
-        unsafe {
-            SYNC_STATUS = SyncStatus {
-                source: SyncSource::MeteringChip,
-                last_sync_timestamp: get_timestamp(),
-                last_offset_ms: 0,
-                synced: true,
-            };
-        }
+    cortex_m::interrupt::free(|_| unsafe {
+        SYNC_STATUS = SyncStatus {
+            source: SyncSource::MeteringChip,
+            last_sync_timestamp: get_timestamp(),
+            last_offset_ms: 0,
+            synced: true,
+        };
     });
 
     defmt::info!("RTC 从计量芯片同步完成");
@@ -594,9 +611,7 @@ pub fn sync_from_metering_chip(chip_time: &RtcTime) {
 
 /// 获取时间同步状态
 pub fn sync_status() -> SyncStatus {
-    cortex_m::interrupt::free(|_| {
-        unsafe { SYNC_STATUS }
-    })
+    cortex_m::interrupt::free(|_| unsafe { SYNC_STATUS })
 }
 
 /// 检查 RTC 是否已同步过
@@ -618,7 +633,9 @@ fn days_to_date(days: u32) -> (u32, u8, u8, u8) {
     // 计算年
     loop {
         let days_in_year = if is_leap_year(2000 + year) { 366 } else { 365 };
-        if remaining < days_in_year { break; }
+        if remaining < days_in_year {
+            break;
+        }
         remaining -= days_in_year;
         year += 1;
     }
@@ -630,7 +647,9 @@ fn days_to_date(days: u32) -> (u32, u8, u8, u8) {
         if month == 2 && is_leap_year(2000 + year) {
             days = 29;
         }
-        if remaining < days { break; }
+        if remaining < days {
+            break;
+        }
         remaining -= days;
         month += 1;
     }

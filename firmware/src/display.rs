@@ -214,7 +214,7 @@ impl LcdPanel {
             let cr = lcd_cr::EN                        // 使能 LCD
                    | (0 << lcd_cr::LMUX_SHIFT)         // 00 = 4COM
                    | (0 << lcd_cr::BIAS_SHIFT)         // bias = 0 (默认 1/3)
-                   | lcd_cr::ENMODE;                   // 使能模式: 自动
+                   | lcd_cr::ENMODE; // 使能模式: 自动
             crate::board::write_reg(&lcd.cr as *const u32 as *mut u32, cr);
 
             // 3. COM 使能: COM0~COM3
@@ -309,7 +309,7 @@ impl LcdPanel {
             5 => {
                 // 功率因数 + 频率
                 self.write_number(0, content.power_factor as i32, 3); // x.xxx
-                self.write_number(4, content.frequency as i32, 2);    // xx.xx Hz
+                self.write_number(4, content.frequency as i32, 2); // xx.xx Hz
                 self.write_symbol(LcdSymbol::UnitPF, true);
                 self.write_symbol(LcdSymbol::UnitHz, true);
             }
@@ -385,7 +385,11 @@ impl LcdPanel {
 
         // 写入段码
         for i in start..8 {
-            let dp = if dp_pos > 0 && (7 - i) == dp_pos as usize { true } else { false };
+            let dp = if dp_pos > 0 && (7 - i) == dp_pos as usize {
+                true
+            } else {
+                false
+            };
             self.write_digit(start_digit + (i - start) as u8, digits[i], dp);
         }
     }
@@ -486,5 +490,80 @@ impl LcdDriver for LcdPanel {
         // 配置 LCD 控制器 bias
         // LCD_CR.BIAS = 0 → 1/3, = 1 → 1/4
         let _ = bias;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_lcd_panel_new() {
+        let panel = LcdPanel::new();
+        assert!(!panel.enabled);
+        assert_eq!(panel.rotate_total, 8);
+        assert_eq!(panel.rotate_page, 0);
+    }
+
+    #[test]
+    fn test_lcd_panel_clear() {
+        let mut panel = LcdPanel::new();
+        panel.display_ram = [0xFFFF_FFFF_FFFF; 4];
+        panel.clear();
+        assert_eq!(panel.display_ram, [0; 4]);
+    }
+
+    #[test]
+    fn test_lcd_panel_all_on() {
+        let mut panel = LcdPanel::new();
+        panel.all_on();
+        for &ram in &panel.display_ram {
+            assert_eq!(ram, 0xFFF_FFFF_FFFF_u64);
+        }
+    }
+
+    #[test]
+    fn test_lcd_panel_next_page() {
+        let mut panel = LcdPanel::new();
+        assert_eq!(panel.current_page(), 0);
+        panel.next_page();
+        assert_eq!(panel.current_page(), 1);
+        panel.rotate_page = 7;
+        panel.next_page();
+        assert_eq!(panel.current_page(), 0);
+    }
+
+    #[test]
+    fn test_segment_patterns_length() {
+        assert_eq!(SEGMENT_PATTERNS.len(), 16);
+    }
+
+    #[test]
+    fn test_segment_patterns_basic() {
+        assert!(SEGMENT_PATTERNS[0] != 0);
+        assert!(SEGMENT_PATTERNS[1] < SEGMENT_PATTERNS[0]);
+        assert_eq!(SEGMENT_PATTERNS[8], 0xFE);
+    }
+
+    #[test]
+    fn test_symbol_values() {
+        assert_eq!(symbol::MINUS, 0x02);
+        assert_eq!(symbol::ALL_ON, 0xFF);
+        assert_eq!(symbol::ALL_OFF, 0x00);
+    }
+
+    #[test]
+    fn test_lcd_symbol_debug() {
+        assert_eq!(format!("{:?}", LcdSymbol::PhaseA), "PhaseA");
+        assert_eq!(format!("{:?}", LcdSymbol::UnitKWh), "UnitKWh");
+        assert_eq!(format!("{:?}", LcdSymbol::Alarm), "Alarm");
+    }
+
+    #[test]
+    fn test_rotate_timer_resets() {
+        let mut panel = LcdPanel::new();
+        panel.rotate_timer = 3000;
+        panel.next_page();
+        assert_eq!(panel.rotate_timer, 0);
     }
 }

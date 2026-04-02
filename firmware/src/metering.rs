@@ -10,8 +10,8 @@
 /* ================================================================== */
 
 use crate::hal::{
-    CalibrationParams, EnergyData, HarmonicData, MeteringChip, MeteringError,
-    Phase, PhaseData, PowerQuality,
+    CalibrationParams, EnergyData, HarmonicData, MeteringChip, MeteringError, Phase, PhaseData,
+    PowerQuality,
 };
 
 /// 能量寄存器位宽 (32-bit)
@@ -96,14 +96,18 @@ impl TariffAccumulators {
     /// 获取指定费率的总有功电能（正向 + 反向，0.01 kWh）
     pub fn total_active(&self, tariff: u8) -> u64 {
         let t = tariff as usize;
-        if t >= NUM_TARIFFS { return 0; }
+        if t >= NUM_TARIFFS {
+            return 0;
+        }
         self.active_import[t].wrapping_add(self.active_export[t])
     }
 
     /// 获取指定费率的总无功电能（正向 + 反向，0.01 kvarh）
     pub fn total_reactive(&self, tariff: u8) -> u64 {
         let t = tariff as usize;
-        if t >= NUM_TARIFFS { return 0; }
+        if t >= NUM_TARIFFS {
+            return 0;
+        }
         self.reactive_import[t].wrapping_add(self.reactive_export[t])
     }
 }
@@ -135,7 +139,9 @@ impl EnergyTracker {
             raw - self.prev_raw
         } else {
             // 翻转：寄存器从大变小说明溢出回绕
-            (ENERGY_REG_MAX - self.prev_raw).wrapping_add(1).wrapping_add(raw)
+            (ENERGY_REG_MAX - self.prev_raw)
+                .wrapping_add(1)
+                .wrapping_add(raw)
         };
 
         self.prev_raw = raw;
@@ -253,7 +259,6 @@ impl DemandData {
         self.max_active = 0;
         self.max_reactive = 0;
     }
-
 }
 
 /* ================================================================== */
@@ -415,7 +420,8 @@ impl<M: MeteringChip> MeteringManager<M> {
                 self.apply_calibration_correction(&mut data);
 
                 // 需量采样
-                self.demand.sample(data.active_power_total, data.reactive_power_total);
+                self.demand
+                    .sample(data.active_power_total, data.reactive_power_total);
 
                 self.last_active_power = data.active_power_total;
                 self.instant = data;
@@ -437,12 +443,22 @@ impl<M: MeteringChip> MeteringManager<M> {
 
         let d_ai = self.tracker_active_import.update(raw.active_import as u32);
         let d_ae = self.tracker_active_export.update(raw.active_export as u32);
-        let d_ri = self.tracker_reactive_import.update(raw.reactive_import as u32);
-        let d_re = self.tracker_reactive_export.update(raw.reactive_export as u32);
+        let d_ri = self
+            .tracker_reactive_import
+            .update(raw.reactive_import as u32);
+        let d_re = self
+            .tracker_reactive_export
+            .update(raw.reactive_export as u32);
 
-        let _d_aia = self.tracker_active_import_a.update(raw.active_import_a as u32);
-        let _d_aib = self.tracker_active_import_b.update(raw.active_import_b as u32);
-        let _d_aic = self.tracker_active_import_c.update(raw.active_import_c as u32);
+        let _d_aia = self
+            .tracker_active_import_a
+            .update(raw.active_import_a as u32);
+        let _d_aib = self
+            .tracker_active_import_b
+            .update(raw.active_import_b as u32);
+        let _d_aic = self
+            .tracker_active_import_c
+            .update(raw.active_import_c as u32);
 
         // 累加到当前费率
         self.tariffs.accumulate(d_ai, d_ae, d_ri, d_re);
@@ -471,8 +487,7 @@ impl<M: MeteringChip> MeteringManager<M> {
         self.poll_instant();
 
         // 电能采集（间隔控制）
-        if current_ms.wrapping_sub(self.last_energy_poll_ms)
-            >= self.poll_config.energy_interval_ms
+        if current_ms.wrapping_sub(self.last_energy_poll_ms) >= self.poll_config.energy_interval_ms
         {
             self.poll_energy();
             self.last_energy_poll_ms = current_ms;
@@ -518,13 +533,15 @@ impl<M: MeteringChip> MeteringManager<M> {
 
     /// 返回总有功电能 (0.01 kWh)
     pub fn accumulated_energy_active(&self) -> u64 {
-        self.tracker_active_import.accumulated
+        self.tracker_active_import
+            .accumulated
             .wrapping_add(self.tracker_active_export.accumulated)
     }
 
     /// 返回总无功电能 (0.01 kvarh)
     pub fn accumulated_energy_reactive(&self) -> u64 {
-        self.tracker_reactive_import.accumulated
+        self.tracker_reactive_import
+            .accumulated
             .wrapping_add(self.tracker_reactive_export.accumulated)
     }
 
@@ -630,18 +647,14 @@ impl<M: MeteringChip> MeteringManager<M> {
         data.active_power_a = apply_i32_gain(data.active_power_a, gains.power_gain[0]);
         data.active_power_b = apply_i32_gain(data.active_power_b, gains.power_gain[1]);
         data.active_power_c = apply_i32_gain(data.active_power_c, gains.power_gain[2]);
-        data.active_power_total = apply_i32_gain(
-            data.active_power_total,
-            gains.power_gain.iter().sum(),
-        );
+        data.active_power_total =
+            apply_i32_gain(data.active_power_total, gains.power_gain.iter().sum());
 
         data.reactive_power_a = apply_i32_gain(data.reactive_power_a, gains.reactive_gain[0]);
         data.reactive_power_b = apply_i32_gain(data.reactive_power_b, gains.reactive_gain[1]);
         data.reactive_power_c = apply_i32_gain(data.reactive_power_c, gains.reactive_gain[2]);
-        data.reactive_power_total = apply_i32_gain(
-            data.reactive_power_total,
-            gains.reactive_gain.iter().sum(),
-        );
+        data.reactive_power_total =
+            apply_i32_gain(data.reactive_power_total, gains.reactive_gain.iter().sum());
     }
 }
 

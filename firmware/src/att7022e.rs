@@ -10,8 +10,10 @@
 //!
 //! 参考: ATT7022E 用户手册 Rev1.3 (210-SD-138)
 
-use crate::hal::{self, MeteringChip, CalibrationParams, PhaseData, EnergyData as HalEnergyData, MeteringError};
 use crate::board::GpioImpl;
+use crate::hal::{
+    self, CalibrationParams, EnergyData as HalEnergyData, MeteringChip, MeteringError, PhaseData,
+};
 
 // ══════════════════════════════════════════════════════════════════
 // Board-specific SPI implementation for ATT7022E
@@ -27,7 +29,7 @@ impl CsPin for BoardCs0 {
     fn set_low(&self) {
         crate::board::gpio_clr(crate::board::pins::SPI0_CSN);
     }
-    
+
     fn set_high(&self) {
         crate::board::gpio_set(crate::board::pins::SPI0_CSN);
     }
@@ -51,28 +53,28 @@ impl MeteringChip for Att7022eBoard {
         let _ = params;
         // Software reset
         self.soft_reset();
-        
+
         // Enable calibration write
         self.enable_calibration_write();
-        
+
         // TODO: Write calibration parameters
         // For now, just mark as initialized
-        
+
         self.disable_calibration_write();
         Ok(())
     }
-    
+
     fn reset(&mut self) -> Result<(), MeteringError> {
         self.soft_reset();
         Ok(())
     }
-    
+
     fn read_instant_data(&mut self) -> Result<PhaseData, MeteringError> {
         let power = self.read_power();
         let rms = self.read_rms();
         let pf = self.read_pf();
         let freq = self.read_frequency();
-        
+
         Ok(PhaseData {
             voltage_a: (rms.ua / 8192) as u16, // Convert to 0.01V
             voltage_b: (rms.ub / 8192) as u16,
@@ -95,7 +97,7 @@ impl MeteringChip for Att7022eBoard {
             power_factor_total: (pf.pft.max(0).min(1000) as u16),
         })
     }
-    
+
     fn read_energy(&mut self) -> Result<HalEnergyData, MeteringError> {
         let energy = self.read_energy_raw();
         Ok(HalEnergyData {
@@ -109,24 +111,24 @@ impl MeteringChip for Att7022eBoard {
             ..Default::default()
         })
     }
-    
+
     fn read_neutral_current(&mut self) -> Result<u16, MeteringError> {
         let rms = self.read_rms();
         Ok((rms.i0 / 8192) as u16) // Convert to mA
     }
-    
+
     fn chip_id(&mut self) -> Result<u32, MeteringError> {
         Ok(self.read_device_id())
     }
-    
+
     fn name() -> &'static str {
         "ATT7022E"
     }
-    
+
     fn supports_fundamental(&self) -> bool {
         true
     }
-    
+
     fn read_fundamental_power(&mut self) -> Result<[i32; 3], MeteringError> {
         let line = self.read_line_power();
         Ok([line.line_pa, line.line_pb, line.line_pc])
@@ -190,83 +192,83 @@ pub mod special_cmd {
 
 pub mod reg {
     // ── 功率 ──
-    pub const PA: u8 = 0x01;  // A相有功功率
-    pub const PB: u8 = 0x02;  // B相有功功率
-    pub const PC: u8 = 0x03;  // C相有功功率
-    pub const PT: u8 = 0x04;  // 合相有功功率
-    pub const QA: u8 = 0x05;  // A相无功功率
-    pub const QB: u8 = 0x06;  // B相无功功率
-    pub const QC: u8 = 0x07;  // C相无功功率
-    pub const QT: u8 = 0x08;  // 合相无功功率
-    pub const SA: u8 = 0x09;  // A相视在功率
-    pub const SB: u8 = 0x0A;  // B相视在功率
-    pub const SC: u8 = 0x0B;  // C相视在功率
-    pub const ST: u8 = 0x0C;  // 合相视在功率
+    pub const PA: u8 = 0x01; // A相有功功率
+    pub const PB: u8 = 0x02; // B相有功功率
+    pub const PC: u8 = 0x03; // C相有功功率
+    pub const PT: u8 = 0x04; // 合相有功功率
+    pub const QA: u8 = 0x05; // A相无功功率
+    pub const QB: u8 = 0x06; // B相无功功率
+    pub const QC: u8 = 0x07; // C相无功功率
+    pub const QT: u8 = 0x08; // 合相无功功率
+    pub const SA: u8 = 0x09; // A相视在功率
+    pub const SB: u8 = 0x0A; // B相视在功率
+    pub const SC: u8 = 0x0B; // C相视在功率
+    pub const ST: u8 = 0x0C; // 合相视在功率
 
     // ── 有效值 ──
-    pub const UA_RMS: u8 = 0x0D;  // A相电压有效值
-    pub const UB_RMS: u8 = 0x0E;  // B相电压有效值
-    pub const UC_RMS: u8 = 0x0F;  // C相电压有效值
-    pub const IA_RMS: u8 = 0x10;  // A相电流有效值
-    pub const IB_RMS: u8 = 0x11;  // B相电流有效值
-    pub const IC_RMS: u8 = 0x12;  // C相电流有效值
-    pub const IT_RMS: u8 = 0x13;  // 三相电流矢量和有效值
-    pub const I0_RMS: u8 = 0x29;  // 零线电流有效值
-    pub const UT_RMS: u8 = 0x2B;  // 三相电压矢量和有效值
+    pub const UA_RMS: u8 = 0x0D; // A相电压有效值
+    pub const UB_RMS: u8 = 0x0E; // B相电压有效值
+    pub const UC_RMS: u8 = 0x0F; // C相电压有效值
+    pub const IA_RMS: u8 = 0x10; // A相电流有效值
+    pub const IB_RMS: u8 = 0x11; // B相电流有效值
+    pub const IC_RMS: u8 = 0x12; // C相电流有效值
+    pub const IT_RMS: u8 = 0x13; // 三相电流矢量和有效值
+    pub const I0_RMS: u8 = 0x29; // 零线电流有效值
+    pub const UT_RMS: u8 = 0x2B; // 三相电压矢量和有效值
 
     // ── 功率因数 ──
-    pub const PFA: u8 = 0x14;  // A相功率因数
-    pub const PFB: u8 = 0x15;  // B相功率因数
-    pub const PFC: u8 = 0x16;  // C相功率因数
-    pub const PFT: u8 = 0x17;  // 合相功率因数
+    pub const PFA: u8 = 0x14; // A相功率因数
+    pub const PFB: u8 = 0x15; // B相功率因数
+    pub const PFC: u8 = 0x16; // C相功率因数
+    pub const PFT: u8 = 0x17; // 合相功率因数
 
     // ── 相角/电压夹角 ──
-    pub const PGA: u8 = 0x18;     // A相电流与电压相角
-    pub const PGB: u8 = 0x19;     // B相电流与电压相角
-    pub const PGC: u8 = 0x1A;     // C相电流与电压相角
+    pub const PGA: u8 = 0x18; // A相电流与电压相角
+    pub const PGB: u8 = 0x19; // B相电流与电压相角
+    pub const PGC: u8 = 0x1A; // C相电流与电压相角
     pub const Y_UA_UB: u8 = 0x26; // Ua与Ub电压夹角
     pub const Y_UA_UC: u8 = 0x27; // Ua与Uc电压夹角
     pub const Y_UB_UC: u8 = 0x28; // Ub与Uc电压夹角
 
     // ── 频率/状态 ──
-    pub const FREQ: u8 = 0x1C;      // 线频率
-    pub const INT_FLAG: u8 = 0x1B;  // 中断标志(读后清零)
-    pub const E_FLAG: u8 = 0x1D;    // 电能工作状态(读后清零)
-    pub const S_FLAG: u8 = 0x2C;    // 断相/相序/SIG标志
+    pub const FREQ: u8 = 0x1C; // 线频率
+    pub const INT_FLAG: u8 = 0x1B; // 中断标志(读后清零)
+    pub const E_FLAG: u8 = 0x1D; // 电能工作状态(读后清零)
+    pub const S_FLAG: u8 = 0x2C; // 断相/相序/SIG标志
 
     // ── 有功电能 (可配置读后清零) ──
-    pub const EPA: u8 = 0x1E;  // A相有功电能
-    pub const EPB: u8 = 0x1F;  // B相有功电能
-    pub const EPC: u8 = 0x20;  // C相有功电能
-    pub const EPT: u8 = 0x21;  // 合相有功电能
+    pub const EPA: u8 = 0x1E; // A相有功电能
+    pub const EPB: u8 = 0x1F; // B相有功电能
+    pub const EPC: u8 = 0x20; // C相有功电能
+    pub const EPT: u8 = 0x21; // 合相有功电能
 
     // ── 无功电能 ──
-    pub const EQA: u8 = 0x22;  // A相无功电能
-    pub const EQB: u8 = 0x23;  // B相无功电能
-    pub const EQC: u8 = 0x24;  // C相无功电能
-    pub const EQT: u8 = 0x25;  // 合相无功电能
+    pub const EQA: u8 = 0x22; // A相无功电能
+    pub const EQB: u8 = 0x23; // B相无功电能
+    pub const EQC: u8 = 0x24; // C相无功电能
+    pub const EQT: u8 = 0x25; // 合相无功电能
 
     // ── 视在电能 ──
-    pub const ESA: u8 = 0x35;  // A相视在电能
-    pub const ESB: u8 = 0x36;  // B相视在电能
-    pub const ESC: u8 = 0x37;  // C相视在电能
-    pub const EST: u8 = 0x38;  // 合相视在电能
+    pub const ESA: u8 = 0x35; // A相视在电能
+    pub const ESB: u8 = 0x36; // B相视在电能
+    pub const ESC: u8 = 0x37; // C相视在电能
+    pub const EST: u8 = 0x38; // 合相视在电能
 
     // ── 基波参数 ──
-    pub const LINE_PA: u8 = 0x40;  // A相基波有功功率
-    pub const LINE_PB: u8 = 0x41;  // B相基波有功功率
-    pub const LINE_PC: u8 = 0x42;  // C相基波有功功率
-    pub const LINE_PT: u8 = 0x43;  // 合相基波有功功率
+    pub const LINE_PA: u8 = 0x40; // A相基波有功功率
+    pub const LINE_PB: u8 = 0x41; // B相基波有功功率
+    pub const LINE_PC: u8 = 0x42; // C相基波有功功率
+    pub const LINE_PT: u8 = 0x43; // 合相基波有功功率
     pub const LINE_EPA: u8 = 0x44; // A相基波有功电能
     pub const LINE_EPB: u8 = 0x45; // B相基波有功电能
     pub const LINE_EPC: u8 = 0x46; // C相基波有功电能
     pub const LINE_EPT: u8 = 0x47; // 合相基波有功电能
-    pub const LINE_UA: u8 = 0x48;  // 基波A相电压有效值
-    pub const LINE_UB: u8 = 0x49;  // 基波B相电压有效值
-    pub const LINE_UC: u8 = 0x4A;  // 基波C相电压有效值
-    pub const LINE_IA: u8 = 0x4B;  // 基波A相电流有效值
-    pub const LINE_IB: u8 = 0x4C;  // 基波B相电流有效值
-    pub const LINE_IC: u8 = 0x4D;  // 基波C相电流有效值
+    pub const LINE_UA: u8 = 0x48; // 基波A相电压有效值
+    pub const LINE_UB: u8 = 0x49; // 基波B相电压有效值
+    pub const LINE_UC: u8 = 0x4A; // 基波C相电压有效值
+    pub const LINE_IA: u8 = 0x4B; // 基波A相电流有效值
+    pub const LINE_IB: u8 = 0x4C; // 基波B相电流有效值
+    pub const LINE_IC: u8 = 0x4D; // 基波C相电流有效值
     pub const LINE_EFLAG: u8 = 0x4E; // 基波电能状态
 
     // ── ADC 采样数据 ──
@@ -283,17 +285,17 @@ pub mod reg {
     pub const FST_CNT_B: u8 = 0x3A; // B相快速脉冲计数
     pub const FST_CNT_C: u8 = 0x3B; // C相快速脉冲计数
     pub const FST_CNT_T: u8 = 0x3C; // 合相快速脉冲计数
-    pub const P_FLAG: u8 = 0x3D;    // 功率方向标志
-    pub const CHKSUM: u8 = 0x3E;    // 校表数据校验和
-    pub const TPSD: u8 = 0x2A;      // 温度传感器输出
+    pub const P_FLAG: u8 = 0x3D; // 功率方向标志
+    pub const CHKSUM: u8 = 0x3E; // 校表数据校验和
+    pub const TPSD: u8 = 0x2A; // 温度传感器输出
     pub const DEVICE_ID: u8 = 0x00; // Device ID (复位值 0x7122A0)
 
     // ── 缓冲 ──
-    pub const PTR_WAVE: u8 = 0x7E;  // 缓冲数据指针
+    pub const PTR_WAVE: u8 = 0x7E; // 缓冲数据指针
     pub const WAVE_BUFF: u8 = 0x7F; // 缓冲数据寄存器
 
     // ── 通讯 ──
-    pub const BCK_REG: u8 = 0x2D;    // 通讯数据备份
+    pub const BCK_REG: u8 = 0x2D; // 通讯数据备份
     pub const COM_CHKSUM: u8 = 0x2E; // 通讯校验和
 }
 
@@ -302,53 +304,53 @@ pub mod reg {
 // ══════════════════════════════════════════════════════════════════
 
 pub mod cal_reg {
-    pub const MODE_CFG: u8 = 0x01;     // 模式配置
-    pub const ADC_GAIN: u8 = 0x02;     // ADC增益配置
-    pub const EMU_CFG: u8 = 0x03;      // EMU单元配置
-    // 功率增益补偿: 0x04~0x0C
-    pub const PA_GAIN: u8 = 0x04;      // A相有功功率增益
-    pub const PB_GAIN: u8 = 0x05;      // B相有功功率增益
-    pub const PC_GAIN: u8 = 0x06;      // C相有功功率增益
-    pub const QA_GAIN: u8 = 0x07;      // A相无功功率增益
-    pub const QB_GAIN: u8 = 0x08;      // B相无功功率增益
-    pub const QC_GAIN: u8 = 0x09;      // C相无功功率增益
-    pub const SA_GAIN: u8 = 0x0A;      // A相视在功率增益
-    pub const SB_GAIN: u8 = 0x0B;      // B相视在功率增益
-    pub const SC_GAIN: u8 = 0x0C;      // C相视在功率增益
-    // 相位校正: 0x10~0x12
-    pub const PHA_CAL: u8 = 0x10;      // A相相位校正
-    pub const PHB_CAL: u8 = 0x11;      // B相相位校正
-    pub const PHC_CAL: u8 = 0x12;      // C相相位校正
-    // 功率offset校正: 0x13~0x15, 0x21~0x23
-    pub const PA_OFFSET: u8 = 0x13;    // A相有功offset
-    pub const PB_OFFSET: u8 = 0x14;    // B相有功offset
-    pub const PC_OFFSET: u8 = 0x15;    // C相有功offset
-    pub const QA_OFFSET: u8 = 0x21;    // A相无功offset
-    pub const QB_OFFSET: u8 = 0x22;    // B相无功offset
-    pub const QC_OFFSET: u8 = 0x23;    // C相无功offset
-    // 无功相位校正
-    pub const Q_PH_CAL: u8 = 0x16;     // 无功相位校正
-    // 电压增益校正: 0x17~0x19
-    pub const UA_GAIN: u8 = 0x17;      // A相电压增益
-    pub const UB_GAIN: u8 = 0x18;      // B相电压增益
-    pub const UC_GAIN: u8 = 0x19;      // C相电压增益
-    // 电流增益校正: 0x1A~0x1C, 0x20
-    pub const IA_GAIN: u8 = 0x1A;      // A相电流增益
-    pub const IB_GAIN: u8 = 0x1B;      // B相电流增益
-    pub const IC_GAIN: u8 = 0x1C;      // C相电流增益
-    pub const I0_GAIN: u8 = 0x20;      // 零线电流增益
-    // 阈值/配置
-    pub const START_I: u8 = 0x1D;      // 起动电流设置
-    pub const HF_CONST: u8 = 0x1E;     // 高频脉冲常数
-    pub const FAIL_VOLT: u8 = 0x1F;    // 失压阈值
-    // 有效值offset校正: 0x24~0x29
-    pub const UA_RMS_OFF: u8 = 0x24;   // A相电压RMS offset
-    pub const UB_RMS_OFF: u8 = 0x25;   // B相电压RMS offset
-    pub const UC_RMS_OFF: u8 = 0x26;   // C相电压RMS offset
-    pub const IA_RMS_OFF: u8 = 0x27;   // A相电流RMS offset
-    pub const IB_RMS_OFF: u8 = 0x28;   // B相电流RMS offset
-    pub const IC_RMS_OFF: u8 = 0x29;   // C相电流RMS offset
-    // ADC offset: 0x2A~0x2F
+    pub const MODE_CFG: u8 = 0x01; // 模式配置
+    pub const ADC_GAIN: u8 = 0x02; // ADC增益配置
+    pub const EMU_CFG: u8 = 0x03; // EMU单元配置
+                                  // 功率增益补偿: 0x04~0x0C
+    pub const PA_GAIN: u8 = 0x04; // A相有功功率增益
+    pub const PB_GAIN: u8 = 0x05; // B相有功功率增益
+    pub const PC_GAIN: u8 = 0x06; // C相有功功率增益
+    pub const QA_GAIN: u8 = 0x07; // A相无功功率增益
+    pub const QB_GAIN: u8 = 0x08; // B相无功功率增益
+    pub const QC_GAIN: u8 = 0x09; // C相无功功率增益
+    pub const SA_GAIN: u8 = 0x0A; // A相视在功率增益
+    pub const SB_GAIN: u8 = 0x0B; // B相视在功率增益
+    pub const SC_GAIN: u8 = 0x0C; // C相视在功率增益
+                                  // 相位校正: 0x10~0x12
+    pub const PHA_CAL: u8 = 0x10; // A相相位校正
+    pub const PHB_CAL: u8 = 0x11; // B相相位校正
+    pub const PHC_CAL: u8 = 0x12; // C相相位校正
+                                  // 功率offset校正: 0x13~0x15, 0x21~0x23
+    pub const PA_OFFSET: u8 = 0x13; // A相有功offset
+    pub const PB_OFFSET: u8 = 0x14; // B相有功offset
+    pub const PC_OFFSET: u8 = 0x15; // C相有功offset
+    pub const QA_OFFSET: u8 = 0x21; // A相无功offset
+    pub const QB_OFFSET: u8 = 0x22; // B相无功offset
+    pub const QC_OFFSET: u8 = 0x23; // C相无功offset
+                                    // 无功相位校正
+    pub const Q_PH_CAL: u8 = 0x16; // 无功相位校正
+                                   // 电压增益校正: 0x17~0x19
+    pub const UA_GAIN: u8 = 0x17; // A相电压增益
+    pub const UB_GAIN: u8 = 0x18; // B相电压增益
+    pub const UC_GAIN: u8 = 0x19; // C相电压增益
+                                  // 电流增益校正: 0x1A~0x1C, 0x20
+    pub const IA_GAIN: u8 = 0x1A; // A相电流增益
+    pub const IB_GAIN: u8 = 0x1B; // B相电流增益
+    pub const IC_GAIN: u8 = 0x1C; // C相电流增益
+    pub const I0_GAIN: u8 = 0x20; // 零线电流增益
+                                  // 阈值/配置
+    pub const START_I: u8 = 0x1D; // 起动电流设置
+    pub const HF_CONST: u8 = 0x1E; // 高频脉冲常数
+    pub const FAIL_VOLT: u8 = 0x1F; // 失压阈值
+                                    // 有效值offset校正: 0x24~0x29
+    pub const UA_RMS_OFF: u8 = 0x24; // A相电压RMS offset
+    pub const UB_RMS_OFF: u8 = 0x25; // B相电压RMS offset
+    pub const UC_RMS_OFF: u8 = 0x26; // C相电压RMS offset
+    pub const IA_RMS_OFF: u8 = 0x27; // A相电流RMS offset
+    pub const IB_RMS_OFF: u8 = 0x28; // B相电流RMS offset
+    pub const IC_RMS_OFF: u8 = 0x29; // C相电流RMS offset
+                                     // ADC offset: 0x2A~0x2F
     pub const ADC_OFF_0: u8 = 0x2A;
     pub const ADC_OFF_1: u8 = 0x2B;
     pub const ADC_OFF_2: u8 = 0x2C;
@@ -356,13 +358,13 @@ pub mod cal_reg {
     pub const ADC_OFF_4: u8 = 0x2E;
     pub const ADC_OFF_5: u8 = 0x2F;
     // 其他
-    pub const INT_EN: u8 = 0x30;       // 中断使能
-    pub const ANA_EN: u8 = 0x31;       // 模拟模块使能
-    pub const ALL_GAIN: u8 = 0x32;     // 全通道增益
+    pub const INT_EN: u8 = 0x30; // 中断使能
+    pub const ANA_EN: u8 = 0x31; // 模拟模块使能
+    pub const ALL_GAIN: u8 = 0x32; // 全通道增益
     pub const PULSE_DOUBLE: u8 = 0x33; // 脉冲加倍
-    pub const LINE_GAIN: u8 = 0x34;    // 基波增益
-    pub const IO_CFG: u8 = 0x35;       // IO状态配置
-    pub const START_P: u8 = 0x36;      // 起动功率
+    pub const LINE_GAIN: u8 = 0x34; // 基波增益
+    pub const IO_CFG: u8 = 0x35; // IO状态配置
+    pub const START_P: u8 = 0x36; // 起动功率
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -706,49 +708,81 @@ impl<SPI: SpiOps, CS: CsPin> Att7022e<SPI, CS> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct PowerData {
-    pub pa: i32, pub pb: i32, pub pc: i32, pub pt: i32,
-    pub qa: i32, pub qb: i32, pub qc: i32, pub qt: i32,
-    pub sa: u32, pub sb: u32, pub sc: u32, pub st: u32,
+    pub pa: i32,
+    pub pb: i32,
+    pub pc: i32,
+    pub pt: i32,
+    pub qa: i32,
+    pub qb: i32,
+    pub qc: i32,
+    pub qt: i32,
+    pub sa: u32,
+    pub sb: u32,
+    pub sc: u32,
+    pub st: u32,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct RmsData {
-    pub ua: u32, pub ub: u32, pub uc: u32,  // 电压有效值
-    pub ia: u32, pub ib: u32, pub ic: u32,  // 电流有效值
-    pub i0: u32,  // 零线电流
-    pub ut: u32,  // 三相电压矢量和
-    pub it: u32,  // 三相电流矢量和
+    pub ua: u32,
+    pub ub: u32,
+    pub uc: u32, // 电压有效值
+    pub ia: u32,
+    pub ib: u32,
+    pub ic: u32, // 电流有效值
+    pub i0: u32, // 零线电流
+    pub ut: u32, // 三相电压矢量和
+    pub it: u32, // 三相电流矢量和
 }
 
 /// 芯片原始电能寄存器数据
 #[derive(Debug, Clone, Copy)]
 pub struct ChipEnergyData {
-    pub epa: u32, pub epb: u32, pub epc: u32, pub ept: u32,
-    pub eqa: u32, pub eqb: u32, pub eqc: u32, pub eqt: u32,
-    pub esa: u32, pub esb: u32, pub esc: u32, pub est: u32,
+    pub epa: u32,
+    pub epb: u32,
+    pub epc: u32,
+    pub ept: u32,
+    pub eqa: u32,
+    pub eqb: u32,
+    pub eqc: u32,
+    pub eqt: u32,
+    pub esa: u32,
+    pub esb: u32,
+    pub esc: u32,
+    pub est: u32,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct PfData {
-    pub pfa: i32, pub pfb: i32, pub pfc: i32, pub pft: i32, // PF * 1000
+    pub pfa: i32,
+    pub pfb: i32,
+    pub pfc: i32,
+    pub pft: i32, // PF * 1000
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct AngleData {
-    pub pga: i32, pub pgb: i32, pub pgc: i32, // 相角 (度*100)
-    pub y_ua_ub: u32, pub y_ua_uc: u32, pub y_ub_uc: u32, // 电压夹角
+    pub pga: i32,
+    pub pgb: i32,
+    pub pgc: i32, // 相角 (度*100)
+    pub y_ua_ub: u32,
+    pub y_ua_uc: u32,
+    pub y_ub_uc: u32, // 电压夹角
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct LinePowerData {
-    pub line_pa: i32, pub line_pb: i32, pub line_pc: i32, pub line_pt: i32,
+    pub line_pa: i32,
+    pub line_pb: i32,
+    pub line_pc: i32,
+    pub line_pt: i32,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct StatusFlags {
-    pub raw_sflag: u32,  // 断相/相序/SIG
-    pub raw_eflag: u32,  // 电能状态
-    pub raw_pflag: u32,  // 功率方向
+    pub raw_sflag: u32, // 断相/相序/SIG
+    pub raw_eflag: u32, // 电能状态
+    pub raw_pflag: u32, // 功率方向
 }
 
 // ══════════════════════════════════════════════════════════════════
