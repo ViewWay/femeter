@@ -23,9 +23,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 // New v1.0 modules
-use crate::tariff::TouManager;
 use crate::demand::DemandMeter;
 use crate::statistics::Statistics;
+use crate::tariff::TouManager;
 
 /// 全局日志开关
 static LOG_ENABLED: AtomicBool = AtomicBool::new(true);
@@ -61,10 +61,16 @@ pub enum ChipType {
 
 impl ChipType {
     pub fn bits(&self) -> u8 {
-        match self { Self::ATT7022E => 19, Self::RN8302B => 24 }
+        match self {
+            Self::ATT7022E => 19,
+            Self::RN8302B => 24,
+        }
     }
     pub fn precision_factor(&self) -> f64 {
-        match self { Self::ATT7022E => 0.001, Self::RN8302B => 0.0001 }
+        match self {
+            Self::ATT7022E => 0.001,
+            Self::RN8302B => 0.0001,
+        }
     }
 }
 
@@ -79,7 +85,11 @@ pub struct PhaseData {
 
 impl Default for PhaseData {
     fn default() -> Self {
-        Self { voltage: 220.0, current: 0.0, angle: 0.0 }
+        Self {
+            voltage: 220.0,
+            current: 0.0,
+            angle: 0.0,
+        }
     }
 }
 
@@ -103,12 +113,22 @@ impl PhaseData {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum MeterEvent {
-    OverVoltageA = 0x01, OverVoltageB = 0x02, OverVoltageC = 0x03,
-    UnderVoltageA = 0x04, UnderVoltageB = 0x05, UnderVoltageC = 0x06,
-    PhaseLossA = 0x07, PhaseLossB = 0x08, PhaseLossC = 0x09,
-    OverCurrentA = 0x0A, OverCurrentB = 0x0B, OverCurrentC = 0x0C,
+    OverVoltageA = 0x01,
+    OverVoltageB = 0x02,
+    OverVoltageC = 0x03,
+    UnderVoltageA = 0x04,
+    UnderVoltageB = 0x05,
+    UnderVoltageC = 0x06,
+    PhaseLossA = 0x07,
+    PhaseLossB = 0x08,
+    PhaseLossC = 0x09,
+    OverCurrentA = 0x0A,
+    OverCurrentB = 0x0B,
+    OverCurrentC = 0x0C,
     ReversePower = 0x10,
-    CoverOpen = 0x11, TerminalCoverOpen = 0x12, MagneticTamper = 0x13,
+    CoverOpen = 0x11,
+    TerminalCoverOpen = 0x12,
+    MagneticTamper = 0x13,
     BatteryLow = 0x14,
 }
 
@@ -170,8 +190,14 @@ impl Default for MeterConfig {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EnergyData {
-    pub wh_a: f64, pub wh_b: f64, pub wh_c: f64, pub wh_total: f64,
-    pub varh_a: f64, pub varh_b: f64, pub varh_c: f64, pub varh_total: f64,
+    pub wh_a: f64,
+    pub wh_b: f64,
+    pub wh_c: f64,
+    pub wh_total: f64,
+    pub varh_a: f64,
+    pub varh_b: f64,
+    pub varh_c: f64,
+    pub varh_total: f64,
 }
 
 /* ── 完整快照 ── */
@@ -191,25 +217,42 @@ pub struct MeterSnapshot {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComputedValues {
-    pub p_a: f64, pub p_b: f64, pub p_c: f64, pub p_total: f64,
-    pub q_a: f64, pub q_b: f64, pub q_c: f64, pub q_total: f64,
-    pub s_a: f64, pub s_b: f64, pub s_c: f64, pub s_total: f64,
-    pub pf_a: f64, pub pf_b: f64, pub pf_c: f64, pub pf_total: f64,
+    pub p_a: f64,
+    pub p_b: f64,
+    pub p_c: f64,
+    pub p_total: f64,
+    pub q_a: f64,
+    pub q_b: f64,
+    pub q_c: f64,
+    pub q_total: f64,
+    pub s_a: f64,
+    pub s_b: f64,
+    pub s_c: f64,
+    pub s_total: f64,
+    pub pf_a: f64,
+    pub pf_b: f64,
+    pub pf_c: f64,
+    pub pf_total: f64,
 }
 
 /* ── 事件检测阈值 (与固件一致) ── */
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventThresholds {
-    pub over_voltage: f64,   // V, 默认 264
-    pub under_voltage: f64,  // V, 默认 176
-    pub lost_voltage: f64,   // V, 默认 30
-    pub over_current: f64,   // A, 默认 60
+    pub over_voltage: f64,  // V, 默认 264
+    pub under_voltage: f64, // V, 默认 176
+    pub lost_voltage: f64,  // V, 默认 30
+    pub over_current: f64,  // A, 默认 60
 }
 
 impl Default for EventThresholds {
     fn default() -> Self {
-        Self { over_voltage: 264.0, under_voltage: 176.0, lost_voltage: 30.0, over_current: 60.0 }
+        Self {
+            over_voltage: 264.0,
+            under_voltage: 176.0,
+            lost_voltage: 30.0,
+            over_current: 60.0,
+        }
     }
 }
 
@@ -239,7 +282,9 @@ pub struct VirtualMeter {
 }
 
 impl Default for VirtualMeter {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl VirtualMeter {
@@ -268,7 +313,10 @@ impl VirtualMeter {
 
     pub fn set_voltage(&mut self, phase: char, value: f64) {
         let p = match phase.to_ascii_lowercase() {
-            'a' => &mut self.phase_a, 'b' => &mut self.phase_b, 'c' => &mut self.phase_c, _ => return,
+            'a' => &mut self.phase_a,
+            'b' => &mut self.phase_b,
+            'c' => &mut self.phase_c,
+            _ => return,
         };
         vm_log!("set_voltage({}) = {:.2} V", phase, value);
         p.voltage = value;
@@ -276,7 +324,10 @@ impl VirtualMeter {
 
     pub fn set_current(&mut self, phase: char, value: f64) {
         let p = match phase.to_ascii_lowercase() {
-            'a' => &mut self.phase_a, 'b' => &mut self.phase_b, 'c' => &mut self.phase_c, _ => return,
+            'a' => &mut self.phase_a,
+            'b' => &mut self.phase_b,
+            'c' => &mut self.phase_c,
+            _ => return,
         };
         vm_log!("set_current({}) = {:.2} A", phase, value);
         p.current = value;
@@ -284,32 +335,73 @@ impl VirtualMeter {
 
     pub fn set_angle(&mut self, phase: char, value: f64) {
         let p = match phase.to_ascii_lowercase() {
-            'a' => &mut self.phase_a, 'b' => &mut self.phase_b, 'c' => &mut self.phase_c, _ => return,
+            'a' => &mut self.phase_a,
+            'b' => &mut self.phase_b,
+            'c' => &mut self.phase_c,
+            _ => return,
         };
         vm_log!("set_angle({}) = {:.1}°", phase, value);
         p.angle = value;
     }
 
-    pub fn set_freq(&mut self, freq: f64) { vm_log!("set_freq = {:.2} Hz", freq); self.config.freq = freq; }
-    pub fn set_chip(&mut self, chip: ChipType) { vm_log!("set_chip = {:?}", chip); self.config.chip = chip; }
-    pub fn set_noise(&mut self, enabled: bool) { vm_log!("set_noise = {}", enabled); self.config.noise_enabled = enabled; }
-    pub fn set_time_accel(&mut self, accel: f64) { vm_log!("set_time_accel = {:.0}x", accel); self.config.time_accel = accel; }
-    pub fn set_pulse_constant(&mut self, c: u32) { self.pulse_constant = c; }
-    pub fn set_thresholds(&mut self, t: EventThresholds) { self.thresholds = t; }
+    pub fn set_freq(&mut self, freq: f64) {
+        vm_log!("set_freq = {:.2} Hz", freq);
+        self.config.freq = freq;
+    }
+    pub fn set_chip(&mut self, chip: ChipType) {
+        vm_log!("set_chip = {:?}", chip);
+        self.config.chip = chip;
+    }
+    pub fn set_noise(&mut self, enabled: bool) {
+        vm_log!("set_noise = {}", enabled);
+        self.config.noise_enabled = enabled;
+    }
+    pub fn set_time_accel(&mut self, accel: f64) {
+        vm_log!("set_time_accel = {:.0}x", accel);
+        self.config.time_accel = accel;
+    }
+    pub fn set_pulse_constant(&mut self, c: u32) {
+        self.pulse_constant = c;
+    }
+    pub fn set_thresholds(&mut self, t: EventThresholds) {
+        self.thresholds = t;
+    }
 
-    pub fn config(&self) -> &MeterConfig { &self.config }
-    pub fn energy(&self) -> &EnergyData { &self.energy }
-    pub fn events(&self) -> &[EventRecord] { &self.events }
-    pub fn active_events(&self) -> &[MeterEvent] { &self.active_events }
-    pub fn pulse_count(&self) -> u64 { self.pulse_count }
+    pub fn config(&self) -> &MeterConfig {
+        &self.config
+    }
+    pub fn energy(&self) -> &EnergyData {
+        &self.energy
+    }
+    pub fn events(&self) -> &[EventRecord] {
+        &self.events
+    }
+    pub fn active_events(&self) -> &[MeterEvent] {
+        &self.active_events
+    }
+    pub fn pulse_count(&self) -> u64 {
+        self.pulse_count
+    }
 
     // v1.0 new getters
-    pub fn tou(&self) -> &TouManager { &self.tou }
-    pub fn tou_mut(&mut self) -> &mut TouManager { &mut self.tou }
-    pub fn demand(&self) -> &DemandMeter { &self.demand }
-    pub fn demand_mut(&mut self) -> &mut DemandMeter { &mut self.demand }
-    pub fn statistics(&self) -> &Statistics { &self.statistics }
-    pub fn statistics_mut(&mut self) -> &mut Statistics { &mut self.statistics }
+    pub fn tou(&self) -> &TouManager {
+        &self.tou
+    }
+    pub fn tou_mut(&mut self) -> &mut TouManager {
+        &mut self.tou
+    }
+    pub fn demand(&self) -> &DemandMeter {
+        &self.demand
+    }
+    pub fn demand_mut(&mut self) -> &mut DemandMeter {
+        &mut self.demand
+    }
+    pub fn statistics(&self) -> &Statistics {
+        &self.statistics
+    }
+    pub fn statistics_mut(&mut self) -> &mut Statistics {
+        &mut self.statistics
+    }
 
     pub fn reset_energy(&mut self) {
         self.energy = EnergyData::default();
@@ -325,51 +417,159 @@ impl VirtualMeter {
         self.active_events.clear();
         match scenario {
             Scenario::Normal => {
-                self.phase_a = PhaseData { voltage: 220.0, current: 5.0, angle: 18.2 };
-                self.phase_b = PhaseData { voltage: 220.0, current: 5.0, angle: 18.2 };
-                self.phase_c = PhaseData { voltage: 220.0, current: 5.0, angle: 18.2 };
+                self.phase_a = PhaseData {
+                    voltage: 220.0,
+                    current: 5.0,
+                    angle: 18.2,
+                };
+                self.phase_b = PhaseData {
+                    voltage: 220.0,
+                    current: 5.0,
+                    angle: 18.2,
+                };
+                self.phase_c = PhaseData {
+                    voltage: 220.0,
+                    current: 5.0,
+                    angle: 18.2,
+                };
                 self.config.freq = 50.0;
             }
             Scenario::FullLoad => {
-                self.phase_a = PhaseData { voltage: 220.0, current: 60.0, angle: 31.8 };
-                self.phase_b = PhaseData { voltage: 220.0, current: 60.0, angle: 31.8 };
-                self.phase_c = PhaseData { voltage: 220.0, current: 60.0, angle: 31.8 };
+                self.phase_a = PhaseData {
+                    voltage: 220.0,
+                    current: 60.0,
+                    angle: 31.8,
+                };
+                self.phase_b = PhaseData {
+                    voltage: 220.0,
+                    current: 60.0,
+                    angle: 31.8,
+                };
+                self.phase_c = PhaseData {
+                    voltage: 220.0,
+                    current: 60.0,
+                    angle: 31.8,
+                };
                 self.config.freq = 49.8;
             }
             Scenario::NoLoad => {
-                self.phase_a = PhaseData { voltage: 220.0, current: 0.0, angle: 0.0 };
-                self.phase_b = PhaseData { voltage: 220.0, current: 0.0, angle: 0.0 };
-                self.phase_c = PhaseData { voltage: 220.0, current: 0.0, angle: 0.0 };
+                self.phase_a = PhaseData {
+                    voltage: 220.0,
+                    current: 0.0,
+                    angle: 0.0,
+                };
+                self.phase_b = PhaseData {
+                    voltage: 220.0,
+                    current: 0.0,
+                    angle: 0.0,
+                };
+                self.phase_c = PhaseData {
+                    voltage: 220.0,
+                    current: 0.0,
+                    angle: 0.0,
+                };
             }
             Scenario::OverVoltage => {
-                self.phase_a = PhaseData { voltage: 280.0, current: 5.0, angle: 18.2 };
-                self.phase_b = PhaseData { voltage: 220.0, current: 5.0, angle: 18.2 };
-                self.phase_c = PhaseData { voltage: 220.0, current: 5.0, angle: 18.2 };
+                self.phase_a = PhaseData {
+                    voltage: 280.0,
+                    current: 5.0,
+                    angle: 18.2,
+                };
+                self.phase_b = PhaseData {
+                    voltage: 220.0,
+                    current: 5.0,
+                    angle: 18.2,
+                };
+                self.phase_c = PhaseData {
+                    voltage: 220.0,
+                    current: 5.0,
+                    angle: 18.2,
+                };
             }
             Scenario::UnderVoltage => {
-                self.phase_a = PhaseData { voltage: 170.0, current: 5.0, angle: 18.2 };
-                self.phase_b = PhaseData { voltage: 220.0, current: 5.0, angle: 18.2 };
-                self.phase_c = PhaseData { voltage: 220.0, current: 5.0, angle: 18.2 };
+                self.phase_a = PhaseData {
+                    voltage: 170.0,
+                    current: 5.0,
+                    angle: 18.2,
+                };
+                self.phase_b = PhaseData {
+                    voltage: 220.0,
+                    current: 5.0,
+                    angle: 18.2,
+                };
+                self.phase_c = PhaseData {
+                    voltage: 220.0,
+                    current: 5.0,
+                    angle: 18.2,
+                };
             }
             Scenario::PhaseLoss => {
-                self.phase_a = PhaseData { voltage: 0.0, current: 0.0, angle: 0.0 };
-                self.phase_b = PhaseData { voltage: 220.0, current: 5.0, angle: 18.2 };
-                self.phase_c = PhaseData { voltage: 220.0, current: 5.0, angle: 18.2 };
+                self.phase_a = PhaseData {
+                    voltage: 0.0,
+                    current: 0.0,
+                    angle: 0.0,
+                };
+                self.phase_b = PhaseData {
+                    voltage: 220.0,
+                    current: 5.0,
+                    angle: 18.2,
+                };
+                self.phase_c = PhaseData {
+                    voltage: 220.0,
+                    current: 5.0,
+                    angle: 18.2,
+                };
             }
             Scenario::OverCurrent => {
-                self.phase_a = PhaseData { voltage: 220.0, current: 70.0, angle: 18.2 };
-                self.phase_b = PhaseData { voltage: 220.0, current: 5.0, angle: 18.2 };
-                self.phase_c = PhaseData { voltage: 220.0, current: 5.0, angle: 18.2 };
+                self.phase_a = PhaseData {
+                    voltage: 220.0,
+                    current: 70.0,
+                    angle: 18.2,
+                };
+                self.phase_b = PhaseData {
+                    voltage: 220.0,
+                    current: 5.0,
+                    angle: 18.2,
+                };
+                self.phase_c = PhaseData {
+                    voltage: 220.0,
+                    current: 5.0,
+                    angle: 18.2,
+                };
             }
             Scenario::ReversePower => {
-                self.phase_a = PhaseData { voltage: 220.0, current: 5.0, angle: 180.0 };
-                self.phase_b = PhaseData { voltage: 220.0, current: 5.0, angle: 18.2 };
-                self.phase_c = PhaseData { voltage: 220.0, current: 5.0, angle: 18.2 };
+                self.phase_a = PhaseData {
+                    voltage: 220.0,
+                    current: 5.0,
+                    angle: 180.0,
+                };
+                self.phase_b = PhaseData {
+                    voltage: 220.0,
+                    current: 5.0,
+                    angle: 18.2,
+                };
+                self.phase_c = PhaseData {
+                    voltage: 220.0,
+                    current: 5.0,
+                    angle: 18.2,
+                };
             }
             Scenario::Unbalanced => {
-                self.phase_a = PhaseData { voltage: 220.0, current: 10.0, angle: 10.0 };
-                self.phase_b = PhaseData { voltage: 215.0, current: 3.0, angle: 25.0 };
-                self.phase_c = PhaseData { voltage: 225.0, current: 15.0, angle: 5.0 };
+                self.phase_a = PhaseData {
+                    voltage: 220.0,
+                    current: 10.0,
+                    angle: 10.0,
+                };
+                self.phase_b = PhaseData {
+                    voltage: 215.0,
+                    current: 3.0,
+                    angle: 25.0,
+                };
+                self.phase_c = PhaseData {
+                    voltage: 225.0,
+                    current: 15.0,
+                    angle: 5.0,
+                };
             }
         }
     }
@@ -399,28 +599,62 @@ impl VirtualMeter {
         self.active_events.clear();
         let t = &self.thresholds;
 
-        let check_voltage = |v: f64, over_ev: MeterEvent, under_ev: MeterEvent, loss_ev: MeterEvent| -> Vec<MeterEvent> {
+        let check_voltage = |v: f64,
+                             over_ev: MeterEvent,
+                             under_ev: MeterEvent,
+                             loss_ev: MeterEvent|
+         -> Vec<MeterEvent> {
             let mut ev = Vec::new();
-            if v > t.over_voltage { ev.push(over_ev); }
-            else if v < t.under_voltage && v > t.lost_voltage { ev.push(under_ev); }
-            if v <= t.lost_voltage { ev.push(loss_ev); }
+            if v > t.over_voltage {
+                ev.push(over_ev);
+            } else if v < t.under_voltage && v > t.lost_voltage {
+                ev.push(under_ev);
+            }
+            if v <= t.lost_voltage {
+                ev.push(loss_ev);
+            }
             ev
         };
 
         let check_current = |i: f64, ev: MeterEvent| -> Vec<MeterEvent> {
-            if i > t.over_current { vec![ev] } else { vec![] }
+            if i > t.over_current {
+                vec![ev]
+            } else {
+                vec![]
+            }
         };
 
         self.active_events.extend(check_voltage(
-            self.phase_a.voltage, MeterEvent::OverVoltageA, MeterEvent::UnderVoltageA, MeterEvent::PhaseLossA));
+            self.phase_a.voltage,
+            MeterEvent::OverVoltageA,
+            MeterEvent::UnderVoltageA,
+            MeterEvent::PhaseLossA,
+        ));
         self.active_events.extend(check_voltage(
-            self.phase_b.voltage, MeterEvent::OverVoltageB, MeterEvent::UnderVoltageB, MeterEvent::PhaseLossB));
+            self.phase_b.voltage,
+            MeterEvent::OverVoltageB,
+            MeterEvent::UnderVoltageB,
+            MeterEvent::PhaseLossB,
+        ));
         self.active_events.extend(check_voltage(
-            self.phase_c.voltage, MeterEvent::OverVoltageC, MeterEvent::UnderVoltageC, MeterEvent::PhaseLossC));
+            self.phase_c.voltage,
+            MeterEvent::OverVoltageC,
+            MeterEvent::UnderVoltageC,
+            MeterEvent::PhaseLossC,
+        ));
 
-        self.active_events.extend(check_current(self.phase_a.current, MeterEvent::OverCurrentA));
-        self.active_events.extend(check_current(self.phase_b.current, MeterEvent::OverCurrentB));
-        self.active_events.extend(check_current(self.phase_c.current, MeterEvent::OverCurrentC));
+        self.active_events.extend(check_current(
+            self.phase_a.current,
+            MeterEvent::OverCurrentA,
+        ));
+        self.active_events.extend(check_current(
+            self.phase_b.current,
+            MeterEvent::OverCurrentB,
+        ));
+        self.active_events.extend(check_current(
+            self.phase_c.current,
+            MeterEvent::OverCurrentC,
+        ));
 
         // 反向功率
         if self.phase_a.active_power() < 0.0
@@ -451,7 +685,9 @@ impl VirtualMeter {
     /* ── 内部 ── */
 
     fn apply_noise(&mut self, value: f64) -> f64 {
-        if !self.config.noise_enabled { return value; }
+        if !self.config.noise_enabled {
+            return value;
+        }
         let factor = self.config.chip.precision_factor();
         value * (1.0 + self.rng.gen_range(-factor..factor))
     }
@@ -462,7 +698,9 @@ impl VirtualMeter {
         let dt_hours = dt_ms / 3_600_000.0 * self.config.time_accel;
         self.last_update = now;
 
-        if dt_hours <= 0.0 { return; }
+        if dt_hours <= 0.0 {
+            return;
+        }
 
         let p_a = self.phase_a.active_power();
         let p_b = self.phase_b.active_power();
@@ -500,13 +738,24 @@ impl VirtualMeter {
         let q_b = self.phase_b.reactive_power();
         let q_c = self.phase_c.reactive_power();
         self.demand.sample(p_a, p_b, p_c, q_a, q_b, q_c);
-        let s_total = self.phase_a.apparent_power() + self.phase_b.apparent_power() + self.phase_c.apparent_power();
+        let s_total = self.phase_a.apparent_power()
+            + self.phase_b.apparent_power()
+            + self.phase_c.apparent_power();
         let p_total = p_a + p_b + p_c;
-        let pf = if s_total > 0.0 { p_total / s_total } else { 0.0 };
+        let pf = if s_total > 0.0 {
+            p_total / s_total
+        } else {
+            0.0
+        };
         self.statistics.sample(
-            self.phase_a.voltage, self.phase_b.voltage, self.phase_c.voltage,
-            self.phase_a.current, self.phase_b.current, self.phase_c.current,
-            self.config.freq, pf,
+            self.phase_a.voltage,
+            self.phase_b.voltage,
+            self.phase_c.voltage,
+            self.phase_a.current,
+            self.phase_b.current,
+            self.phase_c.current,
+            self.config.freq,
+            pf,
         );
     }
 
@@ -528,7 +777,11 @@ impl VirtualMeter {
         let p_total = p_a + p_b + p_c;
         let q_total = q_a + q_b + q_c;
         let s_total = s_a + s_b + s_c;
-        let pf_total = if s_total > 0.0 { p_total / s_total } else { 0.0 };
+        let pf_total = if s_total > 0.0 {
+            p_total / s_total
+        } else {
+            0.0
+        };
 
         MeterSnapshot {
             timestamp: Utc::now(),
@@ -538,10 +791,22 @@ impl VirtualMeter {
             phase_b: self.phase_b.clone(),
             phase_c: self.phase_c.clone(),
             computed: ComputedValues {
-                p_a, p_b, p_c, p_total, q_a, q_b, q_c, q_total,
-                s_a, s_b, s_c, s_total,
-                pf_a: self.phase_a.power_factor(), pf_b: self.phase_b.power_factor(),
-                pf_c: self.phase_c.power_factor(), pf_total,
+                p_a,
+                p_b,
+                p_c,
+                p_total,
+                q_a,
+                q_b,
+                q_c,
+                q_total,
+                s_a,
+                s_b,
+                s_c,
+                s_total,
+                pf_a: self.phase_a.power_factor(),
+                pf_b: self.phase_b.power_factor(),
+                pf_c: self.phase_c.power_factor(),
+                pf_total,
             },
             energy: self.energy.clone(),
             active_events: self.active_events.clone(),
@@ -565,10 +830,16 @@ impl VirtualMeter {
             0x0A => (snap.freq * 100.0) as u32,
             0x0B => (snap.energy.wh_a * 100.0) as u32,
             0x0E => (snap.energy.wh_total * 100.0) as u32,
-            0xFF => match self.config.chip { ChipType::ATT7022E => 0x7022E, ChipType::RN8302B => 0x8302B },
+            0xFF => match self.config.chip {
+                ChipType::ATT7022E => 0x7022E,
+                ChipType::RN8302B => 0x8302B,
+            },
             _ => 0,
         };
-        let mask = match self.config.chip { ChipType::ATT7022E => 0x7FFFF, ChipType::RN8302B => 0xFFFFFF };
+        let mask = match self.config.chip {
+            ChipType::ATT7022E => 0x7FFFF,
+            ChipType::RN8302B => 0xFFFFFF,
+        };
         format!("{:06X}", value & mask)
     }
 
@@ -578,7 +849,11 @@ impl VirtualMeter {
         let ev_str = if snap.active_events.is_empty() {
             "无".to_string()
         } else {
-            snap.active_events.iter().map(|e| format!("{:?}", e)).collect::<Vec<_>>().join(", ")
+            snap.active_events
+                .iter()
+                .map(|e| format!("{:?}", e))
+                .collect::<Vec<_>>()
+                .join(", ")
         };
         writeln!(w, "[{}] Ua={:.1} Ub={:.1} Uc={:.1} Ia={:.2} Ib={:.2} Ic={:.2} P={:.1}W Q={:.1}var PF={:.3} F={:.2}Hz Wh={:.3}kWh | Events: {}",
             snap.timestamp.format("%H:%M:%S%.3f"),
@@ -592,4 +867,6 @@ impl VirtualMeter {
 }
 
 pub type MeterHandle = Arc<Mutex<VirtualMeter>>;
-pub fn create_meter() -> MeterHandle { Arc::new(Mutex::new(VirtualMeter::new())) }
+pub fn create_meter() -> MeterHandle {
+    Arc::new(Mutex::new(VirtualMeter::new()))
+}

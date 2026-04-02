@@ -27,8 +27,10 @@ impl Default for PersistedState {
             energy: EnergyData::default(),
             events: Vec::new(),
             load_profile_records: Vec::new(),
-            max_demand_p: 0.0, max_demand_p_time: chrono::Utc::now(),
-            max_demand_q: 0.0, max_demand_q_time: chrono::Utc::now(),
+            max_demand_p: 0.0,
+            max_demand_p_time: chrono::Utc::now(),
+            max_demand_q: 0.0,
+            max_demand_q_time: chrono::Utc::now(),
             statistics: crate::statistics::Statistics::default(),
             calibration: crate::calibration::CalibrationParams::default(),
             saved_at: chrono::Utc::now(),
@@ -41,7 +43,11 @@ pub struct Persistence {
 }
 
 impl Persistence {
-    pub fn new(path: &str) -> Self { Self { path: path.to_string() } }
+    pub fn new(path: &str) -> Self {
+        Self {
+            path: path.to_string(),
+        }
+    }
 
     pub fn save(&self, state: &PersistedState) -> Result<()> {
         let json = serde_json::to_string_pretty(state)?;
@@ -55,7 +61,9 @@ impl Persistence {
         Ok(state)
     }
 
-    pub fn exists(&self) -> bool { Path::new(&self.path).exists() }
+    pub fn exists(&self) -> bool {
+        Path::new(&self.path).exists()
+    }
 }
 
 #[cfg(test)]

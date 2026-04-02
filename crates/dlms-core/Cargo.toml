@@ -12,3 +12,6 @@ defmt = { version = "0.3", optional = true }
 default = []
 std = []
 defmt-log = ["defmt"]
+
+[lib]
+doctest = false

@@ -53,38 +53,68 @@ impl Default for CalibrationParams {
 
 impl CalibrationParams {
     pub fn set_voltage_gain(&mut self, phase: usize, gain: f64) {
-        if phase < 3 { self.voltage_gain[phase] = gain; }
+        if phase < 3 {
+            self.voltage_gain[phase] = gain;
+        }
     }
     pub fn set_current_gain(&mut self, phase: usize, gain: f64) {
-        if phase < 3 { self.current_gain[phase] = gain; }
+        if phase < 3 {
+            self.current_gain[phase] = gain;
+        }
     }
     pub fn set_phase_comp(&mut self, phase: usize, angle: f64) {
-        if phase < 3 { self.phase_comp[phase] = angle; }
+        if phase < 3 {
+            self.phase_comp[phase] = angle;
+        }
     }
-    pub fn set_pulse_constant(&mut self, c: u32) { self.pulse_constant = c; }
+    pub fn set_pulse_constant(&mut self, c: u32) {
+        self.pulse_constant = c;
+    }
 
-    pub fn start_calibration(&mut self) { self.cal_mode = true; }
-    pub fn end_calibration(&mut self) { self.cal_mode = false; }
-    pub fn is_calibrating(&self) -> bool { self.cal_mode }
+    pub fn start_calibration(&mut self) {
+        self.cal_mode = true;
+    }
+    pub fn end_calibration(&mut self) {
+        self.cal_mode = false;
+    }
+    pub fn is_calibrating(&self) -> bool {
+        self.cal_mode
+    }
 
     /// 读写校准寄存器
-    pub fn read_reg(&self, addr: u16) -> Option<u32> { self.registers.get(&addr).copied() }
-    pub fn write_reg(&mut self, addr: u16, value: u32) { self.registers.insert(addr, value); }
+    pub fn read_reg(&self, addr: u16) -> Option<u32> {
+        self.registers.get(&addr).copied()
+    }
+    pub fn write_reg(&mut self, addr: u16, value: u32) {
+        self.registers.insert(addr, value);
+    }
 
     /// 应用校准到电压
     pub fn calibrate_voltage(&self, phase: usize, raw: f64) -> f64 {
-        if phase < 3 { raw * self.voltage_gain[phase] } else { raw }
+        if phase < 3 {
+            raw * self.voltage_gain[phase]
+        } else {
+            raw
+        }
     }
 
     /// 应用校准到电流
     pub fn calibrate_current(&self, phase: usize, raw: f64) -> f64 {
-        if phase < 3 { raw * self.current_gain[phase] } else { raw }
+        if phase < 3 {
+            raw * self.current_gain[phase]
+        } else {
+            raw
+        }
     }
 
     /// 应用校准到频率
-    pub fn calibrate_freq(&self, raw: f64) -> f64 { raw * self.freq_gain }
+    pub fn calibrate_freq(&self, raw: f64) -> f64 {
+        raw * self.freq_gain
+    }
 
-    pub fn reset(&mut self) { *self = Self::default(); }
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
 }
 
 #[cfg(test)]

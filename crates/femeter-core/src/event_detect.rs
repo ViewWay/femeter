@@ -37,10 +37,10 @@ pub struct CurrentThresholds {
 impl Default for VoltageThresholds {
     fn default() -> Self {
         Self {
-            over_voltage: 26400,   // 264.0V
-            under_voltage: 17600,  // 176.0V
-            lost_voltage: 3000,    // 30.0V
-            duration_ms: 3000,     // 3s
+            over_voltage: 26400,  // 264.0V
+            under_voltage: 17600, // 176.0V
+            lost_voltage: 3000,   // 30.0V
+            duration_ms: 3000,    // 3s
         }
     }
 }
@@ -48,8 +48,8 @@ impl Default for VoltageThresholds {
 impl Default for CurrentThresholds {
     fn default() -> Self {
         Self {
-            over_current: 60000,   // 60A
-            duration_ms: 5000,     // 5s
+            over_current: 60000, // 60A
+            duration_ms: 5000,   // 5s
         }
     }
 }
@@ -224,7 +224,14 @@ impl EventDetector {
             freq_deviation_ticks: 0,
             freq_deviation_active: false,
             reverse_power_active: false,
-            event_log: [EventLogEntry { event: MeterEvent::BatteryLow, timestamp: 0, value: 0, duration: 0, state: 0, _reserved: 0 }; MAX_EVENT_LOG],
+            event_log: [EventLogEntry {
+                event: MeterEvent::BatteryLow,
+                timestamp: 0,
+                value: 0,
+                duration: 0,
+                state: 0,
+                _reserved: 0,
+            }; MAX_EVENT_LOG],
             event_log_len: 0,
             event_log_pos: 0,
             pending_events: 0,
@@ -255,22 +262,37 @@ impl EventDetector {
         let mut new_events: u32 = 0;
 
         new_events |= check_phase(
-            &mut self.phase_a, data.voltage_a, data.current_a,
-            &self.v_thresholds, &self.c_thresholds,
-            MeterEvent::OverVoltageA, MeterEvent::UnderVoltageA,
-            MeterEvent::PhaseLossA, MeterEvent::OverCurrentA,
+            &mut self.phase_a,
+            data.voltage_a,
+            data.current_a,
+            &self.v_thresholds,
+            &self.c_thresholds,
+            MeterEvent::OverVoltageA,
+            MeterEvent::UnderVoltageA,
+            MeterEvent::PhaseLossA,
+            MeterEvent::OverCurrentA,
         );
         new_events |= check_phase(
-            &mut self.phase_b, data.voltage_b, data.current_b,
-            &self.v_thresholds, &self.c_thresholds,
-            MeterEvent::OverVoltageB, MeterEvent::UnderVoltageB,
-            MeterEvent::PhaseLossB, MeterEvent::OverCurrentB,
+            &mut self.phase_b,
+            data.voltage_b,
+            data.current_b,
+            &self.v_thresholds,
+            &self.c_thresholds,
+            MeterEvent::OverVoltageB,
+            MeterEvent::UnderVoltageB,
+            MeterEvent::PhaseLossB,
+            MeterEvent::OverCurrentB,
         );
         new_events |= check_phase(
-            &mut self.phase_c, data.voltage_c, data.current_c,
-            &self.v_thresholds, &self.c_thresholds,
-            MeterEvent::OverVoltageC, MeterEvent::UnderVoltageC,
-            MeterEvent::PhaseLossC, MeterEvent::OverCurrentC,
+            &mut self.phase_c,
+            data.voltage_c,
+            data.current_c,
+            &self.v_thresholds,
+            &self.c_thresholds,
+            MeterEvent::OverVoltageC,
+            MeterEvent::UnderVoltageC,
+            MeterEvent::PhaseLossC,
+            MeterEvent::OverCurrentC,
         );
 
         // 频率越限 (50Hz ± 2Hz → 4800~5200, 0.01Hz)
@@ -289,7 +311,11 @@ impl EventDetector {
         // 反向功率
         if data.active_power_total < 0 && !self.reverse_power_active {
             self.reverse_power_active = true;
-            self.log_event(MeterEvent::ReversePower, data.active_power_total.unsigned_abs() as u32, 1);
+            self.log_event(
+                MeterEvent::ReversePower,
+                data.active_power_total.unsigned_abs() as u32,
+                1,
+            );
             new_events |= 1 << (MeterEvent::ReversePower as u8);
         } else if data.active_power_total >= 0 && self.reverse_power_active {
             self.reverse_power_active = false;
@@ -342,13 +368,26 @@ mod tests {
 
     fn default_data() -> crate::PhaseData {
         crate::PhaseData {
-            voltage_a: 22000, voltage_b: 22000, voltage_c: 22000,
-            current_a: 10000, current_b: 10000, current_c: 10000,
-            active_power_total: 6600, reactive_power_total: 1000,
-            apparent_power_total: 6676, frequency: 5000, power_factor_total: 989,
-            active_power_a: 2200, active_power_b: 2200, active_power_c: 2200,
-            reactive_power_a: 333, reactive_power_b: 333, reactive_power_c: 333,
-            voltage_angle_a: 0, voltage_angle_b: 24000, voltage_angle_c: 48000,
+            voltage_a: 22000,
+            voltage_b: 22000,
+            voltage_c: 22000,
+            current_a: 10000,
+            current_b: 10000,
+            current_c: 10000,
+            active_power_total: 6600,
+            reactive_power_total: 1000,
+            apparent_power_total: 6676,
+            frequency: 5000,
+            power_factor_total: 989,
+            active_power_a: 2200,
+            active_power_b: 2200,
+            active_power_c: 2200,
+            reactive_power_a: 333,
+            reactive_power_b: 333,
+            reactive_power_c: 333,
+            voltage_angle_a: 0,
+            voltage_angle_b: 24000,
+            voltage_angle_c: 48000,
         }
     }
 
@@ -381,7 +420,9 @@ mod tests {
         let mut d = default_data();
         d.voltage_b = 17000;
         for _ in 0..20 {
-            if det.check(&d) & (1 << MeterEvent::UnderVoltageB as u8) != 0 { return; }
+            if det.check(&d) & (1 << MeterEvent::UnderVoltageB as u8) != 0 {
+                return;
+            }
         }
         panic!("under voltage should trigger");
     }
@@ -392,7 +433,9 @@ mod tests {
         let mut d = default_data();
         d.voltage_c = 500;
         for _ in 0..20 {
-            if det.check(&d) & (1 << MeterEvent::PhaseLossC as u8) != 0 { return; }
+            if det.check(&d) & (1 << MeterEvent::PhaseLossC as u8) != 0 {
+                return;
+            }
         }
         panic!("phase loss should trigger");
     }
@@ -404,7 +447,9 @@ mod tests {
         d.current_a = 65000;
         // 过流需要 5000ms / 200ms = 25 次
         for _ in 0..30 {
-            if det.check(&d) & (1 << MeterEvent::OverCurrentA as u8) != 0 { return; }
+            if det.check(&d) & (1 << MeterEvent::OverCurrentA as u8) != 0 {
+                return;
+            }
         }
         panic!("over current should trigger");
     }
@@ -415,7 +460,9 @@ mod tests {
         let mut d = default_data();
         d.frequency = 4700;
         for _ in 0..20 {
-            if det.check(&d) & (1 << MeterEvent::FrequencyDeviation as u8) != 0 { return; }
+            if det.check(&d) & (1 << MeterEvent::FrequencyDeviation as u8) != 0 {
+                return;
+            }
         }
         panic!("frequency deviation should trigger");
     }
@@ -433,7 +480,9 @@ mod tests {
         let mut det = EventDetector::new();
         let mut d = default_data();
         d.voltage_a = 27000;
-        for _ in 0..16 { det.check(&d); }
+        for _ in 0..16 {
+            det.check(&d);
+        }
         d.voltage_a = 22000;
         assert_eq!(det.check(&d) & (1 << MeterEvent::OverVoltageA as u8), 0);
     }
@@ -452,7 +501,9 @@ mod tests {
     #[test]
     fn test_event_log_overflow() {
         let mut det = EventDetector::new();
-        for _ in 0..300 { det.trigger_external(MeterEvent::BatteryLow); }
+        for _ in 0..300 {
+            det.trigger_external(MeterEvent::BatteryLow);
+        }
         assert_eq!(det.event_log().len(), MAX_EVENT_LOG);
     }
 
@@ -471,8 +522,10 @@ mod tests {
     fn test_custom_thresholds_instant() {
         let mut det = EventDetector::new();
         det.set_voltage_thresholds(VoltageThresholds {
-            over_voltage: 25000, under_voltage: 19000,
-            lost_voltage: 5000, duration_ms: 0,
+            over_voltage: 25000,
+            under_voltage: 19000,
+            lost_voltage: 5000,
+            duration_ms: 0,
         });
         let mut d = default_data();
         d.voltage_a = 25500;
@@ -483,11 +536,15 @@ mod tests {
     fn test_multi_phase() {
         let mut det = EventDetector::new();
         det.set_voltage_thresholds(VoltageThresholds {
-            over_voltage: 25000, under_voltage: 19000,
-            lost_voltage: 5000, duration_ms: 0,
+            over_voltage: 25000,
+            under_voltage: 19000,
+            lost_voltage: 5000,
+            duration_ms: 0,
         });
         let mut d = default_data();
-        d.voltage_a = 27000; d.voltage_b = 18000; d.voltage_c = 1000;
+        d.voltage_a = 27000;
+        d.voltage_b = 18000;
+        d.voltage_c = 1000;
         let ev = det.check(&d);
         assert_ne!(ev & (1 << MeterEvent::OverVoltageA as u8), 0);
         assert_ne!(ev & (1 << MeterEvent::UnderVoltageB as u8), 0);

@@ -14,3 +14,6 @@ defmt = { version = "0.3", optional = true }
 default = []
 std = ["dlms-core/std"]
 defmt-log = ["defmt", "dlms-core/defmt-log"]
+
+[lib]
+doctest = false

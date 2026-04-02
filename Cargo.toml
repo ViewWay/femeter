@@ -32,7 +32,6 @@ dlms-hal = { path = "crates/dlms-hal" }
 dlms-host = { path = "crates/dlms-host" }
 
 [workspace.package]
-name = "femeter"
 version = "0.1.0"
 edition = "2021"
 description = "DLMS/COSEM smart meter system - complete protocol stack and meter application"

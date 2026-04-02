@@ -16,6 +16,7 @@
 //! - IC 123: Array Manager
 //! - IC 124: Communication Port Protection
 
+pub mod ic02_association_sn_secure;
 pub mod ic122_function_control;
 pub mod ic123_array_manager;
 pub mod ic124_comm_port_protection;
@@ -31,6 +32,7 @@ pub mod ic62_security_policy;
 pub mod ic64_security_setup;
 
 // Re-export commonly used types
+pub use ic02_association_sn_secure::AssociationSnSecure;
 pub use ic15_association_ln::AssociationLn;
 pub use ic43_logical_device::LogicalDevice;
 pub use ic44_physical_device::PhysicalDevice;

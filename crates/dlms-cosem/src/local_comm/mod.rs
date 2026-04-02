@@ -11,12 +11,20 @@
 //! - IC 20: Auto Answer
 //! - IC 23: Modem Configuration
 
+pub mod ic100_lp_uart_setup;
+pub mod ic101_rs485_setup;
+pub mod ic102_infrared_setup;
+pub mod ic103_modem_setup;
 pub mod ic13_iec_local_port_setup;
 pub mod ic14_iec_hdlc_setup;
 pub mod ic15_iec_twisted_pair_setup;
 pub mod ic16_iec_modem_setup;
 
 // Re-export commonly used types
+pub use ic100_lp_uart_setup::LpUartPortSetup;
+pub use ic101_rs485_setup::Rs485PortSetup;
+pub use ic102_infrared_setup::InfraredPortSetup;
+pub use ic103_modem_setup::ModemPortSetup;
 pub use ic13_iec_local_port_setup::IecLocalPortSetup;
 pub use ic14_iec_hdlc_setup::IecHdlcSetup;
 pub use ic15_iec_twisted_pair_setup::IecTwistedPairSetup;

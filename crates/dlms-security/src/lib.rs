@@ -17,6 +17,7 @@ mod control;
 mod hls;
 mod key;
 mod lls;
+mod sm4_gmac;
 mod system_title;
 
 // Re-exports
@@ -29,6 +30,7 @@ pub use control::{
 pub use hls::compute_auth_value;
 pub use key::generate_key;
 pub use lls::verify_password;
+pub use sm4_gmac::{sm4_encrypt_block, sm4_gmac, sm4_gmac_verify, Sm4KeySchedule};
 pub use system_title::{SystemTitle, SYSTEM_TITLE_LEN};
 
 /// Maximum security control field size

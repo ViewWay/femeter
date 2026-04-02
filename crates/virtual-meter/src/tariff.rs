@@ -3,40 +3,49 @@
 //! 4 个费率: 尖/峰/平/谷 (Sharp/Peak/Normal/Valley)
 //! 日时段表, 多套费率表, 自动费率判断
 
-use chrono::{Local, Datelike, Timelike};
+use chrono::{Datelike, Local, Timelike};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TariffType {
-    Sharp,   // 尖
-    Peak,    // 峰
-    Normal,  // 平
-    Valley,  // 谷
+    Sharp,  // 尖
+    Peak,   // 峰
+    Normal, // 平
+    Valley, // 谷
 }
 
 impl TariffType {
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Sharp => "尖", Self::Peak => "峰",
-            Self::Normal => "平", Self::Valley => "谷",
+            Self::Sharp => "尖",
+            Self::Peak => "峰",
+            Self::Normal => "平",
+            Self::Valley => "谷",
         }
     }
     pub fn from_byte(b: u8) -> Option<Self> {
         match b {
-            1 => Some(Self::Sharp), 2 => Some(Self::Peak),
-            3 => Some(Self::Normal), 4 => Some(Self::Valley),
+            1 => Some(Self::Sharp),
+            2 => Some(Self::Peak),
+            3 => Some(Self::Normal),
+            4 => Some(Self::Valley),
             _ => None,
         }
     }
     pub fn to_byte(&self) -> u8 {
-        match self { Self::Sharp => 1, Self::Peak => 2, Self::Normal => 3, Self::Valley => 4 }
+        match self {
+            Self::Sharp => 1,
+            Self::Peak => 2,
+            Self::Normal => 3,
+            Self::Valley => 4,
+        }
     }
 }
 
 /// 一个时段: 起始分钟 ~ 结束分钟
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimePeriod {
-    pub start: u32,  // minutes from 00:00
+    pub start: u32, // minutes from 00:00
     pub end: u32,
     pub tariff: TariffType,
 }
@@ -146,7 +155,9 @@ impl Default for TouManager {
 }
 
 impl TouManager {
-    pub fn current_tariff(&self) -> TariffType { self.current_tariff }
+    pub fn current_tariff(&self) -> TariffType {
+        self.current_tariff
+    }
 
     /// 根据本地时间判断当前费率
     pub fn update(&mut self) {
@@ -174,7 +185,9 @@ impl TouManager {
     }
 
     pub fn reset(&mut self) {
-        for v in self.energy.values_mut() { *v = 0.0; }
+        for v in self.energy.values_mut() {
+            *v = 0.0;
+        }
         self.events.clear();
     }
 }

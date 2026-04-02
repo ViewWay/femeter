@@ -147,6 +147,17 @@ pub trait OtaFlash {
 
 /* ── OTA 管理器 ── */
 
+/// 占位 OTA Flash 实现 — 后续替换为实际内部 Flash 驱动
+pub struct InternalFlash;
+impl OtaFlash for InternalFlash {
+    fn flash_read(_addr: u32, _buf: &mut [u8]) -> Result<(), ()> { Ok(()) }
+    fn flash_write(_addr: u32, _data: &[u8]) -> Result<(), ()> { Ok(()) }
+    fn flash_erase_sector(_addr: u32) -> Result<(), ()> { Ok(()) }
+    fn get_active_bank() -> u8 { 1 }
+    fn set_boot_bank(_bank: u8) -> Result<(), ()> { Ok(()) }
+    fn system_reset() -> ! { loop {} }
+}
+
 pub struct OtaManager<F: OtaFlash> {
     _flash: core::marker::PhantomData<F>,
     state: OtaState,

@@ -15,21 +15,34 @@ pub struct StatRecord {
 
 impl StatRecord {
     pub fn update(&mut self, value: f64) {
-        if self.count == 0 { self.min = value; self.max = value; }
-        else { self.min = self.min.min(value); self.max = self.max.max(value); }
+        if self.count == 0 {
+            self.min = value;
+            self.max = value;
+        } else {
+            self.min = self.min.min(value);
+            self.max = self.max.max(value);
+        }
         self.sum += value;
         self.count += 1;
     }
     pub fn avg(&self) -> f64 {
-        if self.count == 0 { 0.0 } else { self.sum / self.count as f64 }
+        if self.count == 0 {
+            0.0
+        } else {
+            self.sum / self.count as f64
+        }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DayStatistics {
     pub date: String, // YYYY-MM-DD
-    pub va: StatRecord, pub vb: StatRecord, pub vc: StatRecord,
-    pub ia: StatRecord, pub ib: StatRecord, pub ic: StatRecord,
+    pub va: StatRecord,
+    pub vb: StatRecord,
+    pub vc: StatRecord,
+    pub ia: StatRecord,
+    pub ib: StatRecord,
+    pub ic: StatRecord,
     pub freq: StatRecord,
     pub pf: StatRecord,
 }
@@ -37,8 +50,12 @@ pub struct DayStatistics {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MonthStatistics {
     pub month: String, // YYYY-MM
-    pub va: StatRecord, pub vb: StatRecord, pub vc: StatRecord,
-    pub ia: StatRecord, pub ib: StatRecord, pub ic: StatRecord,
+    pub va: StatRecord,
+    pub vb: StatRecord,
+    pub vc: StatRecord,
+    pub ia: StatRecord,
+    pub ib: StatRecord,
+    pub ic: StatRecord,
     pub freq: StatRecord,
     pub pf: StatRecord,
 }
@@ -52,12 +69,29 @@ pub struct Statistics {
 }
 
 impl Default for Statistics {
-    fn default() -> Self { Self { daily: Vec::new(), monthly: Vec::new(), last_date: String::new(), last_month: String::new() } }
+    fn default() -> Self {
+        Self {
+            daily: Vec::new(),
+            monthly: Vec::new(),
+            last_date: String::new(),
+            last_month: String::new(),
+        }
+    }
 }
 
 impl Statistics {
     /// 采样更新
-    pub fn sample(&mut self, va: f64, vb: f64, vc: f64, ia: f64, ib: f64, ic: f64, freq: f64, pf: f64) {
+    pub fn sample(
+        &mut self,
+        va: f64,
+        vb: f64,
+        vc: f64,
+        ia: f64,
+        ib: f64,
+        ic: f64,
+        freq: f64,
+        pf: f64,
+    ) {
         let now = Utc::now();
         let date = now.format("%Y-%m-%d").to_string();
         let month = now.format("%Y-%m").to_string();
@@ -67,15 +101,25 @@ impl Statistics {
             self.last_date = date.clone();
             self.daily.push(DayStatistics {
                 date: date.clone(),
-                va: StatRecord::default(), vb: StatRecord::default(), vc: StatRecord::default(),
-                ia: StatRecord::default(), ib: StatRecord::default(), ic: StatRecord::default(),
-                freq: StatRecord::default(), pf: StatRecord::default(),
+                va: StatRecord::default(),
+                vb: StatRecord::default(),
+                vc: StatRecord::default(),
+                ia: StatRecord::default(),
+                ib: StatRecord::default(),
+                ic: StatRecord::default(),
+                freq: StatRecord::default(),
+                pf: StatRecord::default(),
             });
         }
         if let Some(day) = self.daily.last_mut() {
-            day.va.update(va); day.vb.update(vb); day.vc.update(vc);
-            day.ia.update(ia); day.ib.update(ib); day.ic.update(ic);
-            day.freq.update(freq); day.pf.update(pf);
+            day.va.update(va);
+            day.vb.update(vb);
+            day.vc.update(vc);
+            day.ia.update(ia);
+            day.ib.update(ib);
+            day.ic.update(ic);
+            day.freq.update(freq);
+            day.pf.update(pf);
         }
 
         // Ensure monthly entry
@@ -83,15 +127,25 @@ impl Statistics {
             self.last_month = month.clone();
             self.monthly.push(MonthStatistics {
                 month: month.clone(),
-                va: StatRecord::default(), vb: StatRecord::default(), vc: StatRecord::default(),
-                ia: StatRecord::default(), ib: StatRecord::default(), ic: StatRecord::default(),
-                freq: StatRecord::default(), pf: StatRecord::default(),
+                va: StatRecord::default(),
+                vb: StatRecord::default(),
+                vc: StatRecord::default(),
+                ia: StatRecord::default(),
+                ib: StatRecord::default(),
+                ic: StatRecord::default(),
+                freq: StatRecord::default(),
+                pf: StatRecord::default(),
             });
         }
         if let Some(mon) = self.monthly.last_mut() {
-            mon.va.update(va); mon.vb.update(vb); mon.vc.update(vc);
-            mon.ia.update(ia); mon.ib.update(ib); mon.ic.update(ic);
-            mon.freq.update(freq); mon.pf.update(pf);
+            mon.va.update(va);
+            mon.vb.update(vb);
+            mon.vc.update(vc);
+            mon.ia.update(ia);
+            mon.ib.update(ib);
+            mon.ic.update(ic);
+            mon.freq.update(freq);
+            mon.pf.update(pf);
         }
     }
 
@@ -110,7 +164,9 @@ mod tests {
     #[test]
     fn test_stat_record() {
         let mut r = StatRecord::default();
-        r.update(220.0); r.update(221.0); r.update(222.0);
+        r.update(220.0);
+        r.update(221.0);
+        r.update(222.0);
         assert_eq!(r.min, 220.0);
         assert_eq!(r.max, 222.0);
         assert!((r.avg() - 221.0).abs() < 0.001);

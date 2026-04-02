@@ -436,4 +436,10 @@ pub mod events {
     pub const MAGNETIC_DETECTED: u32   = (1 << 8);
     /// LCD 需要刷新
     pub const LCD_REFRESH: u32         = (1 << 9);
+    /// 数据就绪 (metering → display/storage)
+    pub const DATA_READY: u32          = (1 << 10);
+    /// 事件日志需要保存
+    pub const EVENT_LOG_SAVE: u32      = (1 << 11);
+    /// 事件检测完成
+    pub const EVENTS_DETECTED: u32     = (1 << 12);
 }

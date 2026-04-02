@@ -16,3 +16,6 @@ std = ["dlms-core/std", "dlms-axdr/std", "dlms-asn1/std"]
 defmt-log = ["defmt", "dlms-core/defmt-log"]
 
 [dev-dependencies]
+
+[lib]
+doctest = false

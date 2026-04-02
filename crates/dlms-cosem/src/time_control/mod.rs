@@ -19,6 +19,7 @@
 
 pub mod ic10_schedule;
 pub mod ic11_special_days_table;
+pub mod ic19_tariff_schedule;
 pub mod ic20_activity_calendar;
 pub mod ic21_register_monitor;
 pub mod ic22_single_action_schedule;
@@ -33,6 +34,7 @@ pub mod ic8_clock;
 pub mod ic9_script_table;
 
 // Re-export commonly used types
+pub use ic19_tariff_schedule::TariffSchedule;
 pub use ic24_display::Display;
 pub use ic32_disconnector::Disconnector;
 pub use ic70_disconnect_control::DisconnectControl;
