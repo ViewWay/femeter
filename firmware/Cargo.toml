@@ -41,7 +41,7 @@ heapless = "0.8"
 #
 # 计量芯片 (三选一, 默认 ATT7022E)
 [features]
-default = ["att7022e", "defmt-rtt", "freertos"]
+default = ["att7022e", "defmt-rtt"]
 
 # ── 计量芯片 (互斥) ──
 att7022e = []

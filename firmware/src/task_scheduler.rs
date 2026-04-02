@@ -228,6 +228,8 @@ pub mod task {
     pub const TEMPERATURE:super::TaskId = 8;
     /// 看门狗喂狗 (1000ms)
     pub const WATCHDOG:   super::TaskId = 9;
+    /// 低功耗管理 (1000ms)
+    pub const POWER_MGR:  super::TaskId = 12;
     /// LoRaWAN (30000ms)
     pub const LORAWAN:    super::TaskId = 10;
     /// 蜂窝通信 (60000ms)

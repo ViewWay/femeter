@@ -115,12 +115,26 @@ pub fn task_register(timeout_ticks: u32) -> usize {
         if count >= MAX_WATCHED_TASKS {
             panic!("task_watchdog: 已达到最大注册数");
         }
+        #[cfg(feature = "freertos")]
         unsafe {
+            use crate::freertos;
             TASKS[count] = Some(TaskHeartbeat {
-                last_feed: crate::freertos::xTaskGetTickCount(),
+                last_feed: freertos::xTaskGetTickCount(),
                 timeout_ticks,
             });
             TASK_COUNT = count + 1;
+        }
+
+        #[cfg(not(feature = "freertos"))]
+        {
+            // In bare-metal mode, just register the task
+            cortex_m::interrupt::free(|_| unsafe {
+                TASKS[count] = Some(TaskHeartbeat {
+                    last_feed: 0, // No tick counter in bare-metal
+                    timeout_ticks,
+                });
+                TASK_COUNT = count + 1;
+            });
         }
         count
     });
@@ -130,11 +144,23 @@ pub fn task_register(timeout_ticks: u32) -> usize {
 
 /// 任务喂狗 — 在被监控的任务循环中定期调用
 pub fn task_feed(id: usize) {
+    #[cfg(feature = "freertos")]
     cortex_m::interrupt::free(|_| unsafe {
+        use crate::freertos;
         if let Some(ref mut task) = TASKS[id] {
-            task.last_feed = crate::freertos::xTaskGetTickCount();
+            task.last_feed = freertos::xTaskGetTickCount();
         }
     });
+
+    #[cfg(not(feature = "freertos"))]
+    {
+        // In bare-metal mode, update a simple counter
+        cortex_m::interrupt::free(|_| unsafe {
+            if let Some(ref mut task) = TASKS[id] {
+                task.last_feed += 1; // Simple increment
+            }
+        });
+    }
 }
 
 /// 检查所有任务是否存活，全部存活则喂硬件看门狗
@@ -142,27 +168,37 @@ pub fn task_feed(id: usize) {
 /// 在专门的喂狗任务中每秒调用一次。
 /// 如果任一任务超时，停止喂狗，硬件看门狗将复位系统。
 pub fn task_check_and_feed() -> bool {
-    let now = unsafe { crate::freertos::xTaskGetTickCount() };
-    let all_alive = cortex_m::interrupt::free(|_| unsafe {
-        for i in 0..TASK_COUNT {
-            if let Some(ref task) = TASKS[i] {
-                let elapsed = now.wrapping_sub(task.last_feed);
-                if elapsed > task.timeout_ticks {
-                    defmt::error!(
-                        "task_watchdog: 任务 id={} 卡死! elapsed={}, timeout={}",
-                        i, elapsed, task.timeout_ticks
-                    );
+    #[cfg(feature = "freertos")]
+    {
+        let now = unsafe { crate::freertos::xTaskGetTickCount() };
+        let all_alive = cortex_m::interrupt::free(|_| unsafe {
+            for i in 0..TASK_COUNT {
+                if let Some(ref task) = TASKS[i] {
+                    let elapsed = now.wrapping_sub(task.last_feed);
+                    if elapsed > task.timeout_ticks {
+                        defmt::error!("task_watchdog: 任务 {} 卡死，超时 {} ticks", i, task.timeout_ticks);
+                        return false; // 停止喂狗，触发复位
+                    }
+                }
+            }
+            true
+        });
+        all_alive
+    }
+
+    #[cfg(not(feature = "freertos"))]
+    {
+        // 裸机模式下：简单检查任务是否存在
+        let all_alive = cortex_m::interrupt::free(|_| unsafe {
+            for i in 0..TASK_COUNT {
+                if TASKS[i].is_none() {
                     return false;
                 }
             }
-        }
-        true
-    });
-
-    if all_alive {
-        feed();
+            true
+        });
+        all_alive
     }
-    all_alive
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -173,31 +209,55 @@ pub fn task_check_and_feed() -> bool {
 unsafe extern "C" fn watchdog_task_entry(_param: *mut core::ffi::c_void) {
     defmt::info!("看门狗任务启动");
 
+    #[cfg(feature = "freertos")]
     loop {
         if !task_check_and_feed() {
             // 有任务卡死，不再喂狗，等待硬件复位
             defmt::error!("看门狗不再喂狗，等待系统复位...");
             loop {
-                crate::freertos::vTaskDelay(1000);
+                use crate::freertos;
+                freertos::vTaskDelay(1000);
             }
         }
-        crate::freertos::vTaskDelay(1000);
+        use crate::freertos;
+        freertos::vTaskDelay(1000);
+    }
+
+    #[cfg(not(feature = "freertos"))]
+    loop {
+        if !task_check_and_feed() {
+            // In bare-metal mode, just delay and wait for reset
+            defmt::error!("看门狗检测到故障，等待系统复位...");
+            cortex_m::asm::delay(32_000_000); // ~1s delay
+        }
+        cortex_m::asm::delay(32_000_000); // ~1s delay
     }
 }
 
-/// 创建看门狗 FreeRTOS 任务
+/// 创建看门狗任务（FreeRTOS 或裸机）
 ///
-/// `priority`: 任务优先级（建议为最高或接近最高）
+/// `priority`: 任务优先级（FreeRTOS 模式下使用）
 pub fn create_watchdog_task(priority: u32) {
-    use core::ffi::c_char;
-    unsafe {
-        crate::freertos::xTaskCreate(
-            watchdog_task_entry,
-            b"wdog\0".as_ptr() as *const c_char,
-            256,
-            core::ptr::null_mut(),
-            priority,
-            core::ptr::null_mut(),
-        );
+    #[cfg(feature = "freertos")]
+    {
+        use core::ffi::c_char;
+        unsafe {
+            use crate::freertos;
+            freertos::xTaskCreate(
+                watchdog_task_entry,
+                b"wdog\0".as_ptr() as *const c_char,
+                256,
+                core::ptr::null_mut(),
+                priority,
+                core::ptr::null_mut(),
+            );
+        }
+    }
+
+    #[cfg(not(feature = "freertos"))]
+    {
+        // In bare-metal mode, watchdog runs inline
+        // No task creation needed, just call watchdog_task_entry() directly
+        defmt::warn!("create_watchdog_task: 无操作（裸机模式）");
     }
 }

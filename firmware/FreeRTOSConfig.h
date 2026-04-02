@@ -25,6 +25,7 @@
 #define configUSE_TASK_NOTIFICATIONS            1
 #define configTASK_NOTIFICATION_ARRAY_ENTRIES   1
 #define configQUEUE_REGISTRY_SIZE               8
+#define configUSE_QUEUES                      1
 #define configUSE_QUEUE_SETS                    1
 #define configUSE_TIME_SLICING                  1
 

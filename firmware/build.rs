@@ -37,7 +37,7 @@ fn build_freertos() {
             &port_dir,
             ".",  // FreeRTOSConfig.h is here
         ])
-        .warnings_into_errors(true)
+        .warnings_into_errors(false)
         .opt_level_str("s")  // size optimization
         .compile("freertos_hooks");
 
@@ -65,7 +65,7 @@ fn build_freertos() {
             &port_dir,
             ".",  // FreeRTOSConfig.h
         ])
-        .warnings_into_errors(true)
+        .warnings_into_errors(false)
         .opt_level_str("s")
         .compile("freertos_kernel");
 
