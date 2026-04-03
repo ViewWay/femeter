@@ -7,16 +7,30 @@ use std::time::Instant;
 
 struct Rng(u64);
 impl Rng {
-    fn new(seed: u64) -> Self { Self(seed) }
-    fn next_u8(&mut self) -> u8 {
-        self.0 ^= self.0 << 13; self.0 ^= self.0 >> 7; self.0 ^= self.0 << 17; self.0 as u8
+    fn new(seed: u64) -> Self {
+        Self(seed)
     }
-    fn next_u16(&mut self) -> u16 { (self.next_u8() as u16) << 8 | self.next_u8() as u16 }
-    fn fill(&mut self, buf: &mut [u8]) { for b in buf.iter_mut() { *b = self.next_u8(); } }
+    fn next_u8(&mut self) -> u8 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0 as u8
+    }
+    fn next_u16(&mut self) -> u16 {
+        (self.next_u8() as u16) << 8 | self.next_u8() as u16
+    }
+    fn fill(&mut self, buf: &mut [u8]) {
+        for b in buf.iter_mut() {
+            *b = self.next_u8();
+        }
+    }
 }
 
 fn rand_bytes(seed: u64, len: usize) -> Vec<u8> {
-    let mut rng = Rng(seed); let mut buf = vec![0u8; len]; rng.fill(&mut buf); buf
+    let mut rng = Rng(seed);
+    let mut buf = vec![0u8; len];
+    rng.fill(&mut buf);
+    buf
 }
 
 fn rand_bytes_range(seed: u64, min: usize, max: usize) -> Vec<u8> {
@@ -75,7 +89,8 @@ fn fuzz_hdlc_llc() {
 fn fuzz_hdlc_segment() {
     for i in 0..1000u64 {
         let data = rand_bytes_range(i, 0, 1024);
-        let _ = dlms_hdlc::segment::segment_payload(&data, 50);
+        let addr = dlms_hdlc::address::HdlcAddress::new(1, 16, 1);
+        let _ = dlms_hdlc::segment::segment_payload(&addr, &data, 50, 0, 0);
     }
 }
 
@@ -96,7 +111,9 @@ fn fuzz_axdr_decode() {
         let data = rand_bytes_range(i, 0, 512);
         let mut dec = dlms_axdr::AxdrDecoder::new(&data);
         while dec.remaining() > 0 {
-            if dec.decode().is_err() { break; }
+            if dec.decode().is_err() {
+                break;
+            }
         }
     }
     eprintln!("axdr decode: 2000 cases in {:?}", start.elapsed());
@@ -148,15 +165,17 @@ fn fuzz_obis_parse() {
     let start = Instant::now();
     for i in 0..1000u64 {
         let mut rng = Rng(i + 600000);
-        let parts: Vec<String> = (0..6).map(|_| {
-            let b = rng.next_u8();
-            match b % 4 {
-                0 => (rng.next_u16() % 300).to_string(),
-                1 => String::from_utf8(vec![b'a' + (rng.next_u8() % 26)]).unwrap_or_default(),
-                2 => String::new(),
-                _ => ".".to_string(),
-            }
-        }).collect();
+        let parts: Vec<String> = (0..6)
+            .map(|_| {
+                let b = rng.next_u8();
+                match b % 4 {
+                    0 => (rng.next_u16() % 300).to_string(),
+                    1 => String::from_utf8(vec![b'a' + (rng.next_u8() % 26)]).unwrap_or_default(),
+                    2 => String::new(),
+                    _ => ".".to_string(),
+                }
+            })
+            .collect();
         let s = parts.join(".");
         let _ = dlms_obis::parser::parse_obis(&s);
     }
@@ -171,11 +190,18 @@ fn fuzz_event_detect() {
     for i in 0..2000u64 {
         let mut rng = Rng(i);
         let data = femeter_core::PhaseData {
-            voltage_a: rng.next_u16(), voltage_b: rng.next_u16(), voltage_c: rng.next_u16(),
-            current_a: rng.next_u16(), current_b: rng.next_u16(), current_c: rng.next_u16(),
-            active_power_total: rng.next_u16() as i32, reactive_power_total: rng.next_u16() as i32,
-            apparent_power_total: rng.next_u16() as i32, frequency: rng.next_u16(),
-            power_factor_total: rng.next_u16(), ..Default::default()
+            voltage_a: rng.next_u16(),
+            voltage_b: rng.next_u16(),
+            voltage_c: rng.next_u16(),
+            current_a: rng.next_u16(),
+            current_b: rng.next_u16(),
+            current_c: rng.next_u16(),
+            active_power_total: rng.next_u16() as i32,
+            reactive_power_total: rng.next_u16() as i32,
+            apparent_power_total: rng.next_u16() as i32,
+            frequency: rng.next_u16(),
+            power_factor_total: rng.next_u16(),
+            ..Default::default()
         };
         let mut det = femeter_core::event_detect::EventDetector::new();
         let _ = det.check(&data);
@@ -188,17 +214,31 @@ fn fuzz_tamper_detection() {
     for i in 0..2000u64 {
         let mut rng = Rng(i + 50000);
         let data = femeter_core::PhaseData {
-            voltage_a: rng.next_u16(), voltage_b: rng.next_u16(), voltage_c: rng.next_u16(),
-            current_a: rng.next_u16(), current_b: rng.next_u16(), current_c: rng.next_u16(),
-            frequency: rng.next_u16(), power_factor_total: rng.next_u16(),
+            voltage_a: rng.next_u16(),
+            voltage_b: rng.next_u16(),
+            voltage_c: rng.next_u16(),
+            current_a: rng.next_u16(),
+            current_b: rng.next_u16(),
+            current_c: rng.next_u16(),
+            frequency: rng.next_u16(),
+            power_factor_total: rng.next_u16(),
             ..Default::default()
         };
         let mut td = femeter_core::tamper_detection::TamperDetector::new(22000, 100);
         let accel = femeter_core::tamper_detection::AccelerometerData::default();
-        td.check([data.voltage_a, data.voltage_b, data.voltage_c],
-                 [data.current_a, data.current_b, data.current_c],
-                 [data.voltage_angle_a, data.voltage_angle_b, data.voltage_angle_c],
-                 &accel, false, false, 0);
+        td.check(
+            [data.voltage_a, data.voltage_b, data.voltage_c],
+            [data.current_a, data.current_b, data.current_c],
+            [
+                data.voltage_angle_a,
+                data.voltage_angle_b,
+                data.voltage_angle_c,
+            ],
+            &accel,
+            false,
+            false,
+            0,
+        );
     }
 }
 
@@ -207,7 +247,9 @@ fn fuzz_power_quality() {
     for i in 0..1500u64 {
         let mut rng = Rng(i + 100000);
         let mut harmonics = [0.0f32; 50];
-        for h in harmonics.iter_mut() { *h = (rng.next_u16() as f32) / 65535.0; }
+        for h in harmonics.iter_mut() {
+            *h = (rng.next_u16() as f32) / 65535.0;
+        }
         let _ = femeter_core::power_quality::calculate_thd(&harmonics, 1, 50);
         let _ = femeter_core::power_quality::analyze_harmonics(&harmonics);
     }
@@ -221,7 +263,9 @@ fn fuzz_load_forecast() {
         for _ in 0..48 {
             let load = (rng.next_u16() as f32) / 10.0;
             let ctx = femeter_core::load_forecast::TimeContext::new(
-                rng.next_u8() % 24, rng.next_u8() % 7, (rng.next_u8() % 12) + 1,
+                rng.next_u8() % 24,
+                rng.next_u8() % 7,
+                (rng.next_u8() % 12) + 1,
             );
             fc.update_with_context(load, &ctx);
         }
@@ -243,7 +287,9 @@ fn fuzz_flicker_analyzer() {
     for i in 0..1000u64 {
         let mut rng = Rng(i + 400000);
         let mut fa = femeter_core::power_quality::FlickerAnalyzer::new();
-        for _ in 0..100 { fa.feed_half_cycle_rms((rng.next_u16() as f32) / 65535.0); }
+        for _ in 0..100 {
+            fa.feed_half_cycle_rms((rng.next_u16() as f32) / 65535.0);
+        }
         let _ = fa.instantaneous_flicker();
     }
 }
@@ -251,7 +297,7 @@ fn fuzz_flicker_analyzer() {
 #[test]
 fn fuzz_security_control() {
     for i in 0..=255u8 {
-        let _ = dlms_security::SecurityControlInfo::from_bits(i);
+        let _ = dlms_security::SecurityControl::from_byte(i);
         let _ = dlms_security::SecuritySuite::from_bits(i);
     }
 }
@@ -267,7 +313,11 @@ fn fuzz_key_operations() {
 fn fuzz_unbalance() {
     for i in 0..1000u64 {
         let mut rng = Rng(i + 500000);
-        let vals = [rng.next_u16() as f32, rng.next_u16() as f32, rng.next_u16() as f32];
+        let vals = [
+            rng.next_u16() as f32,
+            rng.next_u16() as f32,
+            rng.next_u16() as f32,
+        ];
         let _ = femeter_core::power_quality::calculate_unbalance(vals);
     }
 }
@@ -280,7 +330,11 @@ fn fuzz_edge_all_zeros() {
     let _ = dlms_hdlc::frame::HdlcFrame::decode(&zeros);
     let _ = dlms_hdlc::crc::crc16(&zeros);
     let mut dec = dlms_axdr::AxdrDecoder::new(&zeros);
-    while dec.remaining() > 0 { if dec.decode().is_err() { break; } }
+    while dec.remaining() > 0 {
+        if dec.decode().is_err() {
+            break;
+        }
+    }
     let _ = dlms_asn1::decode_aarq(&zeros);
 }
 
@@ -290,7 +344,11 @@ fn fuzz_edge_all_ones() {
     let _ = dlms_hdlc::frame::HdlcFrame::decode(&ones);
     let _ = dlms_hdlc::crc::crc16(&ones);
     let mut dec = dlms_axdr::AxdrDecoder::new(&ones);
-    while dec.remaining() > 0 { if dec.decode().is_err() { break; } }
+    while dec.remaining() > 0 {
+        if dec.decode().is_err() {
+            break;
+        }
+    }
     let _ = dlms_asn1::decode_aarq(&ones);
 }
 
@@ -337,18 +395,33 @@ fn fuzz_edge_zero_harmonics() {
 #[test]
 fn fuzz_edge_extreme_phase_data() {
     let data = femeter_core::PhaseData {
-        voltage_a: 0xFFFF, voltage_b: 0x0000, voltage_c: 0x8000,
-        current_a: 0xFFFF, current_b: 0x0000, current_c: 0x8000,
-        active_power_total: i32::MIN, reactive_power_total: i32::MAX,
-        frequency: 0xFFFF, power_factor_total: 0x8000,
+        voltage_a: 0xFFFF,
+        voltage_b: 0x0000,
+        voltage_c: 0x8000,
+        current_a: 0xFFFF,
+        current_b: 0x0000,
+        current_c: 0x8000,
+        active_power_total: i32::MIN,
+        reactive_power_total: i32::MAX,
+        frequency: 0xFFFF,
+        power_factor_total: 0x8000,
         ..Default::default()
     };
     let mut det = femeter_core::event_detect::EventDetector::new();
     let _ = det.check(&data);
     let mut td = femeter_core::tamper_detection::TamperDetector::new(22000, 100);
     let accel = femeter_core::tamper_detection::AccelerometerData::default();
-    td.check([data.voltage_a, data.voltage_b, data.voltage_c],
-             [data.current_a, data.current_b, data.current_c],
-             [data.voltage_angle_a, data.voltage_angle_b, data.voltage_angle_c],
-             &accel, false, false, 0);
+    td.check(
+        [data.voltage_a, data.voltage_b, data.voltage_c],
+        [data.current_a, data.current_b, data.current_c],
+        [
+            data.voltage_angle_a,
+            data.voltage_angle_b,
+            data.voltage_angle_c,
+        ],
+        &accel,
+        false,
+        false,
+        0,
+    );
 }
