@@ -24,6 +24,7 @@ pub mod calibration;
 pub mod demand;
 pub mod display;
 pub mod dlms;
+pub mod html_report;
 pub mod iec62056;
 pub mod load_profile;
 mod meter;
