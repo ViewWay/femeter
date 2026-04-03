@@ -232,7 +232,7 @@ pub fn sm4_gmac(key: &[u8; SM4_KEY_SIZE], iv: &[u8; 8], data: &[u8]) -> [u8; GMA
     padded[..data.len()].copy_from_slice(data);
 
     for chunk in padded.chunks_exact(16) {
-        let block: [u8; 16] = chunk.try_into().unwrap();
+        let block: [u8; 16] = chunk.try_into().expect("chunks_exact guarantees 16 bytes");
         y = xor_blocks(&y, &block);
         y = gf128_mul(&y, &h);
     }
@@ -324,7 +324,7 @@ pub fn sm4_gcm_encrypt(
     let mut aad_padded = alloc::vec![0u8; aad_padded_len];
     aad_padded[..aad.len()].copy_from_slice(aad);
     for chunk in aad_padded.chunks_exact(16) {
-        let block: [u8; 16] = chunk.try_into().unwrap();
+        let block: [u8; 16] = chunk.try_into().expect("chunks_exact guarantees 16 bytes");
         y = xor_blocks(&y, &block);
         y = gf128_mul(&y, &h);
     }
@@ -338,7 +338,7 @@ pub fn sm4_gcm_encrypt(
     let mut ct_padded = alloc::vec![0u8; ct_padded_len];
     ct_padded[..ciphertext.len()].copy_from_slice(&ciphertext);
     for chunk in ct_padded.chunks_exact(16) {
-        let block: [u8; 16] = chunk.try_into().unwrap();
+        let block: [u8; 16] = chunk.try_into().expect("chunks_exact guarantees 16 bytes");
         y = xor_blocks(&y, &block);
         y = gf128_mul(&y, &h);
     }
@@ -425,7 +425,7 @@ fn sm4_gmac_with_aad(
     let mut buf = alloc::vec![0u8; aad_pad.max(1)];
     buf[..aad.len()].copy_from_slice(aad);
     for chunk in buf.chunks_exact(16) {
-        let block: [u8; 16] = chunk.try_into().unwrap();
+        let block: [u8; 16] = chunk.try_into().expect("chunks_exact guarantees 16 bytes");
         y = xor_blocks(&y, &block);
         y = gf128_mul(&y, &h);
     }
@@ -435,7 +435,7 @@ fn sm4_gmac_with_aad(
     buf = alloc::vec![0u8; data_pad.max(1)];
     buf[..data.len()].copy_from_slice(data);
     for chunk in buf.chunks_exact(16) {
-        let block: [u8; 16] = chunk.try_into().unwrap();
+        let block: [u8; 16] = chunk.try_into().expect("chunks_exact guarantees 16 bytes");
         y = xor_blocks(&y, &block);
         y = gf128_mul(&y, &h);
     }

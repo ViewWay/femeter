@@ -169,7 +169,7 @@ impl TcpServer {
         self.running.store(false, Ordering::Relaxed);
         // Connect to self to unblock accept()
         let _ = std::net::TcpStream::connect_timeout(
-            &"127.0.0.1:8888".parse().unwrap(),
+            &"127.0.0.1:8888".parse().expect("valid socket addr"),
             Duration::from_secs(1),
         );
         for h in self.handles.drain(..) {

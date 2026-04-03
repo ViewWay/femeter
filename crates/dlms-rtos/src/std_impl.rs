@@ -87,33 +87,33 @@ impl CrateTaskHandle for StdTaskHandle {
     fn state(&self) -> TaskState {
         // Safety: In single-threaded std tests, RwLock won't be poisoned.
         // A poisoned lock indicates a test panic, so panicking here is appropriate.
-        *self.state.read().unwrap()
+        *self.state.read().expect("lock poisoned")
     }
 
     fn suspend(&self) {
         // Safety: In single-threaded std tests, RwLock won't be poisoned.
         // A poisoned lock indicates a test panic, so panicking here is appropriate.
-        *self.state.write().unwrap() = TaskState::Suspended;
+        *self.state.write().expect("lock poisoned") = TaskState::Suspended;
     }
 
     fn resume(&self) {
         if self.state() == TaskState::Suspended {
             // Safety: In single-threaded std tests, RwLock won't be poisoned.
             // A poisoned lock indicates a test panic, so panicking here is appropriate.
-            *self.state.write().unwrap() = TaskState::Ready;
+            *self.state.write().expect("lock poisoned") = TaskState::Ready;
         }
     }
 
     fn priority(&self) -> Priority {
         // Safety: In single-threaded std tests, RwLock won't be poisoned.
         // A poisoned lock indicates a test panic, so panicking here is appropriate.
-        *self.priority.read().unwrap()
+        *self.priority.read().expect("lock poisoned")
     }
 
     fn set_priority(&self, priority: Priority) {
         // Safety: In single-threaded std tests, RwLock won't be poisoned.
         // A poisoned lock indicates a test panic, so panicking here is appropriate.
-        *self.priority.write().unwrap() = priority;
+        *self.priority.write().expect("lock poisoned") = priority;
     }
 }
 
@@ -180,7 +180,7 @@ impl CrateTimerHandle for StdTimerHandle {
         self.running.store(true, Ordering::Release);
         // Safety: In single-threaded std tests, RwLock won't be poisoned.
         // A poisoned lock indicates a test panic, so panicking here is appropriate.
-        *self.start_time.write().unwrap() = Some(Instant::now());
+        *self.start_time.write().expect("lock poisoned") = Some(Instant::now());
     }
 
     fn stop(&self) -> bool {
@@ -200,7 +200,7 @@ impl CrateTimerHandle for StdTimerHandle {
     fn mode(&self) -> TimerMode {
         // Safety: In single-threaded std tests, RwLock won't be poisoned.
         // A poisoned lock indicates a test panic, so panicking here is appropriate.
-        *self.mode.read().unwrap()
+        *self.mode.read().expect("lock poisoned")
     }
 
     fn remaining(&self) -> Option<u32> {
@@ -209,7 +209,7 @@ impl CrateTimerHandle for StdTimerHandle {
         }
         // Safety: In single-threaded std tests, RwLock won't be poisoned.
         // A poisoned lock indicates a test panic, so panicking here is appropriate.
-        let start_guard = self.start_time.read().unwrap();
+        let start_guard = self.start_time.read().expect("lock poisoned");
         let start = *start_guard.as_ref()?;
         drop(start_guard);
         let elapsed = start.elapsed().as_millis() as u32;
@@ -271,7 +271,7 @@ impl<T: Send> MutexPtr<T> for StdMutex<T> {
         // Safety: In single-threaded std tests, RwLock won't be poisoned.
         // A poisoned lock indicates a test panic, so panicking here is appropriate.
         StdMutexGuardRef {
-            _borrow: self.inner.write().unwrap(),
+            _borrow: self.inner.write().expect("lock poisoned"),
         }
     }
 
@@ -446,13 +446,13 @@ impl<T: Send> QueueHandle for StdQueueHandle<T> {
     fn len(&self) -> usize {
         // Safety: In single-threaded std tests, RwLock won't be poisoned.
         // A poisoned lock indicates a test panic, so panicking here is appropriate.
-        self.inner.read().unwrap().len()
+        self.inner.read().expect("lock poisoned").len()
     }
 
     fn is_empty(&self) -> bool {
         // Safety: In single-threaded std tests, RwLock won't be poisoned.
         // A poisoned lock indicates a test panic, so panicking here is appropriate.
-        self.inner.read().unwrap().is_empty()
+        self.inner.read().expect("lock poisoned").is_empty()
     }
 
     fn capacity(&self) -> usize {
@@ -574,7 +574,7 @@ impl MemPoolHandle for StdMemPoolHandle {
     fn block_count(&self) -> usize {
         // Safety: In single-threaded std tests, RwLock won't be poisoned.
         // A poisoned lock indicates a test panic, so panicking here is appropriate.
-        self.blocks.read().unwrap().len()
+        self.blocks.read().expect("lock poisoned").len()
     }
 
     fn free_count(&self) -> usize {

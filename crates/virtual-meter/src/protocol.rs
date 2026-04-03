@@ -64,7 +64,7 @@ impl ProtocolHandler {
             Err(_) => return format!("ERR invalid address: {}", args[0]),
         };
 
-        let mut meter = self.meter.lock().unwrap();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
         let value = meter.format_register(addr);
         format!("OK {}", value)
     }
@@ -95,7 +95,7 @@ impl ProtocolHandler {
             Err(_) => return format!("ERR invalid data: {}", args[1]),
         };
 
-        let mut meter = self.meter.lock().unwrap();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
 
         // 简化的写操作 - 实际应用中可扩展
         match addr {
@@ -118,7 +118,7 @@ impl ProtocolHandler {
 
     /// 获取 JSON 快照
     fn handle_snapshot(&self) -> String {
-        let mut meter = self.meter.lock().unwrap();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
         let snapshot = meter.snapshot();
 
         match serde_json::to_string(&snapshot) {
@@ -129,7 +129,7 @@ impl ProtocolHandler {
 
     /// 获取设备 ID
     fn handle_id(&self) -> String {
-        let mut meter = self.meter.lock().unwrap();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
         let chip = meter.config().chip;
         let id = meter.format_register(0xFF);
         drop(meter);
@@ -144,7 +144,7 @@ impl ProtocolHandler {
 
     /// 软件复位
     fn handle_reset(&self) -> String {
-        let mut meter = self.meter.lock().unwrap();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
         meter.reset_energy();
         "OK RESET".to_string()
     }

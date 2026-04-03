@@ -65,8 +65,10 @@ pub struct CalibrationParams {
     pub power_offset_c: f32,
 }
 
+pub mod error;
 pub mod event_detect;
 pub mod load_forecast;
+pub mod memory_checks;
 pub mod ota;
 pub mod power_quality;
 pub mod tamper_detection;

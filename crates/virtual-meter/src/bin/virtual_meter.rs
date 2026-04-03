@@ -59,7 +59,7 @@ fn main() -> Result<()> {
 
     // 应用初始配置
     {
-        let mut meter = meter.lock().unwrap();
+        let mut meter = meter.lock().expect("mutex poisoned");
 
         // 设置芯片类型
         match args.chip.to_lowercase().as_str() {

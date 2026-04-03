@@ -175,7 +175,7 @@ impl DlmsProcessor {
             Ok(GetRequest::Normal(req)) => {
                 let desc = &req.request.descriptor;
                 let obis = ObisPath::from(&desc.instance);
-                let mut meter = self.meter.lock().unwrap();
+                let mut meter = self.meter.lock().expect("mutex poisoned");
                 let snap = meter.snapshot();
                 let value =
                     self.read_cosem_attribute(desc.class_id, &obis, desc.attribute_id, &snap);
@@ -191,7 +191,7 @@ impl DlmsProcessor {
                 let mut values = Vec::new();
                 for item in &req.requests {
                     let obis = ObisPath::from(&item.descriptor.instance);
-                    let mut meter = self.meter.lock().unwrap();
+                    let mut meter = self.meter.lock().expect("mutex poisoned");
                     let snap = meter.snapshot();
                     let value = self.read_cosem_object(&obis, &snap);
                     drop(meter);
@@ -212,7 +212,7 @@ impl DlmsProcessor {
             return Err(anyhow!("invalid get"));
         }
         let obis = ObisPath(apdu[3], apdu[4], apdu[5], apdu[6], apdu[7]);
-        let mut meter = self.meter.lock().unwrap();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
         let snap = meter.snapshot();
         let value = self.read_cosem_object(&obis, &snap);
         drop(meter);
@@ -404,7 +404,7 @@ impl DlmsProcessor {
         let code =
             ObisCode::parse(obis_str).ok_or_else(|| anyhow!("invalid OBIS: {}", obis_str))?;
         let obis = ObisPath::from(&code);
-        let mut meter = self.meter.lock().unwrap();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
         let snap = meter.snapshot();
         let value = self.read_cosem_object(&obis, &snap);
         Ok(format!("{}: {:?}", obis, value))

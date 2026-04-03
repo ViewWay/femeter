@@ -1,0 +1,16 @@
+[package]
+name = "bench-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dlms-core = { path = "../dlms-core", features = ["std"] }
+dlms-hdlc = { path = "../dlms-hdlc", features = ["std"] }
+dlms-axdr = { path = "../dlms-axdr", features = ["std"] }
+dlms-asn1 = { path = "../dlms-asn1", features = ["std"] }
+dlms-apdu = { path = "../dlms-apdu", features = ["std"] }
+dlms-security = { path = "../dlms-security", features = ["std"] }
+femeter-core = { path = "../femeter-core" }
+
+[lib]
+doctest = false

@@ -91,7 +91,7 @@ impl Shell {
 
             // 自动刷新模式
             if self.auto_refresh {
-                let mut meter = self.meter.lock().unwrap();
+                let mut meter = self.meter.lock().expect("mutex poisoned");
                 meter.print_status(&mut stdout);
                 drop(meter);
                 stdout.flush()?;
@@ -395,7 +395,7 @@ impl Shell {
                 return Ok(());
             }
         };
-        let mut meter = self.meter.lock().unwrap();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
         meter.load_scenario(sc);
         queue!(stdout, style::Print(format!("已加载场景: {:?}\n\r", sc)))?;
         stdout.flush()?;
@@ -422,7 +422,7 @@ impl Shell {
                 return Ok(());
             }
         };
-        let mut meter = self.meter.lock().unwrap();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
         meter.trigger_event(ev);
         queue!(stdout, style::Print(format!("已触发事件: {:?}\n\r", ev)))?;
         stdout.flush()?;
@@ -430,7 +430,7 @@ impl Shell {
     }
 
     fn cmd_events(&self, stdout: &mut impl Write) -> Result<()> {
-        let meter = self.meter.lock().unwrap();
+        let meter = self.meter.lock().expect("mutex poisoned");
         let events = meter.events();
         if events.is_empty() {
             queue!(stdout, style::Print("无事件记录\n\r"))?;
@@ -473,7 +473,7 @@ impl Shell {
         stdout.flush().ok();
         for _i in 0..10 {
             std::thread::sleep(Duration::from_millis(interval));
-            let mut meter = self.meter.lock().unwrap();
+            let mut meter = self.meter.lock().expect("mutex poisoned");
             meter.print_status(stdout);
             drop(meter);
             stdout.flush().ok();
@@ -486,7 +486,7 @@ impl Shell {
     }
 
     fn cmd_pulse(&self, stdout: &mut impl Write) -> Result<()> {
-        let meter = self.meter.lock().unwrap();
+        let meter = self.meter.lock().expect("mutex poisoned");
         queue!(
             stdout,
             style::Print(format!(
@@ -536,7 +536,7 @@ impl Shell {
         stdout.flush()?;
 
         for (name, secs) in &scenarios {
-            let mut meter = self.meter.lock().unwrap();
+            let mut meter = self.meter.lock().expect("mutex poisoned");
             let sc = match *name {
                 "normal" => Scenario::Normal,
                 "full" => Scenario::FullLoad,
@@ -562,7 +562,7 @@ impl Shell {
     }
 
     fn cmd_status(&self, stdout: &mut impl Write) -> Result<()> {
-        let mut meter = self.meter.lock().unwrap();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
         let snap = meter.snapshot();
         let ev_str = if snap.active_events.is_empty() {
             "无".to_string()
@@ -634,7 +634,7 @@ impl Shell {
         }
         let param = args[0].to_lowercase();
         let value_str = args[1];
-        let mut meter = self.meter.lock().unwrap();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
         let result = match param.as_str() {
             "ua" => {
                 meter.set_voltage('a', value_str.parse().unwrap_or(220.0));
@@ -714,7 +714,7 @@ impl Shell {
     }
 
     fn cmd_energy(&self, stdout: &mut impl Write) -> Result<()> {
-        let meter = self.meter.lock().unwrap();
+        let meter = self.meter.lock().expect("mutex poisoned");
         let e = meter.energy();
         let r = format!(
             "\n  有功电能 (Wh): A={:.3} B={:.3} C={:.3} 总={:.3}\n  无功电能 (varh): A={:.3} B={:.3} C={:.3} 总={:.3}\n\n",
@@ -725,7 +725,7 @@ impl Shell {
     }
 
     fn cmd_reset(&self, stdout: &mut impl Write) -> Result<()> {
-        let mut meter = self.meter.lock().unwrap();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
         meter.reset_energy();
         queue!(stdout, style::Print("电能已重置\n\r"))?;
         stdout.flush()?;
@@ -733,7 +733,7 @@ impl Shell {
     }
 
     fn cmd_snapshot(&self, stdout: &mut impl Write) -> Result<()> {
-        let mut meter = self.meter.lock().unwrap();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
         let snap = meter.snapshot();
         let json = serde_json::to_string_pretty(&snap)?;
         queue!(stdout, style::Print(format!("{}\n\r", json)))?;
@@ -762,7 +762,7 @@ impl Shell {
     }
 
     fn cmd_tariff(&self, _args: &[&str], stdout: &mut impl Write) -> Result<()> {
-        let meter = self.meter.lock().unwrap();
+        let meter = self.meter.lock().expect("mutex poisoned");
         let tou = meter.tou();
         queue!(
             stdout,
@@ -801,7 +801,7 @@ impl Shell {
     }
 
     fn cmd_demand(&self, _args: &[&str], stdout: &mut impl Write) -> Result<()> {
-        let meter = self.meter.lock().unwrap();
+        let meter = self.meter.lock().expect("mutex poisoned");
         let demand = meter.demand();
         queue!(
             stdout,
@@ -826,7 +826,7 @@ impl Shell {
     fn cmd_display(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
         let battery = args.first().map(|s| *s == "bat").unwrap_or(false);
         let disp = crate::display::LcdDisplay::new();
-        let mut meter = self.meter.lock().unwrap();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
         let snap = meter.snapshot();
         let value = snap.energy.wh_total / 1000.0;
         drop(meter);
@@ -837,7 +837,7 @@ impl Shell {
     }
 
     fn cmd_stats(&self, _args: &[&str], stdout: &mut impl Write) -> Result<()> {
-        let meter = self.meter.lock().unwrap();
+        let meter = self.meter.lock().expect("mutex poisoned");
         let stats = meter.statistics();
         queue!(stdout, style::Print("统计记录:\n\r"))?;
         let va_min = stats.daily.last().map(|d| d.va.min).unwrap_or(0.0);
@@ -855,7 +855,7 @@ impl Shell {
     }
 
     fn cmd_cal(&self, _args: &[&str], stdout: &mut impl Write) -> Result<()> {
-        let _meter = self.meter.lock().unwrap();
+        let _meter = self.meter.lock().expect("mutex poisoned");
         let cal = crate::calibration::CalibrationParams::default();
         queue!(
             stdout,
@@ -867,7 +867,7 @@ impl Shell {
 
     fn cmd_save(&self, _args: &[&str], stdout: &mut impl Write) -> Result<()> {
         use crate::persistence::PersistedState;
-        let mut meter = self.meter.lock().unwrap();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
         let snap = meter.snapshot();
         let state = PersistedState {
             energy: snap.energy.clone(),
