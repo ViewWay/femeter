@@ -1,10 +1,11 @@
-//! Interactive Shell (ASCII-only output)
+//! Interactive Shell — compact, colored output
 
 use crate::{ChipType, MeterEvent, MeterHandle, Scenario};
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use crossterm::style;
 use crossterm::terminal::{self, ClearType};
-use crossterm::{cursor, queue, style};
+use crossterm::{cursor, queue};
 use std::io::{self, IsTerminal, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -13,6 +14,34 @@ use std::time::Duration;
 pub struct Shell {
     meter: MeterHandle,
     running: Arc<AtomicBool>,
+}
+
+// ── Color helpers ──
+
+fn cyan(text: &str) -> String {
+    format!("\x1b[36m{}\x1b[0m", text)
+}
+fn yellow(text: &str) -> String {
+    format!("\x1b[33m{}\x1b[0m", text)
+}
+fn green(text: &str) -> String {
+    format!("\x1b[32m{}\x1b[0m", text)
+}
+fn red(text: &str) -> String {
+    format!("\x1b[31m{}\x1b[0m", text)
+}
+fn grey(text: &str) -> String {
+    format!("\x1b[90m{}\x1b[0m", text)
+}
+fn white(text: &str) -> String {
+    format!("\x1b[97m{}\x1b[0m", text)
+}
+fn dim(text: &str) -> String {
+    format!("\x1b[2m{}\x1b[0m", text)
+}
+
+fn nl() -> &'static str {
+    "\n\r"
 }
 
 impl Shell {
@@ -35,24 +64,21 @@ impl Shell {
         use std::io::BufRead;
         let stdin = io::stdin();
         let mut stdout = io::stdout();
-        self.print_welcome_simple(&mut stdout)?;
+        println!("{} {}", cyan("⚡ FeMeter v0.2"), dim("| type help"));
+        print!("{} ", cyan(">"));
+        io::stdout().flush()?;
         for line in stdin.lock().lines() {
             let line = line?;
             if line.trim().is_empty() {
                 continue;
             }
-            self.execute_command(line.trim(), &mut stdout)?;
+            self.execute_command(line.trim(), &mut stdout, false)?;
             if !self.running.load(Ordering::Relaxed) {
                 break;
             }
+            print!("{} ", cyan(">"));
+            io::stdout().flush()?;
         }
-        println!("Goodbye!");
-        Ok(())
-    }
-
-    fn print_welcome_simple(&self, stdout: &mut impl Write) -> Result<()> {
-        writeln!(stdout, "FeMeter v0.2 | type help")?;
-        stdout.flush()?;
         Ok(())
     }
 
@@ -63,15 +89,25 @@ impl Shell {
         let mut history: Vec<String> = Vec::new();
         let mut history_index = 0;
 
-        self.print_welcome(&mut stdout)?;
+        // Startup banner
+        queue!(
+            stdout,
+            terminal::Clear(ClearType::All),
+            cursor::MoveTo(0, 0),
+            style::Print(format!(
+                "{} {}{}",
+                cyan("⚡ FeMeter v0.2"),
+                dim("| ATT7022E"),
+                nl()
+            )),
+            style::Print(cyan("> ")),
+        )?;
+        stdout.flush()?;
 
         loop {
             if !self.running.load(Ordering::Relaxed) {
                 break;
             }
-
-            queue!(stdout, style::Print("\n\r> "), cursor::Show)?;
-            stdout.flush()?;
             input.clear();
 
             loop {
@@ -117,17 +153,18 @@ impl Shell {
 
             let cmd = input.trim();
             if cmd.is_empty() {
+                queue!(stdout, style::Print(format!("{}{}", nl(), cyan("> "))))?;
+                stdout.flush()?;
                 continue;
             }
             if !history.contains(&cmd.to_string()) {
                 history.push(cmd.to_string());
                 history_index = history.len();
             }
-            self.execute_command(cmd, &mut stdout)?;
+            self.execute_command(cmd, &mut stdout, true)?;
         }
 
         terminal::disable_raw_mode()?;
-        println!("\nGoodbye!");
         Ok(())
     }
 
@@ -145,19 +182,13 @@ impl Shell {
         Ok(())
     }
 
-    fn print_welcome(&self, stdout: &mut impl Write) -> Result<()> {
-        queue!(
-            stdout,
-            terminal::Clear(ClearType::All),
-            cursor::MoveTo(0, 0),
-            style::Print("FeMeter v0.2 | type help\n\r"),
-            style::Print("> "),
-        )?;
+    fn print_prompt(&self, stdout: &mut impl Write) -> Result<()> {
+        queue!(stdout, style::Print(cyan("> ")))?;
         stdout.flush()?;
         Ok(())
     }
 
-    fn execute_command(&self, input: &str, stdout: &mut impl Write) -> Result<()> {
+    fn execute_command(&self, input: &str, stdout: &mut impl Write, raw: bool) -> Result<()> {
         let parts: Vec<&str> = input.split_whitespace().collect();
         if parts.is_empty() {
             return Ok(());
@@ -180,53 +211,57 @@ impl Shell {
                 Ok(())
             }
             _ => {
-                queue!(
-                    stdout,
-                    style::Print(format!("Unknown command: {} (type help)\n\r", parts[0]))
-                )?;
-                let _ = stdout.flush();
+                let out = format!("{}{}{}", red("  ✗ unknown: "), parts[0], nl());
+                queue!(stdout, style::Print(out))?;
+                if raw {
+                    self.print_prompt(stdout)?;
+                }
                 Ok(())
             }
         }
     }
 
+    // ── Commands ──
+
     fn cmd_help(&self, stdout: &mut impl Write) -> Result<()> {
-        let help = r#"
- FeMeter v0.2
- ========================================
-  set ua/ub/uc <V>          voltage
-  set ia/ib/ic <A>          current
-  set angle-a/b/c <deg>     phase angle
-  set freq <Hz>             frequency
-  set pf <0~1>              power factor
-  set 3p <V> <A> <Hz> <PF> three-phase combo
-  set noise on/off          noise
-  set accel <rate>          time acceleration
-
-  get voltage               phase + line voltage
-  get current               phase + neutral current
-  get power                 active/reactive/apparent
-  get energy                cumulative energy
-  get freq                  frequency
-  get pf                    power factor
-  get status                status word
-
-  status                    full status table
-  scenario <name>           normal/full/noload/overv/loss/overi/reverse
-  event <type>              cover/terminal/magnetic/battery
-  event list                event history
-  watch [ms]                real-time monitor
-  reset                     reset energy
-  quit                      exit
-"#;
-        queue!(stdout, style::Print(help))?;
+        let out = format!(
+            r#"{g} ⚡ set {d}─────────────────────
+   ua/ub/uc <V>     voltage
+   ia/ib/ic <A>     current
+   angle-a/b/c <°>  phase angle
+   freq <Hz>        frequency
+   pf <0~1>         power factor
+   3p <V A Hz PF>   three-phase combo
+   noise on/off     noise sim
+   accel <rate>     time accel
+{g} ⚡ get {d}─────────────────────
+   voltage   phase + line V
+   current   phase + neutral I
+   power     P / Q / S
+   energy    kWh / kvarh
+   freq      Hz
+   pf        power factor
+   status    status word
+{g} ⚡ other {d}──────────────────
+   status          full table
+   scenario <name> normal/full/noload/overv/loss/overi/reverse
+   event <type>    cover/terminal/magnetic/battery
+   watch [ms]      live monitor
+   reset           reset energy
+   quit            exit
+"#,
+            g = cyan("⚡"),
+            d = grey("─"),
+        );
+        queue!(stdout, style::Print(out))?;
         stdout.flush()?;
         Ok(())
     }
 
     fn cmd_scenario(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
         if args.is_empty() {
-            queue!(stdout, style::Print("Usage: scenario <normal|full|noload|overv|underv|loss|overi|reverse|unbalanced>\n\r"))?;
+            let out = format!("{}{}\n", grey("  usage: scenario <name>"), nl());
+            queue!(stdout, style::Print(out))?;
             stdout.flush()?;
             return Ok(());
         }
@@ -241,20 +276,20 @@ impl Shell {
             "reverse" | "reversepower" => Scenario::ReversePower,
             "unbalanced" => Scenario::Unbalanced,
             _ => {
-                queue!(
-                    stdout,
-                    style::Print(format!("Unknown scenario: {}\n\r", args[0]))
-                )?;
+                let out = format!("{}{}{}\n", red("  ✗ unknown: "), args[0], nl());
+                queue!(stdout, style::Print(out))?;
                 stdout.flush()?;
                 return Ok(());
             }
         };
         let mut meter = self.meter.lock().expect("mutex poisoned");
         meter.load_scenario(sc);
-        queue!(
-            stdout,
-            style::Print(format!("Loaded scenario: {:?}\n\r", sc))
-        )?;
+        let out = format!(
+            "{} {}\n",
+            grey("  → scenario:"),
+            yellow(&format!("{:?}", sc))
+        );
+        queue!(stdout, style::Print(out))?;
         stdout.flush()?;
         Ok(())
     }
@@ -264,23 +299,23 @@ impl Shell {
             let meter = self.meter.lock().expect("mutex poisoned");
             let events = meter.events();
             if events.is_empty() {
-                queue!(stdout, style::Print("No events\n\r"))?;
+                let out = format!("{}{}\n", grey("  no events"), nl());
+                queue!(stdout, style::Print(out))?;
             } else {
-                queue!(
-                    stdout,
-                    style::Print(format!("Events ({} total):\n\r", events.len()))
-                )?;
+                let mut out = format!(
+                    "{}{}\n",
+                    cyan("  Events"),
+                    grey(&format!(" ({}) ──", events.len()))
+                );
                 for e in events.iter().rev().take(20) {
-                    queue!(
-                        stdout,
-                        style::Print(format!(
-                            "  [{}] {:?} - {}\n\r",
-                            e.timestamp.format("%H:%M:%S"),
-                            e.event,
-                            e.description
-                        ))
-                    )?;
+                    out.push_str(&format!(
+                        "   {}  {:<16} {}\n",
+                        grey(&e.timestamp.format("%H:%M:%S").to_string()),
+                        white(&format!("{:?}", e.event)),
+                        &e.description,
+                    ));
                 }
+                queue!(stdout, style::Print(out))?;
             }
             stdout.flush()?;
             return Ok(());
@@ -292,20 +327,16 @@ impl Shell {
             "magnetic" => MeterEvent::MagneticTamper,
             "battery" => MeterEvent::BatteryLow,
             _ => {
-                queue!(
-                    stdout,
-                    style::Print(format!("Unknown event: {}\n\r", args[0]))
-                )?;
+                let out = format!("{}{}{}\n", red("  ✗ unknown: "), args[0], nl());
+                queue!(stdout, style::Print(out))?;
                 stdout.flush()?;
                 return Ok(());
             }
         };
         let mut meter = self.meter.lock().expect("mutex poisoned");
         meter.trigger_event(ev);
-        queue!(
-            stdout,
-            style::Print(format!("Triggered event: {:?}\n\r", ev))
-        )?;
+        let out = format!("{} {}\n", grey("  → event:"), yellow(&format!("{:?}", ev)));
+        queue!(stdout, style::Print(out))?;
         stdout.flush()?;
         Ok(())
     }
@@ -315,100 +346,130 @@ impl Shell {
             .first()
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(500);
-        queue!(
-            stdout,
-            style::Print(format!(
-                "Watch ({}ms interval, 10 rounds, Ctrl+C to stop):\n\r",
-                interval
-            ))
-        )
-        .ok();
-        stdout.flush().ok();
         for _i in 0..10 {
             std::thread::sleep(Duration::from_millis(interval));
-            let mut meter = self.meter.lock().expect("mutex poisoned");
-            meter.print_status(stdout);
-            drop(meter);
-            stdout.flush().ok();
             if !self.running.load(Ordering::Relaxed) {
                 break;
             }
+            let mut meter = self.meter.lock().expect("mutex poisoned");
+            let snap = meter.snapshot();
+            drop(meter);
+
+            let line1 = format!(
+                " {}{} A:{}{} {}{} | B:{}{} {}{} | C:{}{} {}{}",
+                grey("["),
+                grey(&snap.timestamp.format("%H:%M:%S").to_string()),
+                white(&format!("{:.1}", snap.phase_a.voltage)),
+                grey("V"),
+                white(&format!("{:.2}", snap.phase_a.current)),
+                grey("A"),
+                white(&format!("{:.1}", snap.phase_b.voltage)),
+                grey("V"),
+                white(&format!("{:.2}", snap.phase_b.current)),
+                grey("A"),
+                white(&format!("{:.1}", snap.phase_c.voltage)),
+                grey("V"),
+                white(&format!("{:.2}", snap.phase_c.current)),
+                grey("A"),
+            );
+            let line2 = format!(
+                "  P:{}{} Q:{}{} S:{}{} PF:{}",
+                white(&format!("{:.1}", snap.computed.p_total)),
+                grey("W"),
+                white(&format!("{:.1}", snap.computed.q_total)),
+                grey("var"),
+                white(&format!("{:.1}", snap.computed.s_total)),
+                grey("VA"),
+                white(&format!("{:.3}", snap.computed.pf_total)),
+            );
+
+            queue!(
+                stdout,
+                terminal::Clear(ClearType::All),
+                cursor::MoveTo(0, 0),
+                style::Print(line1),
+                style::Print(nl()),
+                style::Print(line2),
+            )
+            .ok();
+            stdout.flush().ok();
         }
-        queue!(stdout, style::Print("Watch ended\n\r")).ok();
+        queue!(stdout, style::Print(format!("{}{}", nl(), cyan("> ")))).ok();
         stdout.flush().ok();
     }
 
     fn cmd_status(&self, stdout: &mut impl Write) -> Result<()> {
         let mut meter = self.meter.lock().expect("mutex poisoned");
         let snap = meter.snapshot();
+        let cfg = meter.config();
+
         let ev_str = if snap.active_events.is_empty() {
-            "none".to_string()
+            green("✓").to_string()
         } else {
-            snap.active_events
-                .iter()
-                .map(|e| format!("{:?}", e))
-                .collect::<Vec<_>>()
-                .join(", ")
+            red(&format!(
+                "! {}",
+                snap.active_events
+                    .iter()
+                    .map(|e| format!("{:?}", e))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ))
+            .to_string()
         };
 
-        let status = format!(
-            r#"
-==========================================
-  Chip: {:?} ({}-bit)  Freq: {:.2} Hz  Noise: {}  Accel: {:.0}x
-  Events: {}
-------------------------------------------
-  Phase    V(V)      I(A)     Angle(deg)    PF
-  -----  --------  --------  ----------  -----
-  A       {:>8.2}  {:>8.2}  {:>10.1}  {:>5.3}
-  B       {:>8.2}  {:>8.2}  {:>10.1}  {:>5.3}
-  C       {:>8.2}  {:>8.2}  {:>10.1}  {:>5.3}
-------------------------------------------
-  P: {:>10.1} W   Q: {:>10.1} var   PF: {:.3}
-  S: {:>10.1} VA
-------------------------------------------
-  Energy: {:.3} kWh / {:.3} kvarh
-==========================================
-"#,
-            snap.chip,
-            snap.chip.bits(),
-            snap.freq,
-            if meter.config().noise_enabled {
-                "ON"
-            } else {
-                "OFF"
-            },
-            meter.config().time_accel,
+        let noise = if cfg.noise_enabled { "on" } else { "off" };
+        let accel = cfg.time_accel;
+
+        let out = format!(
+            "{}\n   {}  {:.2}{}  noise:{}  accel:{}{}\n{}\n        {}    {}    {}    {}\n   A  {:>8.2}  {:>6.3}  {:>6.1}  {:>6.3}\n   B  {:>8.2}  {:>6.3}  {:>6.1}  {:>6.3}\n   C  {:>8.2}  {:>6.3}  {:>6.1}  {:>6.3}\n{}\n   P {:>8.1}{}   Q {:>8.1}{}   S {:>8.1}{}   PF {}\n   E {}{} / {}{}\n{}\n",
+            cyan("  ══ FeMeter ═══════════════════════════════"),
+            yellow(&format!("{:?}", snap.chip)),
+            white(&format!("{:.2}", snap.freq)),
+            grey("Hz"),
+            grey(noise),
+            grey(&format!("{:.0}x", accel)),
             ev_str,
-            snap.phase_a.voltage,
-            snap.phase_a.current,
-            snap.phase_a.angle,
-            snap.computed.pf_a,
-            snap.phase_b.voltage,
-            snap.phase_b.current,
-            snap.phase_b.angle,
-            snap.computed.pf_b,
-            snap.phase_c.voltage,
-            snap.phase_c.current,
-            snap.phase_c.angle,
-            snap.computed.pf_c,
-            snap.computed.p_total,
-            snap.computed.q_total,
-            snap.computed.pf_total,
-            snap.computed.s_total,
-            snap.energy.wh_total / 1000.0,
-            snap.energy.varh_total / 1000.0,
+            grey("  ──────────────────────────────────────────"),
+            grey("V"), grey("A"), grey("°"), grey("PF"),
+            white(&format!("{:.2}", snap.phase_a.voltage)),
+            white(&format!("{:.3}", snap.phase_a.current)),
+            white(&format!("{:.1}", snap.phase_a.angle)),
+            white(&format!("{:.3}", snap.computed.pf_a)),
+            white(&format!("{:.2}", snap.phase_b.voltage)),
+            white(&format!("{:.3}", snap.phase_b.current)),
+            white(&format!("{:.1}", snap.phase_b.angle)),
+            white(&format!("{:.3}", snap.computed.pf_b)),
+            white(&format!("{:.2}", snap.phase_c.voltage)),
+            white(&format!("{:.3}", snap.phase_c.current)),
+            white(&format!("{:.1}", snap.phase_c.angle)),
+            white(&format!("{:.3}", snap.computed.pf_c)),
+            grey("  ──────────────────────────────────────────"),
+            white(&format!("{:.1}", snap.computed.p_total)),
+            grey("W"),
+            white(&format!("{:.1}", snap.computed.q_total)),
+            grey("var"),
+            white(&format!("{:.1}", snap.computed.s_total)),
+            grey("VA"),
+            white(&format!("{:.3}", snap.computed.pf_total)),
+            white(&format!("{:.3}", snap.energy.wh_total / 1000.0)),
+            grey("kWh"),
+            white(&format!("{:.3}", snap.energy.varh_total / 1000.0)),
+            grey("kvarh"),
+            grey("  ══════════════════════════════════════════"),
         );
-        queue!(stdout, style::Print(status))?;
+        queue!(stdout, style::Print(out))?;
         stdout.flush()?;
         Ok(())
     }
 
     fn cmd_set(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
         if args.is_empty() {
-            queue!(
-                stdout,
-                style::Print("Usage: set <param> <value> | set 3p <V> <A> <Hz> <PF>\n\r")
-            )?;
+            let out = format!(
+                "{}{}\n",
+                grey("  usage: set <param> <value> | set 3p <V A Hz PF>"),
+                nl()
+            );
+            queue!(stdout, style::Print(out))?;
             stdout.flush()?;
             return Ok(());
         }
@@ -417,11 +478,8 @@ impl Shell {
 
         if param == "three-phase" || param == "threephase" || param == "3p" {
             if args.len() < 5 {
-                queue!(
-                    stdout,
-                    style::Print("Usage: set 3p <Voltage> <Current> <Freq> <PF>\n\r")
-                )?;
-                queue!(stdout, style::Print("Example: set 3p 230 5 50 0.95\n\r"))?;
+                let out = format!("{}{}\n", grey("  usage: set 3p <V> <A> <Hz> <PF>"), nl());
+                queue!(stdout, style::Print(out))?;
                 stdout.flush()?;
                 return Ok(());
             }
@@ -429,7 +487,6 @@ impl Shell {
             let i: f64 = args[2].parse().unwrap_or(5.0);
             let freq: f64 = args[3].parse().unwrap_or(50.0);
             let pf: f64 = args[4].parse().unwrap_or(0.95);
-
             let angle = pf.acos() * 180.0 / std::f64::consts::PI;
 
             meter.set_voltage('a', v);
@@ -443,22 +500,30 @@ impl Shell {
             meter.set_angle('c', angle);
             meter.set_freq(freq);
 
-            queue!(
-                stdout,
-                style::Print(format!(
-                    "3-phase set: {:.1}V {:.2}A {:.2}Hz PF={:.3} (angle={:.1}deg)\n\r",
-                    v, i, freq, pf, angle
-                ))
-            )?;
+            let out = format!(
+                "{} {}{} {}{} {}{} {}={}\n",
+                grey("  → 3P:"),
+                white(&format!("{:.1}", v)),
+                grey("V"),
+                white(&format!("{:.2}", i)),
+                grey("A"),
+                white(&format!("{:.1}", freq)),
+                grey("Hz"),
+                grey("PF"),
+                white(&format!("{:.2}", pf)),
+            );
+            queue!(stdout, style::Print(out))?;
             stdout.flush()?;
             return Ok(());
         }
 
         if args.len() < 2 {
-            queue!(
-                stdout,
-                style::Print(format!("Usage: set {} <value>\n\r", param))
-            )?;
+            let out = format!(
+                "{}{}\n",
+                grey(&format!("  usage: set {} <value>", param)),
+                nl()
+            );
+            queue!(stdout, style::Print(out))?;
             stdout.flush()?;
             return Ok(());
         }
@@ -466,121 +531,169 @@ impl Shell {
         let value_str = args[1];
         let result = match param.as_str() {
             "ua" => {
-                meter.set_voltage('a', value_str.parse().unwrap_or(220.0));
+                let v = value_str.parse().unwrap_or(220.0);
+                meter.set_voltage('a', v);
                 format!(
-                    "A-phase voltage = {:.2} V",
-                    value_str.parse::<f64>().unwrap_or(220.0)
+                    "{} A-phase: {}{}",
+                    grey("  →"),
+                    white(&format!("{:.2}", v)),
+                    grey("V")
                 )
             }
             "ub" => {
-                meter.set_voltage('b', value_str.parse().unwrap_or(220.0));
+                let v = value_str.parse().unwrap_or(220.0);
+                meter.set_voltage('b', v);
                 format!(
-                    "B-phase voltage = {:.2} V",
-                    value_str.parse::<f64>().unwrap_or(220.0)
+                    "{} B-phase: {}{}",
+                    grey("  →"),
+                    white(&format!("{:.2}", v)),
+                    grey("V")
                 )
             }
             "uc" => {
-                meter.set_voltage('c', value_str.parse().unwrap_or(220.0));
+                let v = value_str.parse().unwrap_or(220.0);
+                meter.set_voltage('c', v);
                 format!(
-                    "C-phase voltage = {:.2} V",
-                    value_str.parse::<f64>().unwrap_or(220.0)
+                    "{} C-phase: {}{}",
+                    grey("  →"),
+                    white(&format!("{:.2}", v)),
+                    grey("V")
                 )
             }
             "ia" => {
-                meter.set_current('a', value_str.parse().unwrap_or(0.0));
+                let v = value_str.parse().unwrap_or(0.0);
+                meter.set_current('a', v);
                 format!(
-                    "A-phase current = {:.2} A",
-                    value_str.parse::<f64>().unwrap_or(0.0)
+                    "{} A-phase: {}{}",
+                    grey("  →"),
+                    white(&format!("{:.3}", v)),
+                    grey("A")
                 )
             }
             "ib" => {
-                meter.set_current('b', value_str.parse().unwrap_or(0.0));
+                let v = value_str.parse().unwrap_or(0.0);
+                meter.set_current('b', v);
                 format!(
-                    "B-phase current = {:.2} A",
-                    value_str.parse::<f64>().unwrap_or(0.0)
+                    "{} B-phase: {}{}",
+                    grey("  →"),
+                    white(&format!("{:.3}", v)),
+                    grey("A")
                 )
             }
             "ic" => {
-                meter.set_current('c', value_str.parse().unwrap_or(0.0));
+                let v = value_str.parse().unwrap_or(0.0);
+                meter.set_current('c', v);
                 format!(
-                    "C-phase current = {:.2} A",
-                    value_str.parse::<f64>().unwrap_or(0.0)
+                    "{} C-phase: {}{}",
+                    grey("  →"),
+                    white(&format!("{:.3}", v)),
+                    grey("A")
                 )
             }
             "angle-a" | "angle_a" => {
-                meter.set_angle('a', value_str.parse().unwrap_or(0.0));
+                let v = value_str.parse().unwrap_or(0.0);
+                meter.set_angle('a', v);
                 format!(
-                    "A-phase angle = {:.1} deg",
-                    value_str.parse::<f64>().unwrap_or(0.0)
+                    "{} A-angle: {}{}",
+                    grey("  →"),
+                    white(&format!("{:.1}", v)),
+                    grey("°")
                 )
             }
             "angle-b" | "angle_b" => {
-                meter.set_angle('b', value_str.parse().unwrap_or(0.0));
+                let v = value_str.parse().unwrap_or(0.0);
+                meter.set_angle('b', v);
                 format!(
-                    "B-phase angle = {:.1} deg",
-                    value_str.parse::<f64>().unwrap_or(0.0)
+                    "{} B-angle: {}{}",
+                    grey("  →"),
+                    white(&format!("{:.1}", v)),
+                    grey("°")
                 )
             }
             "angle-c" | "angle_c" => {
-                meter.set_angle('c', value_str.parse().unwrap_or(0.0));
+                let v = value_str.parse().unwrap_or(0.0);
+                meter.set_angle('c', v);
                 format!(
-                    "C-phase angle = {:.1} deg",
-                    value_str.parse::<f64>().unwrap_or(0.0)
+                    "{} C-angle: {}{}",
+                    grey("  →"),
+                    white(&format!("{:.1}", v)),
+                    grey("°")
                 )
             }
             "freq" => {
-                meter.set_freq(value_str.parse().unwrap_or(50.0));
+                let v = value_str.parse().unwrap_or(50.0);
+                meter.set_freq(v);
                 format!(
-                    "Frequency = {:.2} Hz",
-                    value_str.parse::<f64>().unwrap_or(50.0)
+                    "{} freq: {}{}",
+                    grey("  →"),
+                    white(&format!("{:.2}", v)),
+                    grey("Hz")
                 )
             }
             "pf" | "power-factor" => {
                 let pf: f64 = value_str.parse().unwrap_or(0.95);
                 if !(-1.0..=1.0).contains(&pf) {
-                    "Error: PF must be -1.0 to 1.0".to_string()
+                    format!("{} PF must be -1~1", red("  ✗"))
                 } else {
                     let angle = pf.acos() * 180.0 / std::f64::consts::PI;
                     meter.set_angle('a', angle);
                     meter.set_angle('b', angle);
                     meter.set_angle('c', angle);
-                    format!("PF = {:.3} (angle auto-set to {:.1} deg)", pf, angle)
+                    format!(
+                        "{} PF: {} ({}{}{})",
+                        grey("  →"),
+                        white(&format!("{:.3}", pf)),
+                        grey("angle"),
+                        white(&format!("{:.1}", angle)),
+                        grey("°")
+                    )
                 }
             }
             "noise" => {
                 let e = ["on", "1", "true"].contains(&value_str.to_lowercase().as_str());
                 meter.set_noise(e);
-                format!("Noise {}", if e { "ON" } else { "OFF" })
+                format!(
+                    "{} noise: {}",
+                    grey("  →"),
+                    if e { green("on") } else { dim("off") }
+                )
             }
             "chip" => match value_str.to_lowercase().as_str() {
                 "att7022e" | "att7022" => {
                     meter.set_chip(ChipType::ATT7022E);
-                    "ATT7022E".to_string()
+                    format!("{} chip: {}", grey("  →"), yellow("ATT7022E"))
                 }
                 "rn8302b" | "rn8302" => {
                     meter.set_chip(ChipType::RN8302B);
-                    "RN8302B".to_string()
+                    format!("{} chip: {}", grey("  →"), yellow("RN8302B"))
                 }
-                _ => format!("Unknown: {}", value_str),
+                _ => format!("{} unknown: {}", red("  ✗"), value_str),
             },
             "accel" => {
                 let a: f64 = value_str.parse().unwrap_or(1.0);
                 meter.set_time_accel(a);
-                format!("Time accel = {:.0}x", a)
+                format!(
+                    "{} accel: {}{}",
+                    grey("  →"),
+                    white(&format!("{:.0}", a)),
+                    grey("x")
+                )
             }
-            _ => format!("Unknown param: {}", param),
+            _ => format!("{} unknown: {}", red("  ✗"), param),
         };
-        queue!(stdout, style::Print(format!("{}\n\r", result)))?;
+        queue!(stdout, style::Print(format!("{}\n", result)))?;
         stdout.flush()?;
         Ok(())
     }
 
     fn cmd_get(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
         if args.is_empty() {
-            queue!(
-                stdout,
-                style::Print("Usage: get <voltage|current|angle|power|energy|freq|pf|status>\n\r")
-            )?;
+            let out = format!(
+                "{}{}\n",
+                grey("  usage: get <voltage|current|power|energy|freq|pf|status>"),
+                nl()
+            );
+            queue!(stdout, style::Print(out))?;
             stdout.flush()?;
             return Ok(());
         }
@@ -589,10 +702,9 @@ impl Shell {
         let mut meter = self.meter.lock().expect("mutex poisoned");
         let snap = meter.snapshot();
 
-        match sub.as_str() {
+        let out = match sub.as_str() {
             "voltage" | "volt" | "v" => {
-                let v_ab = (snap.phase_a.voltage * snap.phase_a.voltage
-                    + snap.phase_b.voltage * snap.phase_b.voltage
+                let v_ab = (snap.phase_a.voltage.powi(2) + snap.phase_b.voltage.powi(2)
                     - 2.0
                         * snap.phase_a.voltage
                         * snap.phase_b.voltage
@@ -600,8 +712,7 @@ impl Shell {
                             / 180.0)
                             .cos())
                 .sqrt();
-                let v_bc = (snap.phase_b.voltage * snap.phase_b.voltage
-                    + snap.phase_c.voltage * snap.phase_c.voltage
+                let v_bc = (snap.phase_b.voltage.powi(2) + snap.phase_c.voltage.powi(2)
                     - 2.0
                         * snap.phase_b.voltage
                         * snap.phase_c.voltage
@@ -609,8 +720,7 @@ impl Shell {
                             / 180.0)
                             .cos())
                 .sqrt();
-                let v_ca = (snap.phase_c.voltage * snap.phase_c.voltage
-                    + snap.phase_a.voltage * snap.phase_a.voltage
+                let v_ca = (snap.phase_c.voltage.powi(2) + snap.phase_a.voltage.powi(2)
                     - 2.0
                         * snap.phase_c.voltage
                         * snap.phase_a.voltage
@@ -619,16 +729,29 @@ impl Shell {
                             .cos())
                 .sqrt();
 
-                let output = format!(
-                    "\n\r  [Voltage]\n\r  Phase  Phase(V)  Line(V)\n\r  -----  --------  --------\n\r  A        {:>8.2}  {:>8.2}\n\r  B        {:>8.2}  {:>8.2}\n\r  C        {:>8.2}  {:>8.2}\n\r  (Uab/Ubc/Uca)\n\r\n",
-                    snap.phase_a.voltage,
-                    v_ab,
-                    snap.phase_b.voltage,
-                    v_bc,
-                    snap.phase_c.voltage,
-                    v_ca
-                );
-                queue!(stdout, style::Print(output))?;
+                format!(
+                    "{}{}\n   {}  {}{}  {}  {}{}\n   {}  {}{}  {}  {}{}\n   {}  {}{}  {}  {}{}\n",
+                    cyan("  Voltage "),
+                    grey("──────────────"),
+                    grey("A"),
+                    white(&format!("{:>8.2}", snap.phase_a.voltage)),
+                    grey("V"),
+                    grey("AB"),
+                    white(&format!("{:>8.1}", v_ab)),
+                    grey("V"),
+                    grey("B"),
+                    white(&format!("{:>8.2}", snap.phase_b.voltage)),
+                    grey("V"),
+                    grey("BC"),
+                    white(&format!("{:>8.1}", v_bc)),
+                    grey("V"),
+                    grey("C"),
+                    white(&format!("{:>8.2}", snap.phase_c.voltage)),
+                    grey("V"),
+                    grey("CA"),
+                    white(&format!("{:>8.1}", v_ca)),
+                    grey("V"),
+                )
             }
             "current" | "curr" | "i" => {
                 let i_n = ((snap.phase_a.current
@@ -647,145 +770,164 @@ impl Shell {
                     .powi(2))
                 .sqrt();
 
-                let output = format!(
-                    "\n\r  [Current]\n\r  Phase  Current(A)\n\r  -----  ----------\n\r  A        {:>8.3}\n\r  B        {:>8.3}\n\r  C        {:>8.3}\n\r  N        {:>8.3}  (neutral)\n\r\n",
-                    snap.phase_a.current, snap.phase_b.current, snap.phase_c.current, i_n
-                );
-                queue!(stdout, style::Print(output))?;
-            }
-            "angle" | "ang" | "a" => {
-                let output = format!(
-                    "\n\r  [Angle]\n\r  Phase  Angle(deg)\n\r  -----  ----------\n\r  A        {:>8.1}\n\r  B        {:>8.1}\n\r  C        {:>8.1}\n\r  (Normal: A=0, B=-120, C=120)\n\r\n",
-                    snap.phase_a.angle, snap.phase_b.angle, snap.phase_c.angle
-                );
-                queue!(stdout, style::Print(output))?;
+                format!(
+                    "{}{}\n   {}  {}{}\n   {}  {}{}\n   {}  {}{}\n   {}  {}{}",
+                    cyan("  Current "),
+                    grey("──────────────"),
+                    grey("A"),
+                    white(&format!("{:>8.3}", snap.phase_a.current)),
+                    grey("A"),
+                    grey("B"),
+                    white(&format!("{:>8.3}", snap.phase_b.current)),
+                    grey("A"),
+                    grey("C"),
+                    white(&format!("{:>8.3}", snap.phase_c.current)),
+                    grey("A"),
+                    grey("N"),
+                    white(&format!("{:>8.3}", i_n)),
+                    grey("A"),
+                )
             }
             "power" | "pow" | "p" => {
-                let output = format!(
-                    "\n\r  [Power]\n\r  Phase        W(W)     var(var)    VA(VA)      PF\n\r  -----  ----------  ----------  ---------  -------\n\r  A        {:>8.1}  {:>10.1}  {:>9.1}  {:>7.3}\n\r  B        {:>8.1}  {:>10.1}  {:>9.1}  {:>7.3}\n\r  C        {:>8.1}  {:>10.1}  {:>9.1}  {:>7.3}\n\r  Total    {:>8.1}  {:>10.1}  {:>9.1}  {:>7.3}\n\r\n",
-                    snap.computed.p_a,
-                    snap.computed.q_a,
-                    snap.computed.s_a,
-                    snap.computed.pf_a,
-                    snap.computed.p_b,
-                    snap.computed.q_b,
-                    snap.computed.s_b,
-                    snap.computed.pf_b,
-                    snap.computed.p_c,
-                    snap.computed.q_c,
-                    snap.computed.s_c,
-                    snap.computed.pf_c,
-                    snap.computed.p_total,
-                    snap.computed.q_total,
-                    snap.computed.s_total,
-                    snap.computed.pf_total
-                );
-                queue!(stdout, style::Print(output))?;
+                format!(
+                    "{}{}\n         {}        {}       {}      {}\n   A  {:>8.1}  {:>8.1}  {:>8.1}  {:>6.3}\n   B  {:>8.1}  {:>8.1}  {:>8.1}  {:>6.3}\n   C  {:>8.1}  {:>8.1}  {:>8.1}  {:>6.3}\n   {}  {:>8.1}  {:>8.1}  {:>8.1}  {:>6.3}\n",
+                    cyan("  Power "),
+                    grey("────────────────────────────"),
+                    grey("W"), grey("var"), grey("VA"), grey("PF"),
+                    white(&format!("{:.1}", snap.computed.p_a)),
+                    white(&format!("{:.1}", snap.computed.q_a)),
+                    white(&format!("{:.1}", snap.computed.s_a)),
+                    white(&format!("{:.3}", snap.computed.pf_a)),
+                    white(&format!("{:.1}", snap.computed.p_b)),
+                    white(&format!("{:.1}", snap.computed.q_b)),
+                    white(&format!("{:.1}", snap.computed.s_b)),
+                    white(&format!("{:.3}", snap.computed.pf_b)),
+                    white(&format!("{:.1}", snap.computed.p_c)),
+                    white(&format!("{:.1}", snap.computed.q_c)),
+                    white(&format!("{:.1}", snap.computed.s_c)),
+                    white(&format!("{:.3}", snap.computed.pf_c)),
+                    grey("Σ"),
+                    white(&format!("{:.1}", snap.computed.p_total)),
+                    white(&format!("{:.1}", snap.computed.q_total)),
+                    white(&format!("{:.1}", snap.computed.s_total)),
+                    white(&format!("{:.3}", snap.computed.pf_total)),
+                )
             }
             "energy" | "en" | "e" => {
-                let output = format!(
-                    "\n\r  [Energy]\n\r  Phase       kWh       kvarh\n\r  -----  ---------  ---------\n\r  A        {:>9.4}  {:>9.4}\n\r  B        {:>9.4}  {:>9.4}\n\r  C        {:>9.4}  {:>9.4}\n\r  Total    {:>9.4}  {:>9.4}\n\r\n",
-                    snap.energy.wh_a / 1000.0,
-                    snap.energy.varh_a / 1000.0,
-                    snap.energy.wh_b / 1000.0,
-                    snap.energy.varh_b / 1000.0,
-                    snap.energy.wh_c / 1000.0,
-                    snap.energy.varh_c / 1000.0,
-                    snap.energy.wh_total / 1000.0,
-                    snap.energy.varh_total / 1000.0
-                );
-                queue!(stdout, style::Print(output))?;
+                format!(
+                    "{}{}\n       {}      {}\n   A  {}  {}\n   B  {}  {}\n   C  {}  {}\n   {}  {}  {}\n",
+                    cyan("  Energy "),
+                    grey("────────────"),
+                    grey("kWh"), grey("kvarh"),
+                    white(&format!("{:>8.4}", snap.energy.wh_a / 1000.0)),
+                    white(&format!("{:>8.4}", snap.energy.varh_a / 1000.0)),
+                    white(&format!("{:>8.4}", snap.energy.wh_b / 1000.0)),
+                    white(&format!("{:>8.4}", snap.energy.varh_b / 1000.0)),
+                    white(&format!("{:>8.4}", snap.energy.wh_c / 1000.0)),
+                    white(&format!("{:>8.4}", snap.energy.varh_c / 1000.0)),
+                    grey("Σ"),
+                    white(&format!("{:>8.4}", snap.energy.wh_total / 1000.0)),
+                    white(&format!("{:>8.4}", snap.energy.varh_total / 1000.0)),
+                )
             }
             "frequency" | "freq" | "f" => {
-                let output = format!("\n\r  Freq: {:.3} Hz\n\r\n", snap.freq);
-                queue!(stdout, style::Print(output))?;
+                format!(
+                    "  {} {}{}\n",
+                    grey("Freq:"),
+                    white(&format!("{:.3}", snap.freq)),
+                    grey("Hz")
+                )
             }
             "power-factor" | "pf" => {
-                let output = format!(
-                    "\n\r  [Power Factor]\n\r  Phase      PF\n\r  -----  -------\n\r  A       {:>7.4}\n\r  B       {:>7.4}\n\r  C       {:>7.4}\n\r  Total   {:>7.4}\n\r\n",
-                    snap.computed.pf_a,
-                    snap.computed.pf_b,
-                    snap.computed.pf_c,
-                    snap.computed.pf_total
-                );
-                queue!(stdout, style::Print(output))?;
+                format!(
+                    "{}{}\n   {}  {:>7.4}\n   {}  {:>7.4}\n   {}  {:>7.4}\n   {}  {:>7.4}\n",
+                    cyan("  PF "),
+                    grey("────────────"),
+                    grey("A"),
+                    white(&format!("{:.4}", snap.computed.pf_a)),
+                    grey("B"),
+                    white(&format!("{:.4}", snap.computed.pf_b)),
+                    grey("C"),
+                    white(&format!("{:.4}", snap.computed.pf_c)),
+                    grey("Σ"),
+                    white(&format!("{:.4}", snap.computed.pf_total)),
+                )
             }
             "status-word" | "status" | "sw" => {
                 let sw = self.compute_status_word(&snap);
-                let mut output = format!("\n\r  [Status Word] 0x{:08X}\n\r", sw);
-
                 if sw == 0 {
-                    output.push_str("  OK - All parameters normal\n\r");
+                    format!(
+                        "  {} 0x{:08X} {} {}\n",
+                        grey("Status:"),
+                        sw,
+                        green("✓"),
+                        green("OK")
+                    )
                 } else {
+                    let mut s =
+                        format!("  {} 0x{:08X} {}{}\n", grey("Status:"), sw, red("✗"), nl());
                     if sw & 0x01 != 0 {
-                        output.push_str("  ! A-phase voltage loss (< 10V)\n\r");
+                        s.push_str(&format!("    {} A-phase loss (<10V)\n", red("!")));
                     }
                     if sw & 0x02 != 0 {
-                        output.push_str("  ! B-phase voltage loss (< 10V)\n\r");
+                        s.push_str(&format!("    {} B-phase loss (<10V)\n", red("!")));
                     }
                     if sw & 0x04 != 0 {
-                        output.push_str("  ! C-phase voltage loss (< 10V)\n\r");
+                        s.push_str(&format!("    {} C-phase loss (<10V)\n", red("!")));
                     }
                     if sw & 0x08 != 0 {
-                        output.push_str("  ! A-phase overvoltage (> 264V)\n\r");
+                        s.push_str(&format!("    {} A-phase overvoltage (>264V)\n", red("!")));
                     }
                     if sw & 0x10 != 0 {
-                        output.push_str("  ! B-phase overvoltage (> 264V)\n\r");
+                        s.push_str(&format!("    {} B-phase overvoltage (>264V)\n", red("!")));
                     }
                     if sw & 0x20 != 0 {
-                        output.push_str("  ! C-phase overvoltage (> 264V)\n\r");
+                        s.push_str(&format!("    {} C-phase overvoltage (>264V)\n", red("!")));
                     }
                     if sw & 0x40 != 0 {
-                        output.push_str("  ! A-phase undervoltage (< 198V)\n\r");
+                        s.push_str(&format!("    {} A-phase undervoltage (<198V)\n", red("!")));
                     }
                     if sw & 0x80 != 0 {
-                        output.push_str("  ! B-phase undervoltage (< 198V)\n\r");
+                        s.push_str(&format!("    {} B-phase undervoltage (<198V)\n", red("!")));
                     }
                     if sw & 0x100 != 0 {
-                        output.push_str("  ! C-phase undervoltage (< 198V)\n\r");
+                        s.push_str(&format!("    {} C-phase undervoltage (<198V)\n", red("!")));
                     }
                     if sw & 0x200 != 0 {
-                        output.push_str("  ! A-phase overcurrent (> 60A)\n\r");
+                        s.push_str(&format!("    {} A-phase overcurrent (>60A)\n", red("!")));
                     }
                     if sw & 0x400 != 0 {
-                        output.push_str("  ! B-phase overcurrent (> 60A)\n\r");
+                        s.push_str(&format!("    {} B-phase overcurrent (>60A)\n", red("!")));
                     }
                     if sw & 0x800 != 0 {
-                        output.push_str("  ! C-phase overcurrent (> 60A)\n\r");
+                        s.push_str(&format!("    {} C-phase overcurrent (>60A)\n", red("!")));
                     }
                     if sw & 0x1000 != 0 {
-                        output.push_str("  ! Current imbalance (> 20%)\n\r");
+                        s.push_str(&format!("    {} Current imbalance (>20%)\n", red("!")));
                     }
                     if sw & 0x2000 != 0 {
-                        output.push_str("  ! Voltage imbalance (> 2%)\n\r");
+                        s.push_str(&format!("    {} Voltage imbalance (>2%)\n", red("!")));
                     }
                     if sw & 0x4000 != 0 {
-                        output.push_str("  ! Phase sequence error\n\r");
+                        s.push_str(&format!("    {} Phase sequence error\n", red("!")));
                     }
                     if sw & 0x8000 != 0 {
-                        output.push_str("  ! Reverse power\n\r");
+                        s.push_str(&format!("    {} Reverse power\n", red("!")));
                     }
+                    s
                 }
-                output.push('\n');
-                queue!(stdout, style::Print(output))?;
             }
             _ => {
-                queue!(stdout, style::Print(format!("Unknown query: {}\n\r", sub)))?;
-                queue!(
-                    stdout,
-                    style::Print(
-                        "Available: voltage, current, angle, power, energy, freq, pf, status\n\r"
-                    )
-                )?;
+                format!("{}{}\n", red("  ✗ unknown:"), sub)
             }
-        }
+        };
+        queue!(stdout, style::Print(out))?;
         stdout.flush()?;
         Ok(())
     }
 
     fn compute_status_word(&self, snap: &crate::MeterSnapshot) -> u32 {
         let mut sw: u32 = 0;
-
         if snap.phase_a.voltage < 10.0 {
             sw |= 0x01;
         }
@@ -795,7 +937,6 @@ impl Shell {
         if snap.phase_c.voltage < 10.0 {
             sw |= 0x04;
         }
-
         if snap.phase_a.voltage > 264.0 {
             sw |= 0x08;
         }
@@ -805,7 +946,6 @@ impl Shell {
         if snap.phase_c.voltage > 264.0 {
             sw |= 0x20;
         }
-
         if snap.phase_a.voltage < 198.0 && snap.phase_a.voltage >= 10.0 {
             sw |= 0x40;
         }
@@ -815,7 +955,6 @@ impl Shell {
         if snap.phase_c.voltage < 198.0 && snap.phase_c.voltage >= 10.0 {
             sw |= 0x100;
         }
-
         if snap.phase_a.current > 60.0 {
             sw |= 0x200;
         }
@@ -866,14 +1005,14 @@ impl Shell {
         if snap.computed.p_total < 0.0 {
             sw |= 0x8000;
         }
-
         sw
     }
 
     fn cmd_reset(&self, stdout: &mut impl Write) -> Result<()> {
         let mut meter = self.meter.lock().expect("mutex poisoned");
         meter.reset_energy();
-        queue!(stdout, style::Print("Energy reset\n\r"))?;
+        let out = format!("{} energy reset\n", grey("  →"));
+        queue!(stdout, style::Print(out))?;
         stdout.flush()?;
         Ok(())
     }

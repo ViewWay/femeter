@@ -95,7 +95,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    println!("FeMeter Virtual Meter v0.2 | ATT7022E / RN8302B");
+    // Shell prints its own banner
 
     // 创建电表
     let meter = create_meter();
