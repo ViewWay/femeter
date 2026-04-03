@@ -291,6 +291,8 @@ impl Att7022eRegisters {
             0x20..=0x3F => self.calibration.get(&addr).copied().unwrap_or(0),
             // 配置寄存器
             0x40..=0x7F => self.config.get(&addr).copied().unwrap_or(0),
+            // 芯片 ID (特殊地址)
+            0xFF => 0x7022E, // ATT7022E 芯片 ID
             _ => 0,
         }
     }

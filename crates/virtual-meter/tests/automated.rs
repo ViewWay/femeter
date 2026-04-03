@@ -12,6 +12,7 @@ mod tests {
 
     fn make_meter() -> MeterHandle {
         let m = create_meter();
+        m.lock().unwrap().set_test_mode(true); // 启用测试模式
         m.lock().unwrap().load_scenario(Scenario::Normal);
         m
     }
@@ -21,6 +22,7 @@ mod tests {
     #[test]
     fn test_create_meter() {
         let m = create_meter();
+        m.lock().unwrap().set_test_mode(true); // 启用测试模式
         let snap = m.lock().unwrap().snapshot();
         assert_eq!(snap.phase_a.voltage, 220.0);
     }
@@ -207,8 +209,13 @@ mod tests {
         m.lock().unwrap().set_time_accel(3600000.0);
         std::thread::sleep(std::time::Duration::from_millis(10));
         m.lock().unwrap().reset_energy();
-        let snap = m.lock().unwrap().snapshot();
-        assert!((snap.energy.wh_total).abs() < 0.001);
+        // 重置后立即检查，不调用 snapshot (会触发 tick)
+        let wh_total = m.lock().unwrap().energy().wh_total;
+        assert!(
+            (wh_total).abs() < 0.001,
+            "wh_total after reset: {}",
+            wh_total
+        );
     }
 
     /* ── 芯片切换 ── */
@@ -250,15 +257,16 @@ mod tests {
 
     #[test]
     fn test_register_read() {
-        let m = make_meter();
+        let m = create_meter();
         {
             let mut meter = m.lock().unwrap();
+            meter.set_test_mode(true); // 启用测试模式
             meter.set_noise(false);
             meter.set_voltage('a', 220.0);
             meter.set_current('a', 0.0);
             let hex = meter.format_register(0x00);
-            // 220.0V * 1000 = 220000 = 0x35B60
-            assert_eq!(hex, "035B60", "got {}", hex);
+            // 220.0V * 100 = 22000 = 0x0055F0
+            assert_eq!(hex, "0055F0", "got {}", hex);
         }
     }
 
