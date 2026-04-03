@@ -41,3 +41,4 @@ pub use meter::*;
 pub use protocol::*;
 pub use serial::*;
 pub use shell::*;
+pub use tcp_server::TcpServer;

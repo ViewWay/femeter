@@ -1,0 +1,67 @@
+#!/usr/bin/expect -c '
+set timeout 5
+set prompt "⚡> "
+
+# 测试三相组合设置
+send "set three-phase 230 5 50 0.95"
+expect "三相设置"
+
+# 测试单相设置
+send "set ua 235"
+expect "A相电压"
+
+# 测试角度设置
+send "set angle-a 0"
+send "set angle-b -120"
+send "set angle-c 120"
+
+# 测试功率因数设置
+send "set pf 0.9"
+expect "功率因数"
+
+# 测试查询命令
+send "get voltage"
+expect "电压测量"
+
+send "get current"
+expect "电流测量"
+
+send "get angle"
+expect "相角测量"
+
+send "get power"
+expect "功率测量"
+
+send "get energy"
+expect "电能累计"
+
+send "get frequency"
+expect "50"
+
+send "get power-factor"
+expect "功率因数"
+
+# 测试异常场景 - A相失压
+send "set ua 0"
+send "get status-word"
+expect "失压"
+
+# 测试异常场景 - A相过压
+send "set ua 280"
+send "get status-word"
+expect "过压"
+
+# 测试异常场景 - A相过流
+send "set ia 70"
+send "get status-word"
+expect "过流"
+
+# 测试异常场景 - 反向功率
+send "set angle-a 180"
+send "get status-word"
+expect "反向功率"
+
+# 退出
+send "quit"
+
+puts "\n测试完成!"

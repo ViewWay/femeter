@@ -234,6 +234,7 @@ impl Shell {
             "help" | "h" | "?" => self.cmd_help(stdout),
             "status" | "st" => self.cmd_status(stdout),
             "set" => self.cmd_set(&parts[1..], stdout),
+            "get" => self.cmd_get(&parts[1..], stdout),
             "energy" | "en" => self.cmd_energy(stdout),
             "reset" => self.cmd_reset(stdout),
             "snapshot" | "ss" => self.cmd_snapshot(stdout),
@@ -286,14 +287,26 @@ impl Shell {
     status / st           显示完整状态表
     snapshot / ss         JSON 快照
 
-  设置:
+  三相设置:
     set ua/ub/uc <V>      电压 (V)
     set ia/ib/ic <A>      电流 (A)
-    set angle_a/b/c <°>   相角
+    set angle-a/b/c <°>   相角 (如 angle-a 0, angle-b -120, angle-c 120)
     set freq <Hz>         频率
+    set pf <0.0-1.0>      功率因数 (自动计算相角)
+    set three-phase <V> <A> <Hz> <PF>  三相组合设置
     set noise on/off      噪声模拟
     set chip att7022e     切换芯片
     set accel <倍率>      时间加速 (如 3600 = 1秒=1小时)
+
+  查询:
+    get voltage           显示三相电压 + 线电压
+    get current           显示三相电流 + 中性线电流
+    get angle             显示三相角度
+    get power             显示有功/无功/视在功率
+    get energy            显示累计电能
+    get frequency         显示频率
+    get power-factor      显示功率因数
+    get status-word       显示状态字及异常检测
 
   日志:
     log on/off            开关日志打印
@@ -627,35 +640,69 @@ impl Shell {
     }
 
     fn cmd_set(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
-        if args.len() < 2 {
-            queue!(stdout, style::Print("用法: set <param> <value>\n\r"))?;
+        if args.is_empty() {
+            queue!(stdout, style::Print("用法: set <param> <value> | set three-phase <V> <A> <Hz> <PF>\n\r"))?;
             stdout.flush()?;
             return Ok(());
         }
         let param = args[0].to_lowercase();
-        let value_str = args[1];
         let mut meter = self.meter.lock().expect("mutex poisoned");
+        
+        // 处理组合命令: set three-phase <V> <A> <Hz> <PF>
+        if param == "three-phase" || param == "threephase" || param == "3p" {
+            if args.len() < 5 {
+                queue!(stdout, style::Print("用法: set three-phase <电压V> <电流A> <频率Hz> <功率因数PF>\n\r"))?;
+                queue!(stdout, style::Print("示例: set three-phase 230 5 50 0.95\n\r"))?;
+                stdout.flush()?;
+                return Ok(());
+            }
+            let v: f64 = args[1].parse().unwrap_or(220.0);
+            let i: f64 = args[2].parse().unwrap_or(5.0);
+            let freq: f64 = args[3].parse().unwrap_or(50.0);
+            let pf: f64 = args[4].parse().unwrap_or(0.95);
+            
+            // 根据功率因数计算角度 (cos⁻¹(pf))
+            let angle = pf.acos() * 180.0 / std::f64::consts::PI;
+            
+            // 设置三相
+            meter.set_voltage('a', v);
+            meter.set_voltage('b', v);
+            meter.set_voltage('c', v);
+            meter.set_current('a', i);
+            meter.set_current('b', i);
+            meter.set_current('c', i);
+            meter.set_angle('a', angle);
+            meter.set_angle('b', angle);
+            meter.set_angle('c', angle);
+            meter.set_freq(freq);
+            
+            queue!(stdout, style::Print(format!(
+                "三相设置: {:.1}V {:.2}A {:.2}Hz PF={:.3} (角度={:.1}°)\n\r",
+                v, i, freq, pf, angle
+            )))?;
+            stdout.flush()?;
+            return Ok(());
+        }
+        
+        if args.len() < 2 {
+            queue!(stdout, style::Print(format!("用法: set {} <value>\n\r", param)))?;
+            stdout.flush()?;
+            return Ok(());
+        }
+        
+        let value_str = args[1];
         let result = match param.as_str() {
             "ua" => {
                 meter.set_voltage('a', value_str.parse().unwrap_or(220.0));
-                format!(
-                    "A相电压 = {:.2} V",
-                    value_str.parse::<f64>().unwrap_or(220.0)
-                )
+                format!("A相电压 = {:.2} V", value_str.parse::<f64>().unwrap_or(220.0))
             }
             "ub" => {
                 meter.set_voltage('b', value_str.parse().unwrap_or(220.0));
-                format!(
-                    "B相电压 = {:.2} V",
-                    value_str.parse::<f64>().unwrap_or(220.0)
-                )
+                format!("B相电压 = {:.2} V", value_str.parse::<f64>().unwrap_or(220.0))
             }
             "uc" => {
                 meter.set_voltage('c', value_str.parse().unwrap_or(220.0));
-                format!(
-                    "C相电压 = {:.2} V",
-                    value_str.parse::<f64>().unwrap_or(220.0)
-                )
+                format!("C相电压 = {:.2} V", value_str.parse::<f64>().unwrap_or(220.0))
             }
             "ia" => {
                 meter.set_current('a', value_str.parse().unwrap_or(0.0));
@@ -669,21 +716,34 @@ impl Shell {
                 meter.set_current('c', value_str.parse().unwrap_or(0.0));
                 format!("C相电流 = {:.2} A", value_str.parse::<f64>().unwrap_or(0.0))
             }
-            "angle_a" => {
+            "angle-a" | "angle_a" => {
                 meter.set_angle('a', value_str.parse().unwrap_or(0.0));
                 format!("A相角度 = {:.1}°", value_str.parse::<f64>().unwrap_or(0.0))
             }
-            "angle_b" => {
+            "angle-b" | "angle_b" => {
                 meter.set_angle('b', value_str.parse().unwrap_or(0.0));
                 format!("B相角度 = {:.1}°", value_str.parse::<f64>().unwrap_or(0.0))
             }
-            "angle_c" => {
+            "angle-c" | "angle_c" => {
                 meter.set_angle('c', value_str.parse().unwrap_or(0.0));
                 format!("C相角度 = {:.1}°", value_str.parse::<f64>().unwrap_or(0.0))
             }
             "freq" => {
                 meter.set_freq(value_str.parse().unwrap_or(50.0));
                 format!("频率 = {:.2} Hz", value_str.parse::<f64>().unwrap_or(50.0))
+            }
+            "pf" | "power-factor" => {
+                let pf: f64 = value_str.parse().unwrap_or(0.95);
+                if !(-1.0..=1.0).contains(&pf) {
+                    "错误: 功率因数必须在 -1.0 到 1.0 之间".to_string()
+                } else {
+                    // 根据功率因数计算角度 (cos⁻¹(pf))
+                    let angle = pf.acos() * 180.0 / std::f64::consts::PI;
+                    meter.set_angle('a', angle);
+                    meter.set_angle('b', angle);
+                    meter.set_angle('c', angle);
+                    format!("功率因数 = {:.3} (角度自动设为 {:.1}°)", pf, angle)
+                }
             }
             "noise" => {
                 let e = ["on", "1", "true"].contains(&value_str.to_lowercase().as_str());
@@ -711,6 +771,250 @@ impl Shell {
         queue!(stdout, style::Print(format!("{}\n\r", result)))?;
         stdout.flush()?;
         Ok(())
+    }
+
+    fn cmd_get(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        if args.is_empty() {
+            queue!(stdout, style::Print(
+                "用法: get <voltage|current|angle|power|energy|frequency|power-factor|status-word>\n\r"
+            ))?;
+            stdout.flush()?;
+            return Ok(());
+        }
+        
+        let sub = args[0].to_lowercase();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
+        let snap = meter.snapshot();
+        
+        match sub.as_str() {
+            "voltage" | "volt" | "v" => {
+                // 计算线电压 (相电压 × √3)
+                let v_ab = (snap.phase_a.voltage * snap.phase_a.voltage 
+                    + snap.phase_b.voltage * snap.phase_b.voltage 
+                    - 2.0 * snap.phase_a.voltage * snap.phase_b.voltage * ((snap.phase_a.angle - snap.phase_b.angle) * std::f64::consts::PI / 180.0).cos()).sqrt();
+                let v_bc = (snap.phase_b.voltage * snap.phase_b.voltage 
+                    + snap.phase_c.voltage * snap.phase_c.voltage 
+                    - 2.0 * snap.phase_b.voltage * snap.phase_c.voltage * ((snap.phase_b.angle - snap.phase_c.angle) * std::f64::consts::PI / 180.0).cos()).sqrt();
+                let v_ca = (snap.phase_c.voltage * snap.phase_c.voltage 
+                    + snap.phase_a.voltage * snap.phase_a.voltage 
+                    - 2.0 * snap.phase_c.voltage * snap.phase_a.voltage * ((snap.phase_c.angle - snap.phase_a.angle) * std::f64::consts::PI / 180.0).cos()).sqrt();
+                
+                let output = format!(
+                    "\n\r┌────────────────────────────────────────┐\n\r\
+                     │           电压测量                     │\n\r\
+                     ├────────────────────────────────────────┤\n\r\
+                     │ 相位    相电压(V)    线电压(V)         │\n\r\
+                     ├────────────────────────────────────────┤\n\r\
+                     │ A        {:>8.2}      Uab: {:>8.2}     │\n\r\
+                     │ B        {:>8.2}      Ubc: {:>8.2}     │\n\r\
+                     │ C        {:>8.2}      Uca: {:>8.2}     │\n\r\
+                     └────────────────────────────────────────┘\n\r\n"
+                    , snap.phase_a.voltage, v_ab
+                    , snap.phase_b.voltage, v_bc
+                    , snap.phase_c.voltage, v_ca
+                );
+                queue!(stdout, style::Print(output))?;
+            }
+            "current" | "curr" | "i" => {
+                // 计算中性线电流 (简化为三相电流矢量和)
+                let i_n = ((snap.phase_a.current * (snap.phase_a.angle * std::f64::consts::PI / 180.0).cos()
+                    + snap.phase_b.current * (snap.phase_b.angle * std::f64::consts::PI / 180.0).cos()
+                    + snap.phase_c.current * (snap.phase_c.angle * std::f64::consts::PI / 180.0).cos()).powi(2)
+                    + (snap.phase_a.current * (snap.phase_a.angle * std::f64::consts::PI / 180.0).sin()
+                    + snap.phase_b.current * (snap.phase_b.angle * std::f64::consts::PI / 180.0).sin()
+                    + snap.phase_c.current * (snap.phase_c.angle * std::f64::consts::PI / 180.0).sin()).powi(2)).sqrt();
+                
+                let output = format!(
+                    "\n\r┌────────────────────────────────────────┐\n\r\
+                     │           电流测量                     │\n\r\
+                     ├────────────────────────────────────────┤\n\r\
+                     │ 相位    电流(A)                       │\n\r\
+                     ├────────────────────────────────────────┤\n\r\
+                     │ A        {:>8.3}                     │\n\r\
+                     │ B        {:>8.3}                     │\n\r\
+                     │ C        {:>8.3}                     │\n\r\
+                     │ N        {:>8.3}  (中性线)           │\n\r\
+                     └────────────────────────────────────────┘\n\r\n"
+                    , snap.phase_a.current
+                    , snap.phase_b.current
+                    , snap.phase_c.current
+                    , i_n
+                );
+                queue!(stdout, style::Print(output))?;
+            }
+            "angle" | "ang" | "a" => {
+                let output = format!(
+                    "\n\r┌────────────────────────────────────────┐\n\r\
+                     │           相角测量                     │\n\r\
+                     ├────────────────────────────────────────┤\n\r\
+                     │ 相位    角度(°)                       │\n\r\
+                     ├────────────────────────────────────────┤\n\r\
+                     │ A        {:>8.1}°                    │\n\r\
+                     │ B        {:>8.1}°                    │\n\r\
+                     │ C        {:>8.1}°                    │\n\r\
+                     └────────────────────────────────────────┘\n\r\
+                     注: 正常三相角度 A=0°, B=-120°, C=120°\n\r\n"
+                    , snap.phase_a.angle
+                    , snap.phase_b.angle
+                    , snap.phase_c.angle
+                );
+                queue!(stdout, style::Print(output))?;
+            }
+            "power" | "pow" | "p" => {
+                let output = format!(
+                    "\n\r┌────────────────────────────────────────────────┐\n\r\
+                     │                功率测量                        │\n\r\
+                     ├────────────────────────────────────────────────┤\n\r\
+                     │ 相位  有功(W)  无功(var)  视在(VA)    PF    │\n\r\
+                     ├────────────────────────────────────────────────┤\n\r\
+                     │ A    {:>7.1}  {:>8.1}  {:>8.1}  {:>5.3}│\n\r\
+                     │ B    {:>7.1}  {:>8.1}  {:>8.1}  {:>5.3}│\n\r\
+                     │ C    {:>7.1}  {:>8.1}  {:>8.1}  {:>5.3}│\n\r\
+                     ├────────────────────────────────────────────────┤\n\r\
+                     │ 总  {:>8.1}  {:>8.1}  {:>8.1}  {:>5.3}│\n\r\
+                     └────────────────────────────────────────────────┘\n\r\n"
+                    , snap.computed.p_a, snap.computed.q_a, snap.computed.s_a, snap.computed.pf_a
+                    , snap.computed.p_b, snap.computed.q_b, snap.computed.s_b, snap.computed.pf_b
+                    , snap.computed.p_c, snap.computed.q_c, snap.computed.s_c, snap.computed.pf_c
+                    , snap.computed.p_total, snap.computed.q_total, snap.computed.s_total, snap.computed.pf_total
+                );
+                queue!(stdout, style::Print(output))?;
+            }
+            "energy" | "en" | "e" => {
+                let output = format!(
+                    "\n\r┌────────────────────────────────────────┐\n\r\
+                     │           电能累计                     │\n\r\
+                     ├────────────────────────────────────────┤\n\r\
+                     │ 相位    有功(kWh)    无功(kvarh)      │\n\r\
+                     ├────────────────────────────────────────┤\n\r\
+                     │ A        {:>10.4}    {:>10.4}      │\n\r\
+                     │ B        {:>10.4}    {:>10.4}      │\n\r\
+                     │ C        {:>10.4}    {:>10.4}      │\n\r\
+                     ├────────────────────────────────────────┤\n\r\
+                     │ 总      {:>10.4}    {:>10.4}      │\n\r\
+                     └────────────────────────────────────────┘\n\r\n"
+                    , snap.energy.wh_a / 1000.0, snap.energy.varh_a / 1000.0
+                    , snap.energy.wh_b / 1000.0, snap.energy.varh_b / 1000.0
+                    , snap.energy.wh_c / 1000.0, snap.energy.varh_c / 1000.0
+                    , snap.energy.wh_total / 1000.0, snap.energy.varh_total / 1000.0
+                );
+                queue!(stdout, style::Print(output))?;
+            }
+            "frequency" | "freq" | "f" => {
+                let output = format!("\n\r  频率: {:.3} Hz\n\r\n", snap.freq);
+                queue!(stdout, style::Print(output))?;
+            }
+            "power-factor" | "pf" => {
+                let output = format!(
+                    "\n\r┌────────────────────────────────────────┐\n\r\
+                     │           功率因数                     │\n\r\
+                     ├────────────────────────────────────────┤\n\r\
+                     │ 相位    功率因数                      │\n\r\
+                     ├────────────────────────────────────────┤\n\r\
+                     │ A        {:>8.4}                    │\n\r\
+                     │ B        {:>8.4}                    │\n\r\
+                     │ C        {:>8.4}                    │\n\r\
+                     │ 总       {:>8.4}                    │\n\r\
+                     └────────────────────────────────────────┘\n\r\n"
+                    , snap.computed.pf_a
+                    , snap.computed.pf_b
+                    , snap.computed.pf_c
+                    , snap.computed.pf_total
+                );
+                queue!(stdout, style::Print(output))?;
+            }
+            "status-word" | "status" | "sw" => {
+                // 生成状态字
+                let sw = self.compute_status_word(&snap);
+                let mut output = format!(
+                    "\n\r┌────────────────────────────────────────┐\n\r\
+                     │           状态字分析                   │\n\r\
+                     ├────────────────────────────────────────┤\n\r\
+                     │ 状态字: 0x{:08X}                    │\n\r\
+                     ├────────────────────────────────────────┤\n\r"
+                    , sw
+                );
+                
+                // 解析各状态位
+                if sw == 0 {
+                    output.push_str("│ ✓ 所有参数正常                        │\n\r");
+                } else {
+                    if sw & 0x01 != 0 { output.push_str("│ ⚠ A相失压 (< 10V)                    │\n\r"); }
+                    if sw & 0x02 != 0 { output.push_str("│ ⚠ B相失压 (< 10V)                    │\n\r"); }
+                    if sw & 0x04 != 0 { output.push_str("│ ⚠ C相失压 (< 10V)                    │\n\r"); }
+                    if sw & 0x08 != 0 { output.push_str("│ ⚠ A相过压 (> 264V)                  │\n\r"); }
+                    if sw & 0x10 != 0 { output.push_str("│ ⚠ B相过压 (> 264V)                  │\n\r"); }
+                    if sw & 0x20 != 0 { output.push_str("│ ⚠ C相过压 (> 264V)                  │\n\r"); }
+                    if sw & 0x40 != 0 { output.push_str("│ ⚠ A相欠压 (< 198V)                  │\n\r"); }
+                    if sw & 0x80 != 0 { output.push_str("│ ⚠ B相欠压 (< 198V)                  │\n\r"); }
+                    if sw & 0x100 != 0 { output.push_str("│ ⚠ C相欠压 (< 198V)                  │\n\r"); }
+                    if sw & 0x200 != 0 { output.push_str("│ ⚠ A相过流 (> 60A)                   │\n\r"); }
+                    if sw & 0x400 != 0 { output.push_str("│ ⚠ B相过流 (> 60A)                   │\n\r"); }
+                    if sw & 0x800 != 0 { output.push_str("│ ⚠ C相过流 (> 60A)                   │\n\r"); }
+                    if sw & 0x1000 != 0 { output.push_str("│ ⚠ 电流不平衡 (> 20%)                │\n\r"); }
+                    if sw & 0x2000 != 0 { output.push_str("│ ⚠ 电压不平衡 (> 2%)                 │\n\r"); }
+                    if sw & 0x4000 != 0 { output.push_str("│ ⚠ 相序错误                          │\n\r"); }
+                    if sw & 0x8000 != 0 { output.push_str("│ ⚠ 反向功率                          │\n\r"); }
+                }
+                output.push_str("└────────────────────────────────────────┘\n\r\n");
+                queue!(stdout, style::Print(output))?;
+            }
+            _ => {
+                queue!(stdout, style::Print(format!("未知查询: {}\n\r", sub)))?;
+                queue!(stdout, style::Print("可用: voltage, current, angle, power, energy, frequency, power-factor, status-word\n\r"))?;
+            }
+        }
+        stdout.flush()?;
+        Ok(())
+    }
+    
+    /// 计算状态字
+    fn compute_status_word(&self, snap: &crate::MeterSnapshot) -> u32 {
+        let mut sw: u32 = 0;
+        
+        // 失压检测 (< 10V)
+        if snap.phase_a.voltage < 10.0 { sw |= 0x01; }
+        if snap.phase_b.voltage < 10.0 { sw |= 0x02; }
+        if snap.phase_c.voltage < 10.0 { sw |= 0x04; }
+        
+        // 过压检测 (> 264V, 220V+20%)
+        if snap.phase_a.voltage > 264.0 { sw |= 0x08; }
+        if snap.phase_b.voltage > 264.0 { sw |= 0x10; }
+        if snap.phase_c.voltage > 264.0 { sw |= 0x20; }
+        
+        // 欠压检测 (< 198V, 220V-10%)
+        if snap.phase_a.voltage < 198.0 && snap.phase_a.voltage >= 10.0 { sw |= 0x40; }
+        if snap.phase_b.voltage < 198.0 && snap.phase_b.voltage >= 10.0 { sw |= 0x80; }
+        if snap.phase_c.voltage < 198.0 && snap.phase_c.voltage >= 10.0 { sw |= 0x100; }
+        
+        // 过流检测 (> 60A 额定 1.2 倍 = 72A, 这里简化为 60A)
+        if snap.phase_a.current > 60.0 { sw |= 0x200; }
+        if snap.phase_b.current > 60.0 { sw |= 0x400; }
+        if snap.phase_c.current > 60.0 { sw |= 0x800; }
+        
+        // 电流不平衡检测 ((max-min)/avg > 20%)
+        let i_max = snap.phase_a.current.max(snap.phase_b.current).max(snap.phase_c.current);
+        let i_min = snap.phase_a.current.min(snap.phase_b.current).min(snap.phase_c.current);
+        let i_avg = (snap.phase_a.current + snap.phase_b.current + snap.phase_c.current) / 3.0;
+        if i_avg > 0.0 && (i_max - i_min) / i_avg > 0.2 { sw |= 0x1000; }
+        
+        // 电压不平衡检测 ((max-min)/avg > 2%)
+        let v_max = snap.phase_a.voltage.max(snap.phase_b.voltage).max(snap.phase_c.voltage);
+        let v_min = snap.phase_a.voltage.min(snap.phase_b.voltage).min(snap.phase_c.voltage);
+        let v_avg = (snap.phase_a.voltage + snap.phase_b.voltage + snap.phase_c.voltage) / 3.0;
+        if v_avg > 0.0 && (v_max - v_min) / v_avg > 0.02 { sw |= 0x2000; }
+        
+        // 相序错误检测 (角度不在正常范围)
+        // 正常情况下: A=0°, B≈-120°, C≈120° (允许 ±10° 偏差)
+        let a_ok = snap.phase_a.angle.abs() < 10.0;
+        let b_ok = (snap.phase_b.angle + 120.0).abs() < 10.0;
+        let c_ok = (snap.phase_c.angle - 120.0).abs() < 10.0;
+        if !(a_ok && b_ok && c_ok) { sw |= 0x4000; }
+        
+        // 反向功率检测
+        if snap.computed.p_total < 0.0 { sw |= 0x8000; }
+        
+        sw
     }
 
     fn cmd_energy(&self, stdout: &mut impl Write) -> Result<()> {
