@@ -215,6 +215,7 @@ impl Shell {
             "reset" => self.cmd_reset(stdout),
             "scenario" | "sc" => self.cmd_scenario(&parts[1..], stdout),
             "event" | "ev" | "events" => self.cmd_event(&parts[1..], stdout),
+            "freeze" => self.cmd_freeze(stdout),
             "watch" | "w" => {
                 self.cmd_watch(&parts[1..], stdout);
                 Ok(())
@@ -256,6 +257,11 @@ impl Shell {
             " get status              Status word\n\r",
             "\n\r",
             " status                  Full status table\n\r",
+            " get tou / tariff / demand / profile / freeze\n\r",
+            " set tou <preset>        Load TOU preset\n\r",
+            " set demand-reset         Reset max demand\n\r",
+            " set profile-interval <s> Load profile interval\n\r",
+            " freeze                   Manual freeze\n\r",
             " scenario <name>         Preset scenario\n\r",
             " event <type>            Inject event\n\r",
             " event list              Event history\n\r",
@@ -474,6 +480,36 @@ impl Shell {
                 meter.set_time_accel(a);
                 format!(" -> Accel: {:.0}x{}", a, nl())
             }
+            "tou" => {
+                let preset = match value_str.to_lowercase().as_str() {
+                    "single" | "1" => crate::tou::TouPreset::SingleRate,
+                    "two" | "2" => crate::tou::TouPreset::TwoRateTimeOfDay,
+                    "three" | "3" => crate::tou::TouPreset::ThreeRatePeakFlatValley,
+                    "four" | "4" => crate::tou::TouPreset::FourRatePeakFlatValleySharp,
+                    _ => {
+                        let out = format!(
+                            "  unknown preset: {} (single/two/three/four){}",
+                            value_str,
+                            nl()
+                        );
+                        queue!(stdout, style::Print(out))?;
+                        stdout.flush()?;
+                        return Ok(());
+                    }
+                };
+                meter.tou.load_preset(preset);
+                format!(" -> TOU preset: {:?}{}", preset, nl())
+            }
+            "demand-reset" => {
+                let clock = meter.clock;
+                meter.demand_calc.reset_max(&clock);
+                format!(" -> Max demand reset{}", nl())
+            }
+            "profile-interval" => {
+                let s: u32 = value_str.parse().unwrap_or(900);
+                meter.load_profile.set_interval(s);
+                format!(" -> Profile interval: {}s{}", s, nl())
+            }
             _ => format!("  unknown: {}{}", param, nl()),
         };
         queue!(stdout, style::Print(result))?;
@@ -654,6 +690,126 @@ impl Shell {
                     vec!["Total".into(), format!("{:.4}", snap.computed.pf_total)],
                 ],
             ),
+            "tou" => {
+                let m = &meter.tou;
+                let rate = m.current_rate();
+                let mut out = format!(
+                    " TOU Engine  Current: {} ({} changes){}",
+                    rate.label(),
+                    m.rate_change_count,
+                    nl()
+                );
+                if let Some(dp) = m.calendar.day_profiles.first() {
+                    out.push_str("\n\r Time Table:\n\r");
+                    for seg in &dp.segments {
+                        out.push_str(&format!(
+                            "   {:02}:{:02} -> {}{}",
+                            seg.start_hour,
+                            seg.start_min,
+                            seg.rate.label(),
+                            nl()
+                        ));
+                    }
+                }
+                out
+            }
+            "tariff" => {
+                let te = &meter.tariff_energy;
+                let rate_names = [
+                    "T1(Sharp)",
+                    "T2(Peak)",
+                    "T3(Normal)",
+                    "T4(Valley)",
+                    "T5",
+                    "T6",
+                    "T7",
+                    "T8",
+                ];
+                let mut rows = Vec::new();
+                for (i, &total) in te.active_total.iter().enumerate() {
+                    if total > 0.0 {
+                        rows.push(vec![rate_names[i].into(), format!("{:.4}", total / 1000.0)]);
+                    }
+                }
+                if rows.is_empty() {
+                    format!(" No tariff energy recorded{}", nl())
+                } else {
+                    simple_table(
+                        " Tariff Energy",
+                        &[12usize, 14usize],
+                        &["Rate", "kWh"],
+                        &rows,
+                    )
+                }
+            }
+            "demand" => {
+                let dc = &meter.demand_calc;
+                format!(
+                    " Demand  Current: {:.3} kW  Max: {:.3} kW{}",
+                    dc.current_demand_kw(),
+                    dc.max_demand_kw(),
+                    nl()
+                )
+            }
+            "profile" | "loadprofile" => {
+                let n = args
+                    .get(1)
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .unwrap_or(20);
+                let lp = &meter.load_profile;
+                let entries = lp.query_last(n);
+                if entries.is_empty() {
+                    format!(
+                        " No load profile entries (interval: {}s, captured: {}){}",
+                        lp.capture_interval_s,
+                        lp.capture_count,
+                        nl()
+                    )
+                } else {
+                    let mut out = format!(
+                        " Load Profile ({} entries, showing {}){}",
+                        lp.buffer.len(),
+                        entries.len(),
+                        nl()
+                    );
+                    for e in entries.iter().rev().take(n) {
+                        out.push_str(&format!("   {} |", e.timestamp.format("%m-%d %H:%M")));
+                        // Show P_total (index 9)
+                        if e.values.len() > 9 {
+                            out.push_str(&format!(" P={:.1}W", e.values[9]));
+                        }
+                        if e.values.len() > 15 {
+                            out.push_str(&format!(" F={:.1}Hz", e.values[15]));
+                        }
+                        out.push_str(nl());
+                    }
+                    out
+                }
+            }
+            "freeze" => {
+                let ftype_str = args.get(1).map(|s| s.to_lowercase());
+                let records = match ftype_str.as_deref() {
+                    Some("monthly") => &meter.freeze.monthly_records,
+                    _ => &meter.freeze.daily_records,
+                };
+                if records.is_empty() {
+                    format!(" No freeze records{}", nl())
+                } else {
+                    let mut out = format!(" Freeze Records ({}){}", records.len(), nl());
+                    for r in records.iter().rev().take(20) {
+                        out.push_str(&format!(
+                            "   {} | {:?} | Wh={:.2} | Demand={:.3}kW{}
+\r",
+                            r.timestamp.format("%Y-%m-%d %H:%M"),
+                            r.freeze_type,
+                            r.energy.total_active_import_wh,
+                            r.demand.max_demand_kw,
+                            nl()
+                        ));
+                    }
+                    out
+                }
+            }
             "status-word" | "status" | "sw" => {
                 let sw = self.compute_status_word(&snap);
                 if sw == 0 {
@@ -792,6 +948,48 @@ impl Shell {
         let mut meter = self.meter.lock().expect("mutex poisoned");
         meter.trigger_event(ev);
         let out = format!(" -> event: {}{}", format!("{:?}", ev).to_lowercase(), nl());
+        queue!(stdout, style::Print(out))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_freeze(&self, stdout: &mut impl Write) -> Result<()> {
+        use crate::freeze::{DemandSnapshot, EnergySnapshot, FreezeRecord, FreezeType};
+        let mut meter = self.meter.lock().expect("mutex poisoned");
+        let clock = meter.clock;
+        let energy_wh_total = meter.energy().wh_total;
+        let energy_varh_total = meter.energy().varh_total;
+        let max_demand_kw = meter.demand_calc.max_demand_kw();
+        let max_demand_time = meter.demand_calc.max_demand_timestamp;
+        let phase_max = meter.demand_calc.phase_max_demand_w;
+        let record = FreezeRecord {
+            freeze_type: FreezeType::OnDemand,
+            timestamp: clock,
+            energy: EnergySnapshot {
+                active_import_wh: meter.tariff_energy.active_total,
+                active_export_wh: 0.0,
+                reactive_import_varh: meter.tariff_energy.reactive_total,
+                reactive_export_varh: 0.0,
+                total_active_import_wh: energy_wh_total,
+                total_reactive_import_varh: energy_varh_total,
+            },
+            demand: DemandSnapshot {
+                max_demand_kw,
+                max_demand_time,
+                max_demand_phase_kw: [
+                    phase_max[0] / 1000.0,
+                    phase_max[1] / 1000.0,
+                    phase_max[2] / 1000.0,
+                ],
+            },
+            voltage: [0.0; 3],
+            current: [0.0; 3],
+            power_factor: 0.0,
+            status_word: 0,
+            tariff_rate: 0,
+        };
+        meter.freeze.do_freeze(FreezeType::OnDemand, record);
+        let out = format!(" -> manual freeze executed{}", nl());
         queue!(stdout, style::Print(out))?;
         stdout.flush()?;
         Ok(())

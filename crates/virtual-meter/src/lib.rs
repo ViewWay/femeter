@@ -1,4 +1,4 @@
-//! 虚拟电表 - 跨平台桌面虚拟电表 (v1.0)
+//! 虚拟电表 - 跨平台桌面虚拟电表 (v2.0)
 //!
 //! 模拟 ATT7022E / RN8302B 计量芯片，支持：
 //! - 三相电压/电流/相角设置
@@ -19,22 +19,35 @@
 //! - 状态持久化
 //! - TCP 服务器
 //! - IEC 62056-21 红外协议
+//!
+//! v2.0 新增:
+//! - ADC 采样仿真 (adc.rs)
+//! - 脉冲累计 (pulse.rs)
+//! - ATT7022E 寄存器模型 (registers.rs)
+//! - 真实计量引擎 (meter.rs 重写)
 
+pub mod adc;
 pub mod calibration;
 pub mod demand;
+pub mod demand_new;
 pub mod display;
 pub mod dlms;
+pub mod freeze;
 pub mod html_report;
 pub mod iec62056;
 pub mod load_profile;
 mod meter;
 pub mod persistence;
+pub mod profile;
 mod protocol;
+mod pulse;
+pub mod registers;
 mod serial;
 mod shell;
 pub mod statistics;
 pub mod tariff;
 pub mod tcp_server;
+pub mod tou;
 
 pub use dlms::{create_dlms_processor, DlmsProcessor};
 pub use meter::*;

@@ -1,9 +1,140 @@
 //! 校准参数
 //!
 //! 比例系数, 相位补偿, 脉冲常数, ATT7022E 校准寄存器模拟
+//!
+//! v2.0 新增:
+//! - PhaseCalibration: 单相校表系数 (增益/偏移/相角误差)
+//! - CalibrationData: 完整校表数据 (三相 + 脉冲常数 + 启动电流 + 潜动阈值)
 
 use serde::{Deserialize, Serialize};
 
+/// 单相校表系数
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct PhaseCalibration {
+    /// 电压增益误差 (1.0 = 无误差)
+    pub voltage_gain: f64,
+    /// 电压偏移 (V)
+    pub voltage_offset: f64,
+    /// 电流增益误差
+    pub current_gain: f64,
+    /// 电流偏移 (A)
+    pub current_offset: f64,
+    /// 相角误差 (度)
+    pub phase_angle_error: f64,
+    /// 功率增益误差
+    pub power_gain: f64,
+}
+
+impl Default for PhaseCalibration {
+    fn default() -> Self {
+        Self {
+            voltage_gain: 1.0,
+            voltage_offset: 0.0,
+            current_gain: 1.0,
+            current_offset: 0.0,
+            phase_angle_error: 0.0,
+            power_gain: 1.0,
+        }
+    }
+}
+
+impl PhaseCalibration {
+    /// 应用校准到电压测量值
+    pub fn calibrate_voltage(&self, raw: f64) -> f64 {
+        raw * self.voltage_gain + self.voltage_offset
+    }
+
+    /// 应用校准到电流测量值
+    pub fn calibrate_current(&self, raw: f64) -> f64 {
+        raw * self.current_gain + self.current_offset
+    }
+
+    /// 应用校准到相角
+    pub fn calibrate_angle(&self, raw: f64) -> f64 {
+        raw + self.phase_angle_error
+    }
+
+    /// 应用校准到功率
+    pub fn calibrate_power(&self, raw: f64) -> f64 {
+        raw * self.power_gain
+    }
+
+    /// 重置为默认值
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+}
+
+/// 完整校表数据
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalibrationData {
+    /// 三相校表系数 [A, B, C]
+    pub phases: [PhaseCalibration; 3],
+    /// 脉冲常数 (imp/kWh), 默认 3200
+    pub pulse_constant: u32,
+    /// 电表常数 (rounds/kWh)
+    pub meter_constant: f64,
+    /// 启动电流 (mA), 默认 0.4%Ib (Ib=10A -> 40mA)
+    pub start_current_ma: f64,
+    /// 潜动阈值 (W), 无电压时电流低于此值不计电能
+    pub creep_threshold_w: f64,
+}
+
+impl Default for CalibrationData {
+    fn default() -> Self {
+        Self {
+            phases: [PhaseCalibration::default(); 3],
+            pulse_constant: 3200,
+            meter_constant: 1.0,
+            start_current_ma: 40.0, // 0.4% * 10A = 40mA
+            creep_threshold_w: 1.0,
+        }
+    }
+}
+
+impl CalibrationData {
+    /// 创建新的校表数据
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// 获取指定相的校表系数
+    pub fn phase(&self, index: usize) -> &PhaseCalibration {
+        &self.phases[index.min(2)]
+    }
+
+    /// 获取可变指定相的校表系数
+    pub fn phase_mut(&mut self, index: usize) -> &mut PhaseCalibration {
+        &mut self.phases[index.min(2)]
+    }
+
+    /// 设置脉冲常数
+    pub fn set_pulse_constant(&mut self, c: u32) {
+        self.pulse_constant = c;
+    }
+
+    /// 设置启动电流 (mA)
+    pub fn set_start_current(&mut self, ma: f64) {
+        self.start_current_ma = ma;
+    }
+
+    /// 设置潜动阈值 (W)
+    pub fn set_creep_threshold(&mut self, w: f64) {
+        self.creep_threshold_w = w;
+    }
+
+    /// 获取启动电流 (A)
+    pub fn start_current_a(&self) -> f64 {
+        self.start_current_ma / 1000.0
+    }
+
+    /// 重置所有校表参数
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+}
+
+/// 旧版校准参数 (兼容性保留)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CalibrationParams {
     /// 电压比例系数 (V/V)
