@@ -99,13 +99,17 @@ fn handle_dlms_client(
         };
 
         // Feed bytes into frame assembler
+        let mut escaped = false;
         for &b in &buf[..n] {
             match b {
                 0x7E => {
                     if !frame_buf.is_empty() {
-                        // End of frame detected
-                        let frame = std::mem::take(&mut frame_buf);
-                        // Process the HDLC frame
+                        // End of frame detected — wrap with flags for HdlcFrame::decode
+                        let mut frame = Vec::with_capacity(frame_buf.len() + 2);
+                        frame.push(0x7E);
+                        frame.extend_from_slice(&frame_buf);
+                        frame.push(0x7E);
+                        frame_buf.clear();
                         match processor.process_hdlc(&frame) {
                             Ok(response) => {
                                 let _ = stream.write_all(&response);
@@ -116,15 +120,18 @@ fn handle_dlms_client(
                             }
                         }
                     }
-                    // Start of new frame (or inter-frame marker)
+                    escaped = false;
                 }
                 0x7D => {
-                    // Escape marker — next byte will be handled specially
-                    // For now, just buffer it and let the processor handle
-                    frame_buf.push(b);
+                    escaped = true;
                 }
                 _ => {
-                    frame_buf.push(b);
+                    if escaped {
+                        frame_buf.push(b ^ 0x20);
+                        escaped = false;
+                    } else {
+                        frame_buf.push(b);
+                    }
                 }
             }
         }

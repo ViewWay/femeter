@@ -139,7 +139,7 @@ impl DlmsProcessor {
             return Err(anyhow!("empty APDU"));
         }
         match apdu[0] {
-            0xE0 => self.handle_association(apdu),
+            0x60 | 0xE0 => self.handle_association(apdu),
             0x80 => Ok(vec![0x81, 0x00, 0x00]), // RLRE accepted
             0xC0 | 0xC1 => self.handle_get_request(apdu),
             0xD0 | 0xD1 => self.handle_set_request(apdu),
