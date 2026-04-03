@@ -65,9 +65,9 @@ pub fn calculate_thd(harmonics: &[f32], fundamental_idx: usize, count: usize) ->
         return 0.0;
     }
     let mut sum_sq: f32 = 0.0;
-    for i in 0..count {
+    for (i, &h) in harmonics.iter().enumerate().take(count) {
         if i != fundamental_idx {
-            sum_sq += harmonics[i] * harmonics[i];
+            sum_sq += h * h;
         }
     }
     (sum_sq.sqrt() / fundamental) * 100.0
@@ -82,9 +82,9 @@ pub fn analyze_harmonics(harmonic_amplitudes: &[f32; MAX_HARMONIC_ORDER]) -> Har
     if fundamental.abs() < 1e-10 {
         return result;
     }
-    for i in 0..MAX_HARMONIC_ORDER {
+    for (i, &amp) in harmonic_amplitudes.iter().enumerate() {
         result.harmonics[i] = if fundamental.abs() > 1e-10 {
-            (harmonic_amplitudes[i].abs() / fundamental.abs()) * 100.0
+            (amp.abs() / fundamental.abs()) * 100.0
         } else {
             0.0
         };
@@ -96,21 +96,16 @@ pub fn analyze_harmonics(harmonic_amplitudes: &[f32; MAX_HARMONIC_ORDER]) -> Har
 // ── 电压暂降/暂升检测 (GB/T 30137) ──
 
 /// 电压事件类型
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[repr(u8)]
 pub enum VoltageEventType {
+    #[default]
     Normal = 0,
     Sag = 1,          // 电压暂降
     Swell = 2,        // 电压暂升
     Interruption = 3, // 电压中断 (<10% Un)
     Overvoltage = 4,  // 持续过压
     Undervoltage = 5, // 持续欠压
-}
-
-impl Default for VoltageEventType {
-    fn default() -> Self {
-        VoltageEventType::Normal
-    }
 }
 
 /// 电压暂降/暂升事件
@@ -159,8 +154,8 @@ impl VoltageEventDetector {
     /// * `timestamp_ms` - 当前时间戳 ms
     pub fn check(&mut self, voltages: [u16; 3], timestamp_ms: u32) -> Option<VoltageEvent> {
         let mut result = None;
-        for phase in 0..3 {
-            let pu = voltages[phase] as f32 / self.rated_voltage as f32;
+        for (phase, &v) in voltages.iter().enumerate() {
+            let pu = v as f32 / self.rated_voltage as f32;
             let new_type = if pu < 0.10 {
                 VoltageEventType::Interruption
             } else if pu < SAG_THRESHOLD_PU {
@@ -279,8 +274,7 @@ impl FlickerAnalyzer {
         if self.pst_count == 0 {
             return 0.0;
         }
-        let avg = self.pst_sum / self.pst_count as f32;
-        avg
+        self.pst_sum / self.pst_count as f32
     }
 
     /// 获取长期闪变严重度 Plt (立方根平均)
@@ -360,10 +354,11 @@ pub fn calculate_unbalance(values: [f32; 3]) -> UnbalanceResult {
 // ── 功率因数校正建议 ──
 
 /// 功率因数校正建议
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(u8)]
 pub enum PfCorrectionAdvice {
     /// 功率因数优秀, 无需校正
+    #[default]
     Excellent = 0,
     /// 功率因数良好, 建议监控
     Good = 1,
@@ -375,14 +370,8 @@ pub enum PfCorrectionAdvice {
     OverCompensated = 4,
 }
 
-impl Default for PfCorrectionAdvice {
-    fn default() -> Self {
-        PfCorrectionAdvice::Excellent
-    }
-}
-
 /// 功率因数分析结果
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct PfAnalysis {
     /// 总功率因数
     pub pf_total: f32,
@@ -396,6 +385,19 @@ pub struct PfAnalysis {
     pub advice: PfCorrectionAdvice,
     /// 建议补偿容量 (kvar, 近似)
     pub suggested_kvar: f32,
+}
+
+impl Default for PfAnalysis {
+    fn default() -> Self {
+        Self {
+            pf_total: 0.0,
+            pf_a: 0.0,
+            pf_b: 0.0,
+            pf_c: 0.0,
+            advice: PfCorrectionAdvice::default(),
+            suggested_kvar: 0.0,
+        }
+    }
 }
 
 /// 分析功率因数并给出校正建议
@@ -446,9 +448,10 @@ pub fn analyze_power_factor(pf_values: [u16; 4], active_power_kw: f32) -> PfAnal
 // ── 电能质量事件记录 ──
 
 /// 电能质量事件类别
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(u8)]
 pub enum PowerQualityEventType {
+    #[default]
     None = 0,
     VoltageSag = 1,
     VoltageSwell = 2,
@@ -458,12 +461,6 @@ pub enum PowerQualityEventType {
     FlickerExceed = 6,
     LowPowerFactor = 7,
     FrequencyDeviation = 8,
-}
-
-impl Default for PowerQualityEventType {
-    fn default() -> Self {
-        PowerQualityEventType::None
-    }
 }
 
 /// 电能质量事件记录
@@ -515,7 +512,7 @@ impl PowerQualityMonitor {
     pub fn check(
         &mut self,
         voltages: [u16; 3],
-        currents: [u16; 3],
+        _currents: [u16; 3],
         pf_total: u16,
         frequency: u16,
         timestamp: u32,
@@ -523,7 +520,10 @@ impl PowerQualityMonitor {
         let mut found = Vec::new();
 
         // 1. 电压暂降/暂升
-        if let Some(ve) = self.voltage_detector.check(voltages, timestamp * 1000) {
+        if let Some(ve) = self
+            .voltage_detector
+            .check(voltages, timestamp.wrapping_mul(1000))
+        {
             let pqe = PowerQualityEvent {
                 event_type: match ve.event_type {
                     VoltageEventType::Sag => PowerQualityEventType::VoltageSag,

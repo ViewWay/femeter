@@ -252,7 +252,7 @@ impl CosemClass for TariffSchedule {
                     })
                 }
             }
-            3 | 4 | 5 => Err(CosemError::ReadOnly), // profiles managed via methods
+            3..=5 => Err(CosemError::ReadOnly), // profiles managed via methods
             6 => {
                 if let DlmsType::Boolean(active) = value {
                     self.active = active;

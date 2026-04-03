@@ -144,14 +144,24 @@ pub struct UpgradeInfo {
     pub history: [UpgradeRecord; 8],
 }
 
+/* ── OTA 错误 ── */
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OtaError {
+    FlashReadFailed,
+    FlashWriteFailed,
+    FlashEraseFailed,
+    InvalidBank,
+}
+
 /* ── Flash 操作 trait ── */
 
 pub trait OtaFlash {
-    fn flash_read(addr: u32, buf: &mut [u8]) -> Result<(), ()>;
-    fn flash_write(addr: u32, data: &[u8]) -> Result<(), ()>;
-    fn flash_erase_sector(addr: u32) -> Result<(), ()>;
+    fn flash_read(addr: u32, buf: &mut [u8]) -> Result<(), OtaError>;
+    fn flash_write(addr: u32, data: &[u8]) -> Result<(), OtaError>;
+    fn flash_erase_sector(addr: u32) -> Result<(), OtaError>;
     fn get_active_bank() -> u8;
-    fn set_boot_bank(bank: u8) -> Result<(), ()>;
+    fn set_boot_bank(bank: u8) -> Result<(), OtaError>;
     fn system_reset() -> !;
 }
 
@@ -163,6 +173,12 @@ pub struct OtaManager<F: OtaFlash> {
     received_bytes: u32,
     upgrade_info: UpgradeInfo,
     running_crc: u32,
+}
+
+impl<F: OtaFlash> Default for OtaManager<F> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<F: OtaFlash> OtaManager<F> {
@@ -204,9 +220,9 @@ impl<F: OtaFlash> OtaManager<F> {
         &self.upgrade_info.history
     }
 
-    pub fn start_receive(&mut self) -> Result<(), ()> {
+    pub fn start_receive(&mut self) -> Result<(), OtaError> {
         if self.state != OtaState::Idle {
-            return Err(());
+            return Err(OtaError::FlashWriteFailed);
         }
         self.state = OtaState::Receiving;
         self.received_bytes = 0;
@@ -214,13 +230,13 @@ impl<F: OtaFlash> OtaManager<F> {
         Ok(())
     }
 
-    pub fn write_chunk(&mut self, offset: u32, data: &[u8]) -> Result<(), ()> {
+    pub fn write_chunk(&mut self, offset: u32, data: &[u8]) -> Result<(), OtaError> {
         if self.state != OtaState::Receiving {
-            return Err(());
+            return Err(OtaError::FlashWriteFailed);
         }
         let write_addr = addr::OTA_START + offset;
         if write_addr + data.len() as u32 > addr::OTA_START + addr::OTA_SIZE {
-            return Err(());
+            return Err(OtaError::FlashWriteFailed);
         }
         let sector_start = write_addr & !0x0FFF;
         let sector_end = (write_addr + data.len() as u32 - 1) & !0x0FFF;
@@ -334,7 +350,7 @@ impl<F: OtaFlash> OtaManager<F> {
         Ok(self.state)
     }
 
-    pub fn rollback(&mut self) -> Result<(), ()> {
+    pub fn rollback(&mut self) -> Result<(), OtaError> {
         let rollback_bank = if self.upgrade_info.active_bank == 1 {
             2
         } else {
@@ -388,19 +404,19 @@ mod tests {
 
     struct MockFlash;
     impl OtaFlash for MockFlash {
-        fn flash_read(_a: u32, _b: &mut [u8]) -> Result<(), ()> {
+        fn flash_read(_a: u32, _b: &mut [u8]) -> Result<(), OtaError> {
             Ok(())
         }
-        fn flash_write(_a: u32, _b: &[u8]) -> Result<(), ()> {
+        fn flash_write(_a: u32, _b: &[u8]) -> Result<(), OtaError> {
             Ok(())
         }
-        fn flash_erase_sector(_a: u32) -> Result<(), ()> {
+        fn flash_erase_sector(_a: u32) -> Result<(), OtaError> {
             Ok(())
         }
         fn get_active_bank() -> u8 {
             1
         }
-        fn set_boot_bank(_b: u8) -> Result<(), ()> {
+        fn set_boot_bank(_b: u8) -> Result<(), OtaError> {
             Ok(())
         }
         fn system_reset() -> ! {

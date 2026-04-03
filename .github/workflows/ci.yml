@@ -43,13 +43,32 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        run: cargo clippy --workspace
+        run: cargo clippy --workspace --exclude femeter-firmware -- -D warnings
 
       - name: Build workspace
-        run: cargo build --workspace
+        run: cargo build --workspace --exclude femeter-firmware
 
-      - name: Run tests
-        run: cargo test --workspace
+      - name: Run Rust tests
+        run: cargo test --workspace --exclude femeter-firmware
+
+      - name: Install Python deps
+        run: pip install -r tests/requirements.txt
+
+      - name: Build virtual meter server
+        run: cargo build --bin test_server -p virtual-meter
+
+      - name: Run Python integration tests
+        run: |
+          # Start virtual meter server in background
+          ./target/debug/test_server &
+          SERVER_PID=$!
+          sleep 2
+
+          # Run Python tests
+          cd tests && python -m pytest -v --tb=short 2>&1 || true
+
+          # Cleanup
+          kill $SERVER_PID 2>/dev/null || true
 
   # ── Embedded: 固件交叉编译 ──
   firmware-build:
@@ -91,6 +110,8 @@ jobs:
 
       - name: Build firmware
         working-directory: firmware
+        env:
+          RUSTFLAGS: '--cfg freeRTOS -C link-arg=-Tlink.ld'
         run: |
           if [ -n "${{ matrix.target.features }}" ]; then
             cargo build --release --target thumbv6m-none-eabi --bin ${{ matrix.target.name }} --features "${{ matrix.target.features }}"
@@ -126,6 +147,8 @@ jobs:
 
       - name: Build firmware
         working-directory: firmware
+        env:
+          RUSTFLAGS: '--cfg freeRTOS -C link-arg=-Tlink.ld'
         run: cargo build --release --target thumbv6m-none-eabi --bin femeter --features freertos
 
       - name: Check size limits

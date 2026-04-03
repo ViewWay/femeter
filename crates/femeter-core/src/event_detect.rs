@@ -99,7 +99,7 @@ pub struct EventLogEntry {
 
 /* ── 每相异常持续跟踪 ── */
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 struct PhaseTracker {
     over_voltage_ticks: u16,
     under_voltage_ticks: u16,
@@ -111,23 +111,9 @@ struct PhaseTracker {
     over_current_active: bool,
 }
 
-impl Default for PhaseTracker {
-    fn default() -> Self {
-        Self {
-            over_voltage_ticks: 0,
-            under_voltage_ticks: 0,
-            lost_voltage_ticks: 0,
-            over_current_ticks: 0,
-            over_voltage_active: false,
-            under_voltage_active: false,
-            lost_voltage_active: false,
-            over_current_active: false,
-        }
-    }
-}
-
 /* ── 单相检查, 返回新事件位图 ── */
 
+#[allow(clippy::too_many_arguments)]
 fn check_phase(
     tracker: &mut PhaseTracker,
     voltage: u16,
@@ -211,6 +197,12 @@ pub struct EventDetector {
     event_log_pos: usize,
     pending_events: u32,
     system_timestamp: u32,
+}
+
+impl Default for EventDetector {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EventDetector {
@@ -313,7 +305,7 @@ impl EventDetector {
             self.reverse_power_active = true;
             self.log_event(
                 MeterEvent::ReversePower,
-                data.active_power_total.unsigned_abs() as u32,
+                data.active_power_total.unsigned_abs(),
                 1,
             );
             new_events |= 1 << (MeterEvent::ReversePower as u8);

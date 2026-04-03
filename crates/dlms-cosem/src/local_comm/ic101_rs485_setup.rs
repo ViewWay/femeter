@@ -111,7 +111,7 @@ impl CosemClass for Rs485PortSetup {
                 })?;
                 Ok(())
             }
-            3 | 4 | 5 => Ok(()), // simplified
+            3..=5 => Ok(()), // simplified
             7 => {
                 if let DlmsType::Boolean(h) = value {
                     self.half_duplex = h;

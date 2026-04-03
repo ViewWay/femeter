@@ -124,7 +124,7 @@ impl CosemClass for InfraredPortSetup {
                 })?;
                 Ok(())
             }
-            3 | 4 | 5 => Ok(()), // simplified
+            3..=5 => Ok(()), // simplified
             _ => Err(CosemError::NoSuchAttribute(id)),
         }
     }

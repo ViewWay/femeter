@@ -60,7 +60,7 @@ pub struct MonthStatistics {
     pub pf: StatRecord,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Statistics {
     pub daily: Vec<DayStatistics>,
     pub monthly: Vec<MonthStatistics>,
@@ -68,19 +68,9 @@ pub struct Statistics {
     last_month: String,
 }
 
-impl Default for Statistics {
-    fn default() -> Self {
-        Self {
-            daily: Vec::new(),
-            monthly: Vec::new(),
-            last_date: String::new(),
-            last_month: String::new(),
-        }
-    }
-}
-
 impl Statistics {
     /// 采样更新
+    #[allow(clippy::too_many_arguments)]
     pub fn sample(
         &mut self,
         va: f64,

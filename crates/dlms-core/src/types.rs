@@ -3,6 +3,7 @@
 //! Reference: Green Book Ed.9 §9.5, Blue Book Part 2 §2
 
 use alloc::vec::Vec;
+#[cfg(feature = "std")]
 use core::fmt;
 
 /// A-XDR tag byte for each COSEM data type

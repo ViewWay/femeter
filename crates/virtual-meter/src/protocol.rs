@@ -54,7 +54,12 @@ impl ProtocolHandler {
             return "ERR READ requires address".to_string();
         }
 
-        let addr = match u16::from_str_radix(args[0], 16) {
+        let addr_str = if args[0].starts_with("0x") || args[0].starts_with("0X") {
+            &args[0][2..]
+        } else {
+            args[0]
+        };
+        let addr = match u16::from_str_radix(addr_str, 16) {
             Ok(v) => v,
             Err(_) => return format!("ERR invalid address: {}", args[0]),
         };
@@ -70,12 +75,22 @@ impl ProtocolHandler {
             return "ERR WRITE requires address and data".to_string();
         }
 
-        let addr = match u16::from_str_radix(args[0], 16) {
+        let addr_str = if args[0].starts_with("0x") || args[0].starts_with("0X") {
+            &args[0][2..]
+        } else {
+            args[0]
+        };
+        let addr = match u16::from_str_radix(addr_str, 16) {
             Ok(v) => v,
             Err(_) => return format!("ERR invalid address: {}", args[0]),
         };
 
-        let _data = match u32::from_str_radix(args[1], 16) {
+        let data_str = if args[1].starts_with("0x") || args[1].starts_with("0X") {
+            &args[1][2..]
+        } else {
+            args[1]
+        };
+        let _data = match u32::from_str_radix(data_str, 16) {
             Ok(v) => v,
             Err(_) => return format!("ERR invalid data: {}", args[1]),
         };

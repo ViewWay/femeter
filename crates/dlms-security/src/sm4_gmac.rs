@@ -158,8 +158,8 @@ fn bytes_from_u32s(words: &[u32; 4]) -> [u8; 16] {
 /// XOR two 16-byte blocks
 fn xor_blocks(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
     let mut result = [0u8; 16];
-    for i in 0..16 {
-        result[i] = a[i] ^ b[i];
+    for (i, (ai, bi)) in a.iter().zip(b).enumerate() {
+        result[i] = ai ^ bi;
     }
     result
 }
@@ -180,9 +180,9 @@ fn gf128_mul(x: &[u8; 16], y: &[u8; 16]) -> [u8; 16] {
     let mut z = [0u8; 16];
     let mut v = *y;
 
-    for i in 0..16 {
+    for byte in x.iter() {
         for bit in 0..8 {
-            if (x[i] >> (7 - bit)) & 1 == 1 {
+            if (*byte >> (7 - bit)) & 1 == 1 {
                 z = xor_blocks(&z, &v);
             }
             let carry = (v[15] & 1) != 0;
@@ -226,7 +226,7 @@ pub fn sm4_gmac(key: &[u8; SM4_KEY_SIZE], iv: &[u8; 8], data: &[u8]) -> [u8; GMA
     let padded_len = if data.is_empty() {
         0
     } else {
-        ((data.len() + 15) / 16) * 16
+        data.len().div_ceil(16) * 16
     };
     let mut padded = alloc::vec![0u8; padded_len];
     padded[..data.len()].copy_from_slice(data);
@@ -319,7 +319,7 @@ pub fn sm4_gcm_encrypt(
     let aad_padded_len = if aad.is_empty() {
         0
     } else {
-        ((aad.len() + 15) / 16) * 16
+        aad.len().div_ceil(16) * 16
     };
     let mut aad_padded = alloc::vec![0u8; aad_padded_len];
     aad_padded[..aad.len()].copy_from_slice(aad);
@@ -333,7 +333,7 @@ pub fn sm4_gcm_encrypt(
     let ct_padded_len = if ciphertext.is_empty() {
         0
     } else {
-        ((ciphertext.len() + 15) / 16) * 16
+        ciphertext.len().div_ceil(16) * 16
     };
     let mut ct_padded = alloc::vec![0u8; ct_padded_len];
     ct_padded[..ciphertext.len()].copy_from_slice(&ciphertext);
@@ -421,7 +421,7 @@ fn sm4_gmac_with_aad(
     let mut y = [0u8; 16];
 
     // Process AAD
-    let aad_pad = ((aad.len() + 15) / 16) * 16;
+    let aad_pad = aad.len().div_ceil(16) * 16;
     let mut buf = alloc::vec![0u8; aad_pad.max(1)];
     buf[..aad.len()].copy_from_slice(aad);
     for chunk in buf.chunks_exact(16) {
@@ -431,7 +431,7 @@ fn sm4_gmac_with_aad(
     }
 
     // Process data
-    let data_pad = ((data.len() + 15) / 16) * 16;
+    let data_pad = data.len().div_ceil(16) * 16;
     buf = alloc::vec![0u8; data_pad.max(1)];
     buf[..data.len()].copy_from_slice(data);
     for chunk in buf.chunks_exact(16) {

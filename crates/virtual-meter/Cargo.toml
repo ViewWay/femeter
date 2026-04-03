@@ -23,6 +23,7 @@ dlms-asn1 = { path = "../dlms-asn1", features = ["std"] }
 dlms-hdlc = { path = "../dlms-hdlc", features = ["std"] }
 dlms-apdu = { path = "../dlms-apdu", features = ["std"] }
 dlms-obis = { path = "../dlms-obis", features = ["std"] }
+femeter-core = { path = "../femeter-core" }
 
 [features]
 default = []

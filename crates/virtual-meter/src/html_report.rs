@@ -246,7 +246,7 @@ pub fn generate_html_report(data: &ReportData) -> String {
     html.push_str("</style></head><body>");
 
     html.push_str("<div class='container'>");
-    html.push_str(&format!("<h1>电表运行报告</h1>"));
+    html.push_str("<h1>电表运行报告</h1>");
     html.push_str(&format!(
         "<div class='meta'>表号: <strong>{}</strong> | 报告时间: <strong>{}</strong></div>",
         data.meter_id, data.report_time

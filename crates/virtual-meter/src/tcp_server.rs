@@ -25,7 +25,6 @@ const CLIENT_TIMEOUT_SECS: u64 = 300;
 #[allow(dead_code)]
 const HEARTBEAT_INTERVAL_SECS: u64 = 60;
 #[allow(dead_code)]
-
 pub struct TcpServer {
     meter: MeterHandle,
     running: Arc<AtomicBool>,

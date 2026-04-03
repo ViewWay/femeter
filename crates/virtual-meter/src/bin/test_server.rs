@@ -7,7 +7,6 @@
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::process;
 use std::sync::Arc;
 use std::thread;
 use virtual_meter::{create_dlms_processor, create_meter, tcp_server::TcpServer};

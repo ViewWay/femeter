@@ -26,6 +26,9 @@ use std::sync::{Arc, Mutex};
 use crate::demand::DemandMeter;
 use crate::statistics::Statistics;
 use crate::tariff::TouManager;
+use femeter_core::load_forecast::LoadForecaster;
+use femeter_core::power_quality::PowerQualityMonitor;
+use femeter_core::tamper_detection::TamperDetector;
 
 /// 全局日志开关
 static LOG_ENABLED: AtomicBool = AtomicBool::new(true);
@@ -279,6 +282,12 @@ pub struct VirtualMeter {
     demand: DemandMeter,
     /// 统计记录
     statistics: Statistics,
+    /// 电能质量监测
+    pq_monitor: PowerQualityMonitor,
+    /// 负荷预测
+    load_forecaster: LoadForecaster,
+    /// 防窃电检测
+    tamper_detector: TamperDetector,
 }
 
 impl Default for VirtualMeter {
@@ -306,6 +315,9 @@ impl VirtualMeter {
             tou: TouManager::default(),
             demand: DemandMeter::default(),
             statistics: Statistics::default(),
+            pq_monitor: PowerQualityMonitor::new(22000),
+            load_forecaster: LoadForecaster::new(),
+            tamper_detector: TamperDetector::new(22000, 10000),
         }
     }
 
@@ -757,6 +769,47 @@ impl VirtualMeter {
             self.config.freq,
             pf,
         );
+
+        // Power quality monitoring
+        let voltages = [
+            (self.phase_a.voltage * 100.0) as u16,
+            (self.phase_b.voltage * 100.0) as u16,
+            (self.phase_c.voltage * 100.0) as u16,
+        ];
+        let currents_pq = [
+            (self.phase_a.current * 100.0) as u16,
+            (self.phase_b.current * 100.0) as u16,
+            (self.phase_c.current * 100.0) as u16,
+        ];
+        let pf_u16 = (pf * 10000.0) as u16;
+        let freq_u16 = (self.config.freq * 100.0) as u16;
+        let ts = Utc::now().timestamp() as u32;
+        let pq_events = self
+            .pq_monitor
+            .check(voltages, currents_pq, pf_u16, freq_u16, ts);
+        if !pq_events.is_empty() {
+            vm_log!("PQ events detected: {}", pq_events.len());
+        }
+
+        // Load forecast
+        self.load_forecaster.update(p_total as f32);
+
+        // Tamper detection
+        let angles = [
+            self.phase_a.angle as u16,
+            self.phase_b.angle as u16,
+            self.phase_c.angle as u16,
+        ];
+        let accel = femeter_core::tamper_detection::AccelerometerData::default();
+        let tamper_result =
+            self.tamper_detector
+                .check(voltages, currents_pq, angles, &accel, false, false, ts);
+        if tamper_result.probability > 0.5 {
+            vm_log!(
+                "Tamper detected! probability={:.1}%",
+                tamper_result.probability * 100.0
+            );
+        }
     }
 
     pub fn snapshot(&mut self) -> MeterSnapshot {
@@ -864,9 +917,24 @@ impl VirtualMeter {
             ev_str,
         ).ok();
     }
+    /// Get power quality monitor reference
+    pub fn pq_monitor(&self) -> &PowerQualityMonitor {
+        &self.pq_monitor
+    }
+
+    /// Get load forecaster reference
+    pub fn load_forecaster(&self) -> &LoadForecaster {
+        &self.load_forecaster
+    }
+
+    /// Get tamper detector reference
+    pub fn tamper_detector(&self) -> &TamperDetector {
+        &self.tamper_detector
+    }
 }
 
 pub type MeterHandle = Arc<Mutex<VirtualMeter>>;
+
 pub fn create_meter() -> MeterHandle {
     Arc::new(Mutex::new(VirtualMeter::new()))
 }

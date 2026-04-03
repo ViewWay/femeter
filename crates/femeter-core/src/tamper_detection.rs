@@ -10,9 +10,10 @@
 /* ================================================================== */
 
 /// 窃电事件类型
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TamperEventType {
+    #[default]
     None = 0,
     CtShort = 1,            // CT 短路
     PtDisconnect = 2,       // PT 断线
@@ -25,12 +26,6 @@ pub enum TamperEventType {
     Bypass = 9,             // 旁路
     ReverseCurrent = 10,    // 反向电流
     PartialBypass = 11,     // 部分旁路
-}
-
-impl Default for TamperEventType {
-    fn default() -> Self {
-        TamperEventType::None
-    }
 }
 
 impl TamperEventType {
@@ -379,6 +374,7 @@ impl TamperDetector {
     }
 
     /// 综合窃电检测 (单次调用)
+    #[allow(clippy::too_many_arguments)]
     pub fn check(
         &mut self,
         voltages: [u16; 3],

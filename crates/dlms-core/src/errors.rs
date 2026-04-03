@@ -2,6 +2,7 @@
 //!
 //! Error types for all DLMS/COSEM protocol layers.
 
+#[cfg(feature = "std")]
 use core::fmt;
 
 /// Data access error codes (IEC 62056-6-2 §7.3)
