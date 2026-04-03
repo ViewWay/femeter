@@ -60,11 +60,7 @@ impl TcpServer {
                         eprintln!("[TCP Text] Rejected {}: max connections reached", addr);
                         continue;
                     }
-                    println!(
-                        "[TCP Text] Connection from {} ({} active)",
-                        addr,
-                        current + 1
-                    );
+                    // TCP text connection
                     conn_count.fetch_add(1, Ordering::Relaxed);
 
                     let handler = create_protocol_handler(meter.clone());
@@ -72,19 +68,13 @@ impl TcpServer {
                     thread::spawn(move || {
                         handle_text_client(stream, handler);
                         cc.fetch_sub(1, Ordering::Relaxed);
-                        println!(
-                            "[TCP Text] Disconnected ({} active)",
-                            cc.load(Ordering::Relaxed)
-                        );
+                        // TCP text disconnect
                     });
                 }
             }
         });
         self.handles.push(h);
-        println!(
-            "[TCP] Text protocol server on port {} (max {} connections)",
-            port, MAX_CONNECTIONS
-        );
+        // TCP text started
         Ok(())
     }
 
@@ -105,11 +95,7 @@ impl TcpServer {
                         eprintln!("[TCP DLMS] Rejected {}: max connections", addr);
                         continue;
                     }
-                    println!(
-                        "[TCP DLMS] Connection from {} ({} active)",
-                        addr,
-                        current + 1
-                    );
+                    // TCP DLMS connection
                     conn_count.fetch_add(1, Ordering::Relaxed);
 
                     let processor = create_dlms_processor(meter.clone());
@@ -117,19 +103,13 @@ impl TcpServer {
                     thread::spawn(move || {
                         handle_dlms_client(stream, processor);
                         cc.fetch_sub(1, Ordering::Relaxed);
-                        println!(
-                            "[TCP DLMS] Disconnected ({} active)",
-                            cc.load(Ordering::Relaxed)
-                        );
+                        // TCP DLMS disconnect
                     });
                 }
             }
         });
         self.handles.push(h);
-        println!(
-            "[TCP] DLMS server on port {} (HDLC wrapping, max {} connections)",
-            port, MAX_CONNECTIONS
-        );
+        // TCP DLMS started
         Ok(())
     }
 
@@ -149,7 +129,7 @@ impl TcpServer {
                         eprintln!("[TCP IEC] Rejected {}", addr);
                         continue;
                     }
-                    println!("[TCP IEC] Connection from {}", addr);
+                    // TCP IEC connection
                     conn_count.fetch_add(1, Ordering::Relaxed);
 
                     let cc = conn_count.clone();
@@ -161,7 +141,7 @@ impl TcpServer {
             }
         });
         self.handles.push(h);
-        println!("[TCP] IEC 62056-21 server on port {}", port);
+        // TCP IEC started
         Ok(())
     }
 
@@ -175,7 +155,7 @@ impl TcpServer {
         for h in self.handles.drain(..) {
             let _ = h.join();
         }
-        println!("[TCP] Server stopped");
+        // TCP stopped
     }
 
     /// 获取当前活跃连接数

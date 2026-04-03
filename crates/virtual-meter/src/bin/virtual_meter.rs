@@ -95,10 +95,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    println!("╔══════════════════════════════════════════════╗");
-    println!("║    FeMeter Virtual Meter v0.2                ║");
-    println!("║    模拟 ATT7022E / RN8302B                   ║");
-    println!("╚══════════════════════════════════════════════╝");
+    println!("FeMeter Virtual Meter v0.2 | ATT7022E / RN8302B");
 
     // 创建电表
     let meter = create_meter();
@@ -128,12 +125,12 @@ fn main() -> Result<()> {
     let mut tcp_server = TcpServer::new(meter.clone());
     if args.tcp > 0 {
         if let Err(e) = tcp_server.start_dlms(args.tcp) {
-            eprintln!("[TCP] Failed to start DLMS server: {}", e);
+            eprintln!("TCP DLMS server failed: {}", e);
         }
     }
     if args.text_port > 0 {
         if let Err(e) = tcp_server.start_text(args.text_port) {
-            eprintln!("[TCP] Failed to start text server: {}", e);
+            eprintln!("TCP text server failed: {}", e);
         }
     }
 
@@ -146,10 +143,10 @@ fn main() -> Result<()> {
         {
             match serial_service.start_virtual() {
                 Ok(slave_path) => {
-                    println!("[Serial] Virtual serial port ready: {}", slave_path);
+                    eprintln!("Serial port: {}", slave_path);
                 }
                 Err(e) => {
-                    eprintln!("[Serial] Failed to create virtual serial: {}", e);
+                    eprintln!("Serial failed: {}", e);
                 }
             }
         }
@@ -159,19 +156,19 @@ fn main() -> Result<()> {
         }
     } else if let Some(port_name) = &args.serial {
         if let Err(e) = serial_service.start(port_name) {
-            eprintln!("[Serial] Failed to start: {}", e);
+            eprintln!("Serial failed: {}", e);
         }
     }
 
     // 加载数据文件
     if let Some(data_file) = &args.data_file {
-        println!("[Data] Loading from: {}", data_file);
+        eprintln!("Loading: {}", data_file);
         // TODO: 实现数据文件加载
     }
 
     // 非交互模式
     if args.non_interactive {
-        println!("[Mode] Non-interactive mode. Press Ctrl+C to exit.");
+        eprintln!("Non-interactive. Ctrl+C to exit.");
 
         // 等待 Ctrl+C
         let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
@@ -194,7 +191,7 @@ fn main() -> Result<()> {
     }
 
     // 运行交互式 shell
-    println!("\n输入 'help' 查看命令 | 'quit' 退出\n");
+    println!();
     let mut shell = Shell::new(meter);
     shell.run()?;
 
@@ -202,6 +199,5 @@ fn main() -> Result<()> {
     let _ = serial_service.stop();
     tcp_server.stop();
 
-    println!("Goodbye!");
     Ok(())
 }

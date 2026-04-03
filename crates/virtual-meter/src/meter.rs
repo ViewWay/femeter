@@ -31,7 +31,7 @@ use femeter_core::power_quality::PowerQualityMonitor;
 use femeter_core::tamper_detection::TamperDetector;
 
 /// 全局日志开关
-static LOG_ENABLED: AtomicBool = AtomicBool::new(true);
+static LOG_ENABLED: AtomicBool = AtomicBool::new(false);
 
 /// 设置日志开关
 pub fn set_log_enabled(enabled: bool) {

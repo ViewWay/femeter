@@ -192,32 +192,32 @@ impl Shell {
 
     fn cmd_help(&self, stdout: &mut impl Write) -> Result<()> {
         let help = r#"
-FeMeter v0.2
-=========================================
- set ua/ub/uc <V>       voltage
- set ia/ib/ic <A>       current
- set angle-a/b/c <deg>  phase angle
- set freq <Hz>          frequency
- set pf <0~1>           power factor
- set 3p <V> <A> <Hz> <PF>  three-phase combo
- set noise on/off       noise
- set accel <rate>       time acceleration
+ FeMeter v0.2
+ ========================================
+  set ua/ub/uc <V>          voltage
+  set ia/ib/ic <A>          current
+  set angle-a/b/c <deg>     phase angle
+  set freq <Hz>             frequency
+  set pf <0~1>              power factor
+  set 3p <V> <A> <Hz> <PF> three-phase combo
+  set noise on/off          noise
+  set accel <rate>          time acceleration
 
- get voltage            phase + line voltage
- get current            phase + neutral current
- get power              active/reactive/apparent
- get energy             cumulative energy
- get freq               frequency
- get pf                 power factor
- get status             status word
+  get voltage               phase + line voltage
+  get current               phase + neutral current
+  get power                 active/reactive/apparent
+  get energy                cumulative energy
+  get freq                  frequency
+  get pf                    power factor
+  get status                status word
 
- status                 full status table
- scenario <name>        normal/full/noload/overv/loss/overi/reverse
- event <type>           cover/terminal/magnetic/battery
- event list             event history
- watch [ms]             real-time monitor
- reset                  reset energy
- quit                   exit
+  status                    full status table
+  scenario <name>           normal/full/noload/overv/loss/overi/reverse
+  event <type>              cover/terminal/magnetic/battery
+  event list                event history
+  watch [ms]                real-time monitor
+  reset                     reset energy
+  quit                      exit
 "#;
         queue!(stdout, style::Print(help))?;
         stdout.flush()?;
