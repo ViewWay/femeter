@@ -1,4 +1,4 @@
-//! Interactive Shell — box-drawing table format
+//! Interactive Shell — clean borderless format
 
 use crate::{ChipType, MeterEvent, MeterHandle, Scenario};
 use anyhow::Result;
@@ -16,195 +16,58 @@ pub struct Shell {
     running: Arc<AtomicBool>,
 }
 
-// ── Color helpers ──
-
-fn cyan(text: &str) -> String {
-    format!("\x1b[36m{}\x1b[0m", text)
-}
-fn yellow(text: &str) -> String {
-    format!("\x1b[33m{}\x1b[0m", text)
-}
-fn green(text: &str) -> String {
-    format!("\x1b[32m{}\x1b[0m", text)
-}
-fn red(text: &str) -> String {
-    format!("\x1b[31m{}\x1b[0m", text)
-}
-fn grey(text: &str) -> String {
-    format!("\x1b[90m{}\x1b[0m", text)
-}
-fn white(text: &str) -> String {
-    format!("\x1b[97m{}\x1b[0m", text)
-}
-fn dim(text: &str) -> String {
-    format!("\x1b[2m{}\x1b[0m", text)
-}
-
 fn nl() -> &'static str {
     "\n\r"
 }
 
-// ── Box-drawing table helpers ──
-
-fn table_top(widths: &[usize]) -> String {
-    let inner: Vec<String> = widths.iter().map(|w| "─".repeat(*w + 2)).collect();
-    format!("┌{}┐", inner.join("┬"))
-}
-
-fn table_separator(widths: &[usize]) -> String {
-    let inner: Vec<String> = widths.iter().map(|w| "─".repeat(*w + 2)).collect();
-    format!("├{}┤", inner.join("┼"))
-}
-
-fn table_bottom(widths: &[usize]) -> String {
-    let inner: Vec<String> = widths.iter().map(|w| "─".repeat(*w + 2)).collect();
-    format!("└{}┘", inner.join("┴"))
-}
-
-/// Center text within width
-fn pad_center(text: &str, width: usize) -> String {
-    let tlen = text.display_width();
-    if tlen >= width {
-        return text.to_string();
-    }
-    let left = (width - tlen) / 2;
-    let right = width - tlen - left;
-    format!("{}{}{}", " ".repeat(left), text, " ".repeat(right))
-}
-
-/// Left-align text within width
-fn pad_left(text: &str, width: usize) -> String {
-    let tlen = text.display_width();
-    if tlen >= width {
-        return text.to_string();
-    }
-    format!("{}{}", text, " ".repeat(width - tlen))
-}
-
-/// Right-align text within width
 fn pad_right(text: &str, width: usize) -> String {
-    let tlen = text.display_width();
+    let tlen = text.len();
     if tlen >= width {
         return text.to_string();
     }
     format!("{}{}", " ".repeat(width - tlen), text)
 }
 
-fn table_header(widths: &[usize], headers: &[&str]) -> String {
-    let cells: Vec<String> = widths
+fn pad_left(text: &str, width: usize) -> String {
+    let tlen = text.len();
+    if tlen >= width {
+        return text.to_string();
+    }
+    format!("{}{}", text, " ".repeat(width - tlen))
+}
+
+/// Simple borderless table: title (blank = skip), header row, data rows
+fn simple_table(title: &str, widths: &[usize], headers: &[&str], rows: &[Vec<String>]) -> String {
+    let mut out = String::new();
+    if !title.is_empty() {
+        out.push_str(title);
+        out.push_str(nl());
+        out.push_str(nl());
+    }
+    // header
+    let hdr: Vec<String> = widths
         .iter()
         .zip(headers.iter())
-        .map(|(w, h)| format!(" {} ", pad_center(h, *w)))
+        .map(|(w, h)| pad_left(h, *w))
         .collect();
-    format!("│{}│", cells.join("│"))
-}
-
-fn table_row(widths: &[usize], values: &[&str], aligns: &[Align]) -> String {
-    let cells: Vec<String> = widths
-        .iter()
-        .zip(values.iter())
-        .zip(aligns.iter())
-        .map(|((w, v), a)| {
-            let padded = match a {
-                Align::Left => pad_left(v, *w),
-                Align::Right => pad_right(v, *w),
-            };
-            format!(" {} ", padded)
-        })
-        .collect();
-    format!("│{}│", cells.join("│"))
-}
-
-#[derive(Clone, Copy)]
-enum Align {
-    Left,
-    Right,
-}
-
-/// Simple single-box: top + content lines + bottom
-fn single_box(width: usize, lines: &[&str]) -> String {
-    let mut out = table_top(&[width]) + nl();
-    for line in lines {
-        out.push_str(&format!("│ {} │{}", pad_left(line, width), nl()));
-    }
-    out.push_str(&table_bottom(&[width]));
-    out
-}
-
-/// Box with centered title spanning full width, then multi-column rows
-fn total_width(widths: &[usize]) -> usize {
-    widths.iter().sum::<usize>() + widths.len() * 3 - 1
-}
-
-fn titled_table(
-    title: &str,
-    widths: &[usize],
-    headers: &[&str],
-    rows: &[Vec<String>],
-    aligns: &[Align],
-) -> String {
-    let tw = total_width(widths);
-    let mut out = table_top(widths) + nl();
-    if !title.is_empty() {
-        out.push_str(&format!("│ {} │{}", pad_left(title, tw), nl()));
-        out.push_str(&table_separator(widths));
-        out.push_str(nl());
-    }
-    out.push_str(&table_header(widths, headers));
-    out.push_str(nl());
-    out.push_str(&table_separator(widths));
-    out.push_str(nl());
+    out.push_str(&format!("  {}\n\r", hdr.join("  ")));
+    // rows
     for row in rows {
-        let refs: Vec<&str> = row.iter().map(|s| s.as_str()).collect();
-        out.push_str(&table_row(widths, &refs, aligns));
-        out.push_str(nl());
+        let cells: Vec<String> = widths
+            .iter()
+            .zip(row.iter())
+            .map(|(w, v)| {
+                // first column left-align, rest right-align
+                if widths.first() == Some(w) {
+                    pad_left(v, *w)
+                } else {
+                    pad_right(v, *w)
+                }
+            })
+            .collect();
+        out.push_str(&format!("  {}\n\r", cells.join("  ")));
     }
-    out.push_str(&table_bottom(widths));
     out
-}
-
-/// Multi-section table: title spanning full width, then column sections separated by ┼ separators
-fn multi_section_table(
-    title: &str,
-    widths: &[usize],
-    headers: &[&str],
-    sections: &[(Vec<Vec<String>>, bool)], // (rows, has_separator_after)
-    footer: &[&str],
-) -> String {
-    let aligns_left: Vec<Align> = widths.iter().map(|_| Align::Left).collect();
-    let tw = total_width(widths);
-    let mut out = table_top(widths) + nl();
-    out.push_str(&format!("│ {} │{}", pad_left(title, tw), nl()));
-    out.push_str(&table_separator(widths));
-    out.push_str(nl());
-    out.push_str(&table_header(widths, headers));
-    out.push_str(nl());
-    for (rows, _has_sep) in sections {
-        out.push_str(&table_separator(widths));
-        out.push_str(nl());
-        for row in rows {
-            let refs: Vec<&str> = row.iter().map(|s| s.as_str()).collect();
-            out.push_str(&table_row(widths, &refs, &aligns_left));
-            out.push_str(nl());
-        }
-    }
-    out.push_str(&table_separator(widths));
-    out.push_str(nl());
-    for line in footer {
-        out.push_str(&format!("│ {} │{}", pad_left(line, tw), nl()));
-    }
-    out.push_str(&table_bottom(widths));
-    out
-}
-
-trait DisplayWidth {
-    fn display_width(&self) -> usize;
-}
-
-impl DisplayWidth for str {
-    fn display_width(&self) -> usize {
-        self.chars().count() // All content is ASCII, so char count = display width
-    }
 }
 
 impl Shell {
@@ -227,7 +90,7 @@ impl Shell {
         use std::io::BufRead;
         let stdin = io::stdin();
         let mut stdout = io::stdout();
-        queue!(stdout, style::Print(cyan("> ")))?;
+        queue!(stdout, style::Print("> "))?;
         stdout.flush()?;
         for line in stdin.lock().lines() {
             let line = line?;
@@ -238,7 +101,7 @@ impl Shell {
             if !self.running.load(Ordering::Relaxed) {
                 break;
             }
-            queue!(stdout, style::Print(cyan("> ")))?;
+            queue!(stdout, style::Print("> "))?;
             stdout.flush()?;
         }
         Ok(())
@@ -251,7 +114,7 @@ impl Shell {
         let mut history: Vec<String> = Vec::new();
         let mut history_index = 0;
 
-        queue!(stdout, style::Print(cyan("> ")))?;
+        queue!(stdout, style::Print("> "))?;
         stdout.flush()?;
 
         loop {
@@ -303,7 +166,7 @@ impl Shell {
 
             let cmd = input.trim();
             if cmd.is_empty() {
-                queue!(stdout, style::Print(format!("{}{}", nl(), cyan("> "))))?;
+                queue!(stdout, style::Print(format!("{}{}", nl(), "> ")))?;
                 stdout.flush()?;
                 continue;
             }
@@ -333,7 +196,7 @@ impl Shell {
     }
 
     fn print_prompt(&self, stdout: &mut impl Write) -> Result<()> {
-        queue!(stdout, style::Print(cyan("> ")))?;
+        queue!(stdout, style::Print("> "))?;
         stdout.flush()?;
         Ok(())
     }
@@ -361,7 +224,7 @@ impl Shell {
                 Ok(())
             }
             _ => {
-                let out = format!("{}{}{}", red("  unknown: "), parts[0], nl());
+                let out = format!("  unknown: {}{}", parts[0], nl());
                 queue!(stdout, style::Print(out))?;
                 if raw {
                     self.print_prompt(stdout)?;
@@ -371,214 +234,52 @@ impl Shell {
         }
     }
 
-    // ── Commands ──
-
     fn cmd_help(&self, stdout: &mut impl Write) -> Result<()> {
-        let w: [usize; 2] = [18, 30];
-        let set_cmds = vec![
-            vec!["set ua/ub/uc <V>".into(), "Voltage".into()],
-            vec!["set ia/ib/ic <A>".into(), "Current".into()],
-            vec!["set angle-a/b/c".into(), "Phase angle (deg)".into()],
-            vec!["set freq <Hz>".into(), "Frequency".into()],
-            vec!["set pf <0~1>".into(), "Power factor".into()],
-            vec!["set 3p <V A H P>".into(), "Three-phase combo".into()],
-            vec!["set noise on/off".into(), "Noise simulation".into()],
-            vec!["set accel <rate>".into(), "Time acceleration".into()],
-        ];
-        let get_cmds = vec![
-            vec!["get voltage".into(), "Phase + line voltage".into()],
-            vec!["get current".into(), "Phase + neutral current".into()],
-            vec!["get power".into(), "Active/reactive/apparent".into()],
-            vec!["get energy".into(), "Cumulative energy".into()],
-            vec!["get freq".into(), "Frequency".into()],
-            vec!["get pf".into(), "Power factor".into()],
-            vec!["get status".into(), "Status word".into()],
-        ];
-        let other_cmds = vec![
-            vec!["status".into(), "Full status table".into()],
-            vec!["scenario <name>".into(), "Preset scenario".into()],
-            vec!["event <type>".into(), "Inject event".into()],
-            vec!["event list".into(), "Event history".into()],
-            vec!["watch [ms]".into(), "Real-time monitor".into()],
-            vec!["reset".into(), "Reset energy".into()],
-            vec!["quit".into(), "Exit".into()],
-        ];
-
-        let out = multi_section_table(
-            "FeMeter v0.2",
-            &w,
-            &["Command", "Description"],
-            &[(set_cmds, true), (get_cmds, true), (other_cmds, false)],
-            &[],
+        let out = concat!(
+            " FeMeter v0.2\n\r",
+            "\n\r",
+            " set ua/ub/uc <V>        Voltage\n\r",
+            " set ia/ib/ic <A>        Current\n\r",
+            " set angle-a/b/c <deg>   Phase angle\n\r",
+            " set freq <Hz>           Frequency\n\r",
+            " set pf <0~1>            Power factor\n\r",
+            " set 3p <V A Hz PF>      Three-phase combo\n\r",
+            " set noise on/off        Noise simulation\n\r",
+            " set accel <rate>        Time acceleration\n\r",
+            "\n\r",
+            " get voltage             Phase + line voltage\n\r",
+            " get current             Phase + neutral current\n\r",
+            " get power               Active/reactive/apparent\n\r",
+            " get energy              Cumulative energy\n\r",
+            " get freq                Frequency\n\r",
+            " get pf                  Power factor\n\r",
+            " get status              Status word\n\r",
+            "\n\r",
+            " status                  Full status table\n\r",
+            " scenario <name>         Preset scenario\n\r",
+            " event <type>            Inject event\n\r",
+            " event list              Event history\n\r",
+            " watch [ms]              Real-time monitor\n\r",
+            " reset                   Reset energy\n\r",
+            " quit                    Exit\n\r",
         );
-        queue!(stdout, style::Print(format!("{}{}", out, nl())))?;
+        queue!(stdout, style::Print(out))?;
         stdout.flush()?;
         Ok(())
-    }
-
-    fn cmd_scenario(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
-        if args.is_empty() {
-            let out = format!("{}{}", grey("  usage: scenario <name>"), nl());
-            queue!(stdout, style::Print(out))?;
-            stdout.flush()?;
-            return Ok(());
-        }
-        let sc = match args[0].to_lowercase().as_str() {
-            "normal" => Scenario::Normal,
-            "full" | "fullload" => Scenario::FullLoad,
-            "noload" | "no" | "empty" => Scenario::NoLoad,
-            "overv" | "overvoltage" => Scenario::OverVoltage,
-            "underv" | "undervoltage" => Scenario::UnderVoltage,
-            "loss" | "phaseloss" => Scenario::PhaseLoss,
-            "overi" | "overcurrent" => Scenario::OverCurrent,
-            "reverse" | "reversepower" => Scenario::ReversePower,
-            "unbalanced" => Scenario::Unbalanced,
-            _ => {
-                let out = format!("{}{}{}", red("  unknown: "), args[0], nl());
-                queue!(stdout, style::Print(out))?;
-                stdout.flush()?;
-                return Ok(());
-            }
-        };
-        let mut meter = self.meter.lock().expect("mutex poisoned");
-        meter.load_scenario(sc);
-        let out = format!("  -> scenario: {}", yellow(&format!("{:?}", sc)));
-        queue!(stdout, style::Print(format!("{}{}", out, nl())))?;
-        stdout.flush()?;
-        Ok(())
-    }
-
-    fn cmd_event(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
-        if args.first().map(|s| s.to_lowercase()).as_deref() == Some("list") || args.is_empty() {
-            let meter = self.meter.lock().expect("mutex poisoned");
-            let events = meter.events();
-            if events.is_empty() {
-                let out = format!("{}{}", grey("  no events"), nl());
-                queue!(stdout, style::Print(out))?;
-            } else {
-                let w: [usize; 2] = [10, 18];
-                let rows: Vec<Vec<String>> = events
-                    .iter()
-                    .rev()
-                    .take(20)
-                    .map(|e| {
-                        vec![
-                            e.timestamp.format("%H:%M:%S").to_string(),
-                            format!("{:?}", e.event),
-                        ]
-                    })
-                    .collect();
-                let out = titled_table(
-                    &format!("Events ({})", events.len()),
-                    &w,
-                    &["Time", "Event"],
-                    &rows,
-                    &[Align::Left, Align::Left],
-                );
-                queue!(stdout, style::Print(format!("{}{}", out, nl())))?;
-            }
-            stdout.flush()?;
-            return Ok(());
-        }
-
-        let ev = match args[0].to_lowercase().as_str() {
-            "cover" => MeterEvent::CoverOpen,
-            "terminal" => MeterEvent::TerminalCoverOpen,
-            "magnetic" => MeterEvent::MagneticTamper,
-            "battery" => MeterEvent::BatteryLow,
-            _ => {
-                let out = format!("{}{}{}", red("  unknown: "), args[0], nl());
-                queue!(stdout, style::Print(out))?;
-                stdout.flush()?;
-                return Ok(());
-            }
-        };
-        let mut meter = self.meter.lock().expect("mutex poisoned");
-        meter.trigger_event(ev);
-        let out = format!("  -> event: {}", yellow(&format!("{:?}", ev)));
-        queue!(stdout, style::Print(format!("{}{}", out, nl())))?;
-        stdout.flush()?;
-        Ok(())
-    }
-
-    fn cmd_watch(&self, args: &[&str], stdout: &mut impl Write) {
-        let interval = args
-            .first()
-            .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or(500);
-        for _i in 0..10 {
-            std::thread::sleep(Duration::from_millis(interval));
-            if !self.running.load(Ordering::Relaxed) {
-                break;
-            }
-            let mut meter = self.meter.lock().expect("mutex poisoned");
-            let snap = meter.snapshot();
-            drop(meter);
-
-            let line1 = format!(
-                " {}{} A:{}{} {}{} | B:{}{} {}{} | C:{}{} {}{}",
-                grey("["),
-                grey(&snap.timestamp.format("%H:%M:%S").to_string()),
-                white(&format!("{:.1}", snap.phase_a.voltage)),
-                grey("V"),
-                white(&format!("{:.2}", snap.phase_a.current)),
-                grey("A"),
-                white(&format!("{:.1}", snap.phase_b.voltage)),
-                grey("V"),
-                white(&format!("{:.2}", snap.phase_b.current)),
-                grey("A"),
-                white(&format!("{:.1}", snap.phase_c.voltage)),
-                grey("V"),
-                white(&format!("{:.2}", snap.phase_c.current)),
-                grey("A"),
-            );
-            let line2 = format!(
-                "  P:{}{} Q:{}{} S:{}{} PF:{}",
-                white(&format!("{:.1}", snap.computed.p_total)),
-                grey("W"),
-                white(&format!("{:.1}", snap.computed.q_total)),
-                grey("var"),
-                white(&format!("{:.1}", snap.computed.s_total)),
-                grey("VA"),
-                white(&format!("{:.3}", snap.computed.pf_total)),
-            );
-
-            queue!(
-                stdout,
-                terminal::Clear(ClearType::All),
-                cursor::MoveTo(0, 0),
-                style::Print(line1),
-                style::Print(nl()),
-                style::Print(line2),
-            )
-            .ok();
-            stdout.flush().ok();
-        }
-        queue!(stdout, style::Print(format!("{}{}", nl(), cyan("> ")))).ok();
-        stdout.flush().ok();
     }
 
     fn cmd_status(&self, stdout: &mut impl Write) -> Result<()> {
         let mut meter = self.meter.lock().expect("mutex poisoned");
         let snap = meter.snapshot();
         let cfg = meter.config();
-
         let accel = cfg.time_accel;
-        let w: [usize; 5] = [8, 10, 9, 9, 6];
-        let tw = total_width(&w);
 
         let title = format!(
-            "FeMeter v0.2  {:?}  {:.2}Hz  Accel:{:.0}x",
+            " FeMeter v0.2  {:?}  {:.2}Hz  Accel:{:.0}x",
             snap.chip, snap.freq, accel
         );
 
-        let aligns = [
-            Align::Left,
-            Align::Right,
-            Align::Right,
-            Align::Right,
-            Align::Right,
-        ];
+        let w: [usize; 5] = [6, 8, 7, 8, 6];
         let rows = vec![
             vec![
                 "A".into(),
@@ -603,54 +304,35 @@ impl Shell {
             ],
         ];
 
-        let footer: Vec<String> = vec![
-            format!(
-                "P: {:.1}W  Q: {:.1}var  S: {:.1}VA",
-                snap.computed.p_total, snap.computed.q_total, snap.computed.s_total
-            ),
-            format!(
-                "E: {:.3} kWh / {:.3} kvarh",
-                snap.energy.wh_total / 1000.0,
-                snap.energy.varh_total / 1000.0
-            ),
-        ];
-        let footer_refs: Vec<&str> = footer.iter().map(|s| s.as_str()).collect();
-
-        let mut out = table_top(&w) + nl();
-        out.push_str(&format!("│ {} │{}", pad_left(&title, tw), nl()));
-        out.push_str(&table_separator(&w));
-        out.push_str(nl());
-        out.push_str(&table_header(
+        let mut out = simple_table(
+            &title,
             &w,
-            &["Phase", "V(V)", "I(A)", "Angle°", "PF"],
+            &["Phase", "V(V)", "I(A)", "Angle(°)", "PF"],
+            &rows,
+        );
+        out.push_str(nl());
+        out.push_str(&format!(
+            "  P: {:.1}W  Q: {:.1}var  S: {:.1}VA  PF: {:.3}\n\r",
+            snap.computed.p_total,
+            snap.computed.q_total,
+            snap.computed.s_total,
+            snap.computed.pf_total
+        ));
+        out.push_str(&format!(
+            "  E: {:.3} kWh / {:.3} kvarh\n\r",
+            snap.energy.wh_total / 1000.0,
+            snap.energy.varh_total / 1000.0
         ));
         out.push_str(nl());
-        out.push_str(&table_separator(&w));
-        out.push_str(nl());
-        for row in &rows {
-            let refs: Vec<&str> = row.iter().map(|s| s.as_str()).collect();
-            out.push_str(&table_row(&w, &refs, &aligns));
-            out.push_str(nl());
-        }
-        out.push_str(&table_separator(&w));
-        out.push_str(nl());
-        for line in &footer_refs {
-            out.push_str(&format!("│ {} │{}", pad_left(line, tw), nl()));
-        }
-        out.push_str(&table_bottom(&w));
 
-        queue!(stdout, style::Print(format!("{}{}", out, nl())))?;
+        queue!(stdout, style::Print(out))?;
         stdout.flush()?;
         Ok(())
     }
 
     fn cmd_set(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
         if args.is_empty() {
-            let out = format!(
-                "{}{}",
-                grey("  usage: set <param> <value> | set 3p <V A Hz PF>"),
-                nl()
-            );
+            let out = format!("  usage: set <param> <value> | set 3p <V A Hz PF>{}", nl());
             queue!(stdout, style::Print(out))?;
             stdout.flush()?;
             return Ok(());
@@ -660,7 +342,7 @@ impl Shell {
 
         if param == "three-phase" || param == "threephase" || param == "3p" {
             if args.len() < 5 {
-                let out = format!("{}{}", grey("  usage: set 3p <V> <A> <Hz> <PF>"), nl());
+                let out = format!("  usage: set 3p <V> <A> <Hz> <PF>{}", nl());
                 queue!(stdout, style::Print(out))?;
                 stdout.flush()?;
                 return Ok(());
@@ -683,26 +365,20 @@ impl Shell {
             meter.set_freq(freq);
 
             let out = format!(
-                "  3P: {}{}  {}{}  {}{}  PF={}",
-                white(&format!("{:.1}", v)),
-                grey("V"),
-                white(&format!("{:.2}", i)),
-                grey("A"),
-                white(&format!("{:.1}", freq)),
-                grey("Hz"),
-                white(&format!("{:.2}", pf)),
+                " -> 3P: {:.1}V {:.2}A {:.1}Hz PF={:.2}{}",
+                v,
+                i,
+                freq,
+                pf,
+                nl()
             );
-            queue!(stdout, style::Print(format!("{}{}", out, nl())))?;
+            queue!(stdout, style::Print(out))?;
             stdout.flush()?;
             return Ok(());
         }
 
         if args.len() < 2 {
-            let out = format!(
-                "{}{}",
-                grey(&format!("  usage: set {} <value>", param)),
-                nl()
-            );
+            let out = format!("  usage: set {} <value>{}", param, nl());
             queue!(stdout, style::Print(out))?;
             stdout.flush()?;
             return Ok(());
@@ -713,130 +389,94 @@ impl Shell {
             "ua" => {
                 let v = value_str.parse().unwrap_or(220.0);
                 meter.set_voltage('a', v);
-                format!(
-                    "  A-phase voltage: {}{}",
-                    white(&format!("{:.2}", v)),
-                    grey("V")
-                )
+                format!(" -> A-phase voltage: {:.2}V{}", v, nl())
             }
             "ub" => {
                 let v = value_str.parse().unwrap_or(220.0);
                 meter.set_voltage('b', v);
-                format!(
-                    "  B-phase voltage: {}{}",
-                    white(&format!("{:.2}", v)),
-                    grey("V")
-                )
+                format!(" -> B-phase voltage: {:.2}V{}", v, nl())
             }
             "uc" => {
                 let v = value_str.parse().unwrap_or(220.0);
                 meter.set_voltage('c', v);
-                format!(
-                    "  C-phase voltage: {}{}",
-                    white(&format!("{:.2}", v)),
-                    grey("V")
-                )
+                format!(" -> C-phase voltage: {:.2}V{}", v, nl())
             }
             "ia" => {
                 let v = value_str.parse().unwrap_or(0.0);
                 meter.set_current('a', v);
-                format!(
-                    "  A-phase current: {}{}",
-                    white(&format!("{:.3}", v)),
-                    grey("A")
-                )
+                format!(" -> A-phase current: {:.3}A{}", v, nl())
             }
             "ib" => {
                 let v = value_str.parse().unwrap_or(0.0);
                 meter.set_current('b', v);
-                format!(
-                    "  B-phase current: {}{}",
-                    white(&format!("{:.3}", v)),
-                    grey("A")
-                )
+                format!(" -> B-phase current: {:.3}A{}", v, nl())
             }
             "ic" => {
                 let v = value_str.parse().unwrap_or(0.0);
                 meter.set_current('c', v);
-                format!(
-                    "  C-phase current: {}{}",
-                    white(&format!("{:.3}", v)),
-                    grey("A")
-                )
+                format!(" -> C-phase current: {:.3}A{}", v, nl())
             }
             "angle-a" | "angle_a" => {
                 let v = value_str.parse().unwrap_or(0.0);
                 meter.set_angle('a', v);
-                format!(
-                    "  A-phase angle: {}{}",
-                    white(&format!("{:.1}", v)),
-                    grey("°")
-                )
+                format!(" -> A-phase angle: {:.1}deg{}", v, nl())
             }
             "angle-b" | "angle_b" => {
                 let v = value_str.parse().unwrap_or(0.0);
                 meter.set_angle('b', v);
-                format!(
-                    "  B-phase angle: {}{}",
-                    white(&format!("{:.1}", v)),
-                    grey("°")
-                )
+                format!(" -> B-phase angle: {:.1}deg{}", v, nl())
             }
             "angle-c" | "angle_c" => {
                 let v = value_str.parse().unwrap_or(0.0);
                 meter.set_angle('c', v);
-                format!(
-                    "  C-phase angle: {}{}",
-                    white(&format!("{:.1}", v)),
-                    grey("°")
-                )
+                format!(" -> C-phase angle: {:.1}deg{}", v, nl())
             }
             "freq" => {
                 let v = value_str.parse().unwrap_or(50.0);
                 meter.set_freq(v);
-                format!("  Frequency: {}{}", white(&format!("{:.2}", v)), grey("Hz"))
+                format!(" -> Frequency: {:.2}Hz{}", v, nl())
             }
             "pf" | "power-factor" => {
                 let pf: f64 = value_str.parse().unwrap_or(0.95);
                 if !(-1.0..=1.0).contains(&pf) {
-                    format!("{} PF must be -1~1", red("  ✗"))
+                    format!("  PF must be -1~1{}", nl())
                 } else {
                     let angle = pf.acos() * 180.0 / std::f64::consts::PI;
                     meter.set_angle('a', angle);
                     meter.set_angle('b', angle);
                     meter.set_angle('c', angle);
                     format!(
-                        "  Power factor: {} (angle {}{} )",
-                        white(&format!("{:.3}", pf)),
-                        white(&format!("{:.1}", angle)),
-                        grey("°"),
+                        " -> Power factor: {:.3} (angle {:.1}deg){}",
+                        pf,
+                        angle,
+                        nl()
                     )
                 }
             }
             "noise" => {
                 let e = ["on", "1", "true"].contains(&value_str.to_lowercase().as_str());
                 meter.set_noise(e);
-                format!("  Noise: {}", if e { green("on") } else { dim("off") })
+                format!(" -> Noise: {}{}", if e { "on" } else { "off" }, nl())
             }
             "chip" => match value_str.to_lowercase().as_str() {
                 "att7022e" | "att7022" => {
                     meter.set_chip(ChipType::ATT7022E);
-                    format!("  Chip: {}", yellow("ATT7022E"))
+                    format!(" -> Chip: ATT7022E{}", nl())
                 }
                 "rn8302b" | "rn8302" => {
                     meter.set_chip(ChipType::RN8302B);
-                    format!("  Chip: {}", yellow("RN8302B"))
+                    format!(" -> Chip: RN8302B{}", nl())
                 }
-                _ => format!("{} unknown: {}", red("  ✗"), value_str),
+                _ => format!("  unknown chip: {}{}", value_str, nl()),
             },
             "accel" => {
                 let a: f64 = value_str.parse().unwrap_or(1.0);
                 meter.set_time_accel(a);
-                format!("  Accel: {}{}", white(&format!("{:.0}", a)), grey("x"))
+                format!(" -> Accel: {:.0}x{}", a, nl())
             }
-            _ => format!("{} unknown: {}", red("  ✗"), param),
+            _ => format!("  unknown: {}{}", param, nl()),
         };
-        queue!(stdout, style::Print(format!("{}{}", result, nl())))?;
+        queue!(stdout, style::Print(result))?;
         stdout.flush()?;
         Ok(())
     }
@@ -844,8 +484,7 @@ impl Shell {
     fn cmd_get(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
         if args.is_empty() {
             let out = format!(
-                "{}{}",
-                grey("  usage: get <voltage|current|power|energy|freq|pf|status>"),
+                "  usage: get <voltage|current|power|energy|freq|pf|status>{}",
                 nl()
             );
             queue!(stdout, style::Print(out))?;
@@ -884,26 +523,28 @@ impl Shell {
                             .cos())
                 .sqrt();
 
-                let w: [usize; 3] = [8, 10, 10];
-                let aligns = [Align::Left, Align::Right, Align::Right];
-                let rows = vec![
-                    vec![
-                        "A".into(),
-                        format!("{:.2}", snap.phase_a.voltage),
-                        format!("{:.2}", v_ab),
+                simple_table(
+                    " Voltage",
+                    &[6, 10, 10],
+                    &["Phase", "Phase(V)", "Line(V)"],
+                    &[
+                        vec![
+                            "A".into(),
+                            format!("{:.2}", snap.phase_a.voltage),
+                            format!("{:.2}", v_ab),
+                        ],
+                        vec![
+                            "B".into(),
+                            format!("{:.2}", snap.phase_b.voltage),
+                            format!("{:.2}", v_bc),
+                        ],
+                        vec![
+                            "C".into(),
+                            format!("{:.2}", snap.phase_c.voltage),
+                            format!("{:.2}", v_ca),
+                        ],
                     ],
-                    vec![
-                        "B".into(),
-                        format!("{:.2}", snap.phase_b.voltage),
-                        format!("{:.2}", v_bc),
-                    ],
-                    vec![
-                        "C".into(),
-                        format!("{:.2}", snap.phase_c.voltage),
-                        format!("{:.2}", v_ca),
-                    ],
-                ];
-                titled_table("", &w, &["Phase", "Phase(V)", "Line(V)"], &rows, &aligns)
+                )
             }
             "current" | "curr" | "i" => {
                 let i_n = ((snap.phase_a.current
@@ -922,67 +563,61 @@ impl Shell {
                     .powi(2))
                 .sqrt();
 
-                let w: [usize; 2] = [8, 11];
-                let aligns = [Align::Left, Align::Right];
-                let rows = vec![
-                    vec!["A".into(), format!("{:.3}", snap.phase_a.current)],
-                    vec!["B".into(), format!("{:.3}", snap.phase_b.current)],
-                    vec!["C".into(), format!("{:.3}", snap.phase_c.current)],
-                    vec!["N".into(), format!("{:.3}", i_n)],
-                ];
-                titled_table("", &w, &["Phase", "Current(A)"], &rows, &aligns)
+                let mut tbl = simple_table(
+                    " Current",
+                    &[6, 11],
+                    &["Phase", "Current(A)"],
+                    &[
+                        vec!["A".into(), format!("{:.3}", snap.phase_a.current)],
+                        vec!["B".into(), format!("{:.3}", snap.phase_b.current)],
+                        vec!["C".into(), format!("{:.3}", snap.phase_c.current)],
+                        vec!["N".into(), format!("{:.3}", i_n)],
+                    ],
+                );
+                // Append "(neutral)" note for N row
+                tbl = tbl.trim_end_matches("\n\r").to_string() + "  (neutral)\n\r";
+                tbl
             }
-            "power" | "pow" | "p" => {
-                let w: [usize; 5] = [8, 10, 11, 10, 7];
-                let aligns = [
-                    Align::Left,
-                    Align::Right,
-                    Align::Right,
-                    Align::Right,
-                    Align::Right,
-                ];
-                let rows = vec![
+            "power" | "pow" | "p" => simple_table(
+                " Power",
+                &[6, 10, 10, 10, 7],
+                &["Phase", "W(var)", "var(var)", "VA(VA)", "PF"],
+                &[
                     vec![
                         "A".into(),
-                        format!("{:.2}", snap.computed.p_a),
-                        format!("{:.2}", snap.computed.q_a),
-                        format!("{:.2}", snap.computed.s_a),
+                        format!("{:.1}", snap.computed.p_a),
+                        format!("{:.1}", snap.computed.q_a),
+                        format!("{:.1}", snap.computed.s_a),
                         format!("{:.3}", snap.computed.pf_a),
                     ],
                     vec![
                         "B".into(),
-                        format!("{:.2}", snap.computed.p_b),
-                        format!("{:.2}", snap.computed.q_b),
-                        format!("{:.2}", snap.computed.s_b),
+                        format!("{:.1}", snap.computed.p_b),
+                        format!("{:.1}", snap.computed.q_b),
+                        format!("{:.1}", snap.computed.s_b),
                         format!("{:.3}", snap.computed.pf_b),
                     ],
                     vec![
                         "C".into(),
-                        format!("{:.2}", snap.computed.p_c),
-                        format!("{:.2}", snap.computed.q_c),
-                        format!("{:.2}", snap.computed.s_c),
+                        format!("{:.1}", snap.computed.p_c),
+                        format!("{:.1}", snap.computed.q_c),
+                        format!("{:.1}", snap.computed.s_c),
                         format!("{:.3}", snap.computed.pf_c),
                     ],
                     vec![
                         "Total".into(),
-                        format!("{:.2}", snap.computed.p_total),
-                        format!("{:.2}", snap.computed.q_total),
-                        format!("{:.2}", snap.computed.s_total),
+                        format!("{:.1}", snap.computed.p_total),
+                        format!("{:.1}", snap.computed.q_total),
+                        format!("{:.1}", snap.computed.s_total),
                         format!("{:.3}", snap.computed.pf_total),
                     ],
-                ];
-                titled_table(
-                    "",
-                    &w,
-                    &["Phase", "W(W)", "var(var)", "VA(VA)", "PF"],
-                    &rows,
-                    &aligns,
-                )
-            }
-            "energy" | "en" | "e" => {
-                let w: [usize; 3] = [8, 11, 12];
-                let aligns = [Align::Left, Align::Right, Align::Right];
-                let rows = vec![
+                ],
+            ),
+            "energy" | "en" | "e" => simple_table(
+                " Energy",
+                &[6, 10, 10],
+                &["Phase", "kWh", "kvarh"],
+                &[
                     vec![
                         "A".into(),
                         format!("{:.4}", snap.energy.wh_a / 1000.0),
@@ -1003,94 +638,217 @@ impl Shell {
                         format!("{:.4}", snap.energy.wh_total / 1000.0),
                         format!("{:.4}", snap.energy.varh_total / 1000.0),
                     ],
-                ];
-                titled_table("", &w, &["Phase", "kWh", "kvarh"], &rows, &aligns)
-            }
+                ],
+            ),
             "frequency" | "freq" | "f" => {
-                format!(
-                    "  {} {}{}",
-                    grey("Freq:"),
-                    white(&format!("{:.3}", snap.freq)),
-                    grey("Hz")
-                )
+                format!(" Frequency: {:.3} Hz{}", snap.freq, nl())
             }
-            "power-factor" | "pf" => {
-                let w: [usize; 2] = [8, 10];
-                let aligns = [Align::Left, Align::Right];
-                let rows = vec![
+            "power-factor" | "pf" => simple_table(
+                " Power Factor",
+                &[6, 10],
+                &["Phase", "PF"],
+                &[
                     vec!["A".into(), format!("{:.4}", snap.computed.pf_a)],
                     vec!["B".into(), format!("{:.4}", snap.computed.pf_b)],
                     vec!["C".into(), format!("{:.4}", snap.computed.pf_c)],
                     vec!["Total".into(), format!("{:.4}", snap.computed.pf_total)],
-                ];
-                titled_table("", &w, &["Phase", "PF"], &rows, &aligns)
-            }
+                ],
+            ),
             "status-word" | "status" | "sw" => {
                 let sw = self.compute_status_word(&snap);
                 if sw == 0 {
-                    single_box(18, &[&format!("Status: 0x{:08X}", sw), "OK"])
+                    format!(" Status: 0x{:08X}  OK{}", sw, nl())
                 } else {
-                    let mut errors = Vec::new();
+                    let mut lines = format!(" Status: 0x{:08X}  ALARM{}", sw, nl());
                     if sw & 0x4000 != 0 {
-                        errors.push("! Phase seq error");
+                        lines.push_str(&format!("   Phase sequence error{}\n\r", nl()));
                     }
                     if sw & 0x01 != 0 {
-                        errors.push("! A-phase loss");
+                        lines.push_str(&format!("   A-phase voltage loss (<10V){}\n\r", nl()));
                     }
                     if sw & 0x02 != 0 {
-                        errors.push("! B-phase loss");
+                        lines.push_str(&format!("   B-phase voltage loss (<10V){}\n\r", nl()));
                     }
                     if sw & 0x04 != 0 {
-                        errors.push("! C-phase loss");
+                        lines.push_str(&format!("   C-phase voltage loss (<10V){}\n\r", nl()));
                     }
                     if sw & 0x08 != 0 {
-                        errors.push("! A overvoltage");
+                        lines.push_str(&format!("   A-phase overvoltage (>264V){}\n\r", nl()));
                     }
                     if sw & 0x10 != 0 {
-                        errors.push("! B overvoltage");
+                        lines.push_str(&format!("   B-phase overvoltage (>264V){}\n\r", nl()));
                     }
                     if sw & 0x20 != 0 {
-                        errors.push("! C overvoltage");
+                        lines.push_str(&format!("   C-phase overvoltage (>264V){}\n\r", nl()));
                     }
                     if sw & 0x40 != 0 {
-                        errors.push("! A undervoltage");
+                        lines.push_str(&format!("   A-phase undervoltage (<198V){}\n\r", nl()));
                     }
                     if sw & 0x80 != 0 {
-                        errors.push("! B undervoltage");
+                        lines.push_str(&format!("   B-phase undervoltage (<198V){}\n\r", nl()));
                     }
                     if sw & 0x100 != 0 {
-                        errors.push("! C undervoltage");
+                        lines.push_str(&format!("   C-phase undervoltage (<198V){}\n\r", nl()));
                     }
                     if sw & 0x200 != 0 {
-                        errors.push("! A overcurrent");
+                        lines.push_str(&format!("   A-phase overcurrent (>60A){}\n\r", nl()));
                     }
                     if sw & 0x400 != 0 {
-                        errors.push("! B overcurrent");
+                        lines.push_str(&format!("   B-phase overcurrent (>60A){}\n\r", nl()));
                     }
                     if sw & 0x800 != 0 {
-                        errors.push("! C overcurrent");
+                        lines.push_str(&format!("   C-phase overcurrent (>60A){}\n\r", nl()));
                     }
                     if sw & 0x1000 != 0 {
-                        errors.push("! Current imbalance");
+                        lines.push_str(&format!("   Current imbalance{}\n\r", nl()));
                     }
                     if sw & 0x2000 != 0 {
-                        errors.push("! Voltage imbalance");
+                        lines.push_str(&format!("   Voltage imbalance{}\n\r", nl()));
                     }
                     if sw & 0x8000 != 0 {
-                        errors.push("! Reverse power");
+                        lines.push_str(&format!("   Reverse power{}\n\r", nl()));
                     }
-                    let max_w = 18.max(errors.iter().map(|e| e.len()).max().unwrap_or(0));
-                    let mut lines = vec![format!("Status: 0x{:08X}", sw)];
-                    lines.extend(errors.iter().map(|s| s.to_string()));
-                    let lines_ref: Vec<&str> = lines.iter().map(|s| s.as_str()).collect();
-                    single_box(max_w, &lines_ref)
+                    lines
                 }
             }
+            _ => format!("  unknown: {}{}", sub, nl()),
+        };
+        queue!(stdout, style::Print(out))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_scenario(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        if args.is_empty() {
+            let out = format!("  usage: scenario <name>{}", nl());
+            queue!(stdout, style::Print(out))?;
+            stdout.flush()?;
+            return Ok(());
+        }
+        let sc = match args[0].to_lowercase().as_str() {
+            "normal" => Scenario::Normal,
+            "full" | "fullload" => Scenario::FullLoad,
+            "noload" | "no" | "empty" => Scenario::NoLoad,
+            "overv" | "overvoltage" => Scenario::OverVoltage,
+            "underv" | "undervoltage" => Scenario::UnderVoltage,
+            "loss" | "phaseloss" => Scenario::PhaseLoss,
+            "overi" | "overcurrent" => Scenario::OverCurrent,
+            "reverse" | "reversepower" => Scenario::ReversePower,
+            "unbalanced" => Scenario::Unbalanced,
             _ => {
-                format!("{}{}", red("  unknown:"), sub)
+                let out = format!("  unknown: {}{}", args[0], nl());
+                queue!(stdout, style::Print(out))?;
+                stdout.flush()?;
+                return Ok(());
             }
         };
-        queue!(stdout, style::Print(format!("{}{}", out, nl())))?;
+        let mut meter = self.meter.lock().expect("mutex poisoned");
+        meter.load_scenario(sc);
+        let out = format!(
+            " -> scenario: {}{}",
+            format!("{:?}", sc).to_lowercase(),
+            nl()
+        );
+        queue!(stdout, style::Print(out))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_event(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        if args.first().map(|s| s.to_lowercase()).as_deref() == Some("list") || args.is_empty() {
+            let meter = self.meter.lock().expect("mutex poisoned");
+            let events = meter.events();
+            if events.is_empty() {
+                let out = format!("  no events{}", nl());
+                queue!(stdout, style::Print(out))?;
+            } else {
+                let mut out = format!(" Events ({}){}\n\r", events.len(), nl());
+                for e in events.iter().rev().take(20) {
+                    out.push_str(&format!(
+                        "   {:>10}  {:?}{}\n\r",
+                        e.timestamp.format("%H:%M:%S"),
+                        e.event,
+                        nl()
+                    ));
+                }
+                queue!(stdout, style::Print(out))?;
+            }
+            stdout.flush()?;
+            return Ok(());
+        }
+
+        let ev = match args[0].to_lowercase().as_str() {
+            "cover" => MeterEvent::CoverOpen,
+            "terminal" => MeterEvent::TerminalCoverOpen,
+            "magnetic" => MeterEvent::MagneticTamper,
+            "battery" => MeterEvent::BatteryLow,
+            _ => {
+                let out = format!("  unknown: {}{}", args[0], nl());
+                queue!(stdout, style::Print(out))?;
+                stdout.flush()?;
+                return Ok(());
+            }
+        };
+        let mut meter = self.meter.lock().expect("mutex poisoned");
+        meter.trigger_event(ev);
+        let out = format!(" -> event: {}{}", format!("{:?}", ev).to_lowercase(), nl());
+        queue!(stdout, style::Print(out))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_watch(&self, args: &[&str], stdout: &mut impl Write) {
+        let interval = args
+            .first()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(500);
+        for _i in 0..10 {
+            std::thread::sleep(Duration::from_millis(interval));
+            if !self.running.load(Ordering::Relaxed) {
+                break;
+            }
+            let mut meter = self.meter.lock().expect("mutex poisoned");
+            let snap = meter.snapshot();
+            drop(meter);
+
+            let line1 = format!(
+                " [{}] A:{:.1}V {:.2}A | B:{:.1}V {:.2}A | C:{:.1}V {:.2}A",
+                snap.timestamp.format("%H:%M:%S"),
+                snap.phase_a.voltage,
+                snap.phase_a.current,
+                snap.phase_b.voltage,
+                snap.phase_b.current,
+                snap.phase_c.voltage,
+                snap.phase_c.current,
+            );
+            let line2 = format!(
+                "          P:{:.1}W Q:{:.1}var S:{:.1}VA PF:{:.3}",
+                snap.computed.p_total,
+                snap.computed.q_total,
+                snap.computed.s_total,
+                snap.computed.pf_total,
+            );
+
+            queue!(
+                stdout,
+                terminal::Clear(ClearType::All),
+                cursor::MoveTo(0, 0),
+                style::Print(line1),
+                style::Print(nl()),
+                style::Print(line2),
+            )
+            .ok();
+            stdout.flush().ok();
+        }
+        queue!(stdout, style::Print(format!("{}{}", nl(), "> "))).ok();
+        stdout.flush().ok();
+    }
+
+    fn cmd_reset(&self, stdout: &mut impl Write) -> Result<()> {
+        let mut meter = self.meter.lock().expect("mutex poisoned");
+        meter.reset_energy();
+        let out = format!(" -> energy reset{}", nl());
+        queue!(stdout, style::Print(out))?;
         stdout.flush()?;
         Ok(())
     }
@@ -1175,14 +933,5 @@ impl Shell {
             sw |= 0x8000;
         }
         sw
-    }
-
-    fn cmd_reset(&self, stdout: &mut impl Write) -> Result<()> {
-        let mut meter = self.meter.lock().expect("mutex poisoned");
-        meter.reset_energy();
-        let out = "  -> energy reset".to_string();
-        queue!(stdout, style::Print(format!("{}{}", out, nl())))?;
-        stdout.flush()?;
-        Ok(())
     }
 }
