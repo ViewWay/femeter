@@ -1,4 +1,4 @@
-//! 交互式 Shell (精简版)
+//! Interactive Shell (ASCII-only output)
 
 use crate::{ChipType, MeterEvent, MeterHandle, Scenario};
 use anyhow::Result;
@@ -51,7 +51,7 @@ impl Shell {
     }
 
     fn print_welcome_simple(&self, stdout: &mut impl Write) -> Result<()> {
-        writeln!(stdout, "FeMeter 虚拟电表 v0.2 | help 查看命令")?;
+        writeln!(stdout, "FeMeter v0.2 | type help")?;
         stdout.flush()?;
         Ok(())
     }
@@ -70,7 +70,7 @@ impl Shell {
                 break;
             }
 
-            queue!(stdout, style::Print("\n\r⚡> "), cursor::Show)?;
+            queue!(stdout, style::Print("\n\r> "), cursor::Show)?;
             stdout.flush()?;
             input.clear();
 
@@ -150,8 +150,8 @@ impl Shell {
             stdout,
             terminal::Clear(ClearType::All),
             cursor::MoveTo(0, 0),
-            style::Print("FeMeter 虚拟电表 v0.2 | help 查看命令\n\r"),
-            style::Print("⚡> "),
+            style::Print("FeMeter v0.2 | type help\n\r"),
+            style::Print("> "),
         )?;
         stdout.flush()?;
         Ok(())
@@ -182,7 +182,7 @@ impl Shell {
             _ => {
                 queue!(
                     stdout,
-                    style::Print(format!("未知命令: {} (输入 help)\n\r", parts[0]))
+                    style::Print(format!("Unknown command: {} (type help)\n\r", parts[0]))
                 )?;
                 let _ = stdout.flush();
                 Ok(())
@@ -192,32 +192,32 @@ impl Shell {
 
     fn cmd_help(&self, stdout: &mut impl Write) -> Result<()> {
         let help = r#"
-FeMeter 虚拟电表 v0.2
-──────────────────────
- set ua/ub/uc <V>       电压
- set ia/ib/ic <A>       电流
- set angle-a/b/c <°>    相角
- set freq <Hz>          频率
- set pf <0~1>           功率因数
- set 3p <V> <A> <Hz> <PF>  三相组合
- set noise on/off       噪声
- set accel <倍率>       时间加速
+FeMeter v0.2
+=========================================
+ set ua/ub/uc <V>       voltage
+ set ia/ib/ic <A>       current
+ set angle-a/b/c <deg>  phase angle
+ set freq <Hz>          frequency
+ set pf <0~1>           power factor
+ set 3p <V> <A> <Hz> <PF>  three-phase combo
+ set noise on/off       noise
+ set accel <rate>       time acceleration
 
- get voltage             三相电压+线电压
- get current             三相电流+中性线
- get power               有功/无功/视在
- get energy              累计电能
- get freq                频率
- get pf                  功率因数
- get status              状态字
+ get voltage            phase + line voltage
+ get current            phase + neutral current
+ get power              active/reactive/apparent
+ get energy             cumulative energy
+ get freq               frequency
+ get pf                 power factor
+ get status             status word
 
- status                  完整状态表
- scenario <name>         normal/full/noload/overv/loss/overi/reverse
- event <type>            cover/terminal/magnetic/battery
- event list              事件历史
- watch [ms]              实时监控
- reset                   重置电能
- quit                    退出
+ status                 full status table
+ scenario <name>        normal/full/noload/overv/loss/overi/reverse
+ event <type>           cover/terminal/magnetic/battery
+ event list             event history
+ watch [ms]             real-time monitor
+ reset                  reset energy
+ quit                   exit
 "#;
         queue!(stdout, style::Print(help))?;
         stdout.flush()?;
@@ -226,7 +226,7 @@ FeMeter 虚拟电表 v0.2
 
     fn cmd_scenario(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
         if args.is_empty() {
-            queue!(stdout, style::Print("用法: scenario <normal|full|noload|overv|underv|loss|overi|reverse|unbalanced>\n\r"))?;
+            queue!(stdout, style::Print("Usage: scenario <normal|full|noload|overv|underv|loss|overi|reverse|unbalanced>\n\r"))?;
             stdout.flush()?;
             return Ok(());
         }
@@ -241,29 +241,34 @@ FeMeter 虚拟电表 v0.2
             "reverse" | "reversepower" => Scenario::ReversePower,
             "unbalanced" => Scenario::Unbalanced,
             _ => {
-                queue!(stdout, style::Print(format!("未知场景: {}\n\r", args[0])))?;
+                queue!(
+                    stdout,
+                    style::Print(format!("Unknown scenario: {}\n\r", args[0]))
+                )?;
                 stdout.flush()?;
                 return Ok(());
             }
         };
         let mut meter = self.meter.lock().expect("mutex poisoned");
         meter.load_scenario(sc);
-        queue!(stdout, style::Print(format!("已加载场景: {:?}\n\r", sc)))?;
+        queue!(
+            stdout,
+            style::Print(format!("Loaded scenario: {:?}\n\r", sc))
+        )?;
         stdout.flush()?;
         Ok(())
     }
 
     fn cmd_event(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
-        // event list → 显示事件历史 (原 cmd_events)
         if args.first().map(|s| s.to_lowercase()).as_deref() == Some("list") || args.is_empty() {
             let meter = self.meter.lock().expect("mutex poisoned");
             let events = meter.events();
             if events.is_empty() {
-                queue!(stdout, style::Print("无事件记录\n\r"))?;
+                queue!(stdout, style::Print("No events\n\r"))?;
             } else {
                 queue!(
                     stdout,
-                    style::Print(format!("事件记录 (共 {} 条):\n\r", events.len()))
+                    style::Print(format!("Events ({} total):\n\r", events.len()))
                 )?;
                 for e in events.iter().rev().take(20) {
                     queue!(
@@ -287,14 +292,20 @@ FeMeter 虚拟电表 v0.2
             "magnetic" => MeterEvent::MagneticTamper,
             "battery" => MeterEvent::BatteryLow,
             _ => {
-                queue!(stdout, style::Print(format!("未知事件: {}\n\r", args[0])))?;
+                queue!(
+                    stdout,
+                    style::Print(format!("Unknown event: {}\n\r", args[0]))
+                )?;
                 stdout.flush()?;
                 return Ok(());
             }
         };
         let mut meter = self.meter.lock().expect("mutex poisoned");
         meter.trigger_event(ev);
-        queue!(stdout, style::Print(format!("已触发事件: {:?}\n\r", ev)))?;
+        queue!(
+            stdout,
+            style::Print(format!("Triggered event: {:?}\n\r", ev))
+        )?;
         stdout.flush()?;
         Ok(())
     }
@@ -307,7 +318,7 @@ FeMeter 虚拟电表 v0.2
         queue!(
             stdout,
             style::Print(format!(
-                "实时监控 (每 {}ms, 共 10 次, Ctrl+C 退出):\n\r",
+                "Watch ({}ms interval, 10 rounds, Ctrl+C to stop):\n\r",
                 interval
             ))
         )
@@ -323,7 +334,7 @@ FeMeter 虚拟电表 v0.2
                 break;
             }
         }
-        queue!(stdout, style::Print("监控结束\n\r")).ok();
+        queue!(stdout, style::Print("Watch ended\n\r")).ok();
         stdout.flush().ok();
     }
 
@@ -331,7 +342,7 @@ FeMeter 虚拟电表 v0.2
         let mut meter = self.meter.lock().expect("mutex poisoned");
         let snap = meter.snapshot();
         let ev_str = if snap.active_events.is_empty() {
-            "无".to_string()
+            "none".to_string()
         } else {
             snap.active_events
                 .iter()
@@ -342,29 +353,29 @@ FeMeter 虚拟电表 v0.2
 
         let status = format!(
             r#"
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  芯片: {:?} ({}-bit)  频率: {:.2} Hz  噪声: {}  加速: {:.0}x
-  活动事件: {}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  相位    电压(V)    电流(A)    角度(°)    PF
-  ───────────────────────────────────────
-  A       {:>8.2}   {:>8.2}   {:>8.1}   {:>6.3}
-  B       {:>8.2}   {:>8.2}   {:>8.1}   {:>6.3}
-  C       {:>8.2}   {:>8.2}   {:>8.1}   {:>6.3}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  P总: {:>10.2} W    Q总: {:>10.2} var    PF: {:.3}
-  S总: {:>10.2} VA
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  有功电能: {:.3} kWh    无功电能: {:.3} kvarh
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+==========================================
+  Chip: {:?} ({}-bit)  Freq: {:.2} Hz  Noise: {}  Accel: {:.0}x
+  Events: {}
+------------------------------------------
+  Phase    V(V)      I(A)     Angle(deg)    PF
+  -----  --------  --------  ----------  -----
+  A       {:>8.2}  {:>8.2}  {:>10.1}  {:>5.3}
+  B       {:>8.2}  {:>8.2}  {:>10.1}  {:>5.3}
+  C       {:>8.2}  {:>8.2}  {:>10.1}  {:>5.3}
+------------------------------------------
+  P: {:>10.1} W   Q: {:>10.1} var   PF: {:.3}
+  S: {:>10.1} VA
+------------------------------------------
+  Energy: {:.3} kWh / {:.3} kvarh
+==========================================
 "#,
             snap.chip,
             snap.chip.bits(),
             snap.freq,
             if meter.config().noise_enabled {
-                "开"
+                "ON"
             } else {
-                "关"
+                "OFF"
             },
             meter.config().time_accel,
             ev_str,
@@ -396,7 +407,7 @@ FeMeter 虚拟电表 v0.2
         if args.is_empty() {
             queue!(
                 stdout,
-                style::Print("用法: set <param> <value> | set 3p <V> <A> <Hz> <PF>\n\r")
+                style::Print("Usage: set <param> <value> | set 3p <V> <A> <Hz> <PF>\n\r")
             )?;
             stdout.flush()?;
             return Ok(());
@@ -404,14 +415,13 @@ FeMeter 虚拟电表 v0.2
         let param = args[0].to_lowercase();
         let mut meter = self.meter.lock().expect("mutex poisoned");
 
-        // 处理组合命令: set three-phase / 3p
         if param == "three-phase" || param == "threephase" || param == "3p" {
             if args.len() < 5 {
                 queue!(
                     stdout,
-                    style::Print("用法: set 3p <电压V> <电流A> <频率Hz> <功率因数PF>\n\r")
+                    style::Print("Usage: set 3p <Voltage> <Current> <Freq> <PF>\n\r")
                 )?;
-                queue!(stdout, style::Print("示例: set 3p 230 5 50 0.95\n\r"))?;
+                queue!(stdout, style::Print("Example: set 3p 230 5 50 0.95\n\r"))?;
                 stdout.flush()?;
                 return Ok(());
             }
@@ -436,7 +446,7 @@ FeMeter 虚拟电表 v0.2
             queue!(
                 stdout,
                 style::Print(format!(
-                    "三相设置: {:.1}V {:.2}A {:.2}Hz PF={:.3} (角度={:.1}°)\n\r",
+                    "3-phase set: {:.1}V {:.2}A {:.2}Hz PF={:.3} (angle={:.1}deg)\n\r",
                     v, i, freq, pf, angle
                 ))
             )?;
@@ -447,7 +457,7 @@ FeMeter 虚拟电表 v0.2
         if args.len() < 2 {
             queue!(
                 stdout,
-                style::Print(format!("用法: set {} <value>\n\r", param))
+                style::Print(format!("Usage: set {} <value>\n\r", param))
             )?;
             stdout.flush()?;
             return Ok(());
@@ -458,68 +468,89 @@ FeMeter 虚拟电表 v0.2
             "ua" => {
                 meter.set_voltage('a', value_str.parse().unwrap_or(220.0));
                 format!(
-                    "A相电压 = {:.2} V",
+                    "A-phase voltage = {:.2} V",
                     value_str.parse::<f64>().unwrap_or(220.0)
                 )
             }
             "ub" => {
                 meter.set_voltage('b', value_str.parse().unwrap_or(220.0));
                 format!(
-                    "B相电压 = {:.2} V",
+                    "B-phase voltage = {:.2} V",
                     value_str.parse::<f64>().unwrap_or(220.0)
                 )
             }
             "uc" => {
                 meter.set_voltage('c', value_str.parse().unwrap_or(220.0));
                 format!(
-                    "C相电压 = {:.2} V",
+                    "C-phase voltage = {:.2} V",
                     value_str.parse::<f64>().unwrap_or(220.0)
                 )
             }
             "ia" => {
                 meter.set_current('a', value_str.parse().unwrap_or(0.0));
-                format!("A相电流 = {:.2} A", value_str.parse::<f64>().unwrap_or(0.0))
+                format!(
+                    "A-phase current = {:.2} A",
+                    value_str.parse::<f64>().unwrap_or(0.0)
+                )
             }
             "ib" => {
                 meter.set_current('b', value_str.parse().unwrap_or(0.0));
-                format!("B相电流 = {:.2} A", value_str.parse::<f64>().unwrap_or(0.0))
+                format!(
+                    "B-phase current = {:.2} A",
+                    value_str.parse::<f64>().unwrap_or(0.0)
+                )
             }
             "ic" => {
                 meter.set_current('c', value_str.parse().unwrap_or(0.0));
-                format!("C相电流 = {:.2} A", value_str.parse::<f64>().unwrap_or(0.0))
+                format!(
+                    "C-phase current = {:.2} A",
+                    value_str.parse::<f64>().unwrap_or(0.0)
+                )
             }
             "angle-a" | "angle_a" => {
                 meter.set_angle('a', value_str.parse().unwrap_or(0.0));
-                format!("A相角度 = {:.1}°", value_str.parse::<f64>().unwrap_or(0.0))
+                format!(
+                    "A-phase angle = {:.1} deg",
+                    value_str.parse::<f64>().unwrap_or(0.0)
+                )
             }
             "angle-b" | "angle_b" => {
                 meter.set_angle('b', value_str.parse().unwrap_or(0.0));
-                format!("B相角度 = {:.1}°", value_str.parse::<f64>().unwrap_or(0.0))
+                format!(
+                    "B-phase angle = {:.1} deg",
+                    value_str.parse::<f64>().unwrap_or(0.0)
+                )
             }
             "angle-c" | "angle_c" => {
                 meter.set_angle('c', value_str.parse().unwrap_or(0.0));
-                format!("C相角度 = {:.1}°", value_str.parse::<f64>().unwrap_or(0.0))
+                format!(
+                    "C-phase angle = {:.1} deg",
+                    value_str.parse::<f64>().unwrap_or(0.0)
+                )
             }
             "freq" => {
                 meter.set_freq(value_str.parse().unwrap_or(50.0));
-                format!("频率 = {:.2} Hz", value_str.parse::<f64>().unwrap_or(50.0))
+                format!(
+                    "Frequency = {:.2} Hz",
+                    value_str.parse::<f64>().unwrap_or(50.0)
+                )
             }
             "pf" | "power-factor" => {
                 let pf: f64 = value_str.parse().unwrap_or(0.95);
                 if !(-1.0..=1.0).contains(&pf) {
-                    "错误: 功率因数必须在 -1.0 到 1.0 之间".to_string()
+                    "Error: PF must be -1.0 to 1.0".to_string()
                 } else {
                     let angle = pf.acos() * 180.0 / std::f64::consts::PI;
                     meter.set_angle('a', angle);
                     meter.set_angle('b', angle);
                     meter.set_angle('c', angle);
-                    format!("功率因数 = {:.3} (角度自动设为 {:.1}°)", pf, angle)
+                    format!("PF = {:.3} (angle auto-set to {:.1} deg)", pf, angle)
                 }
             }
             "noise" => {
                 let e = ["on", "1", "true"].contains(&value_str.to_lowercase().as_str());
                 meter.set_noise(e);
-                format!("噪声 {}", if e { "开" } else { "关" })
+                format!("Noise {}", if e { "ON" } else { "OFF" })
             }
             "chip" => match value_str.to_lowercase().as_str() {
                 "att7022e" | "att7022" => {
@@ -530,14 +561,14 @@ FeMeter 虚拟电表 v0.2
                     meter.set_chip(ChipType::RN8302B);
                     "RN8302B".to_string()
                 }
-                _ => format!("未知: {}", value_str),
+                _ => format!("Unknown: {}", value_str),
             },
             "accel" => {
                 let a: f64 = value_str.parse().unwrap_or(1.0);
                 meter.set_time_accel(a);
-                format!("时间加速 = {:.0}x", a)
+                format!("Time accel = {:.0}x", a)
             }
-            _ => format!("未知参数: {}", param),
+            _ => format!("Unknown param: {}", param),
         };
         queue!(stdout, style::Print(format!("{}\n\r", result)))?;
         stdout.flush()?;
@@ -548,7 +579,7 @@ FeMeter 虚拟电表 v0.2
         if args.is_empty() {
             queue!(
                 stdout,
-                style::Print("用法: get <voltage|current|angle|power|energy|freq|pf|status>\n\r")
+                style::Print("Usage: get <voltage|current|angle|power|energy|freq|pf|status>\n\r")
             )?;
             stdout.flush()?;
             return Ok(());
@@ -589,15 +620,7 @@ FeMeter 虚拟电表 v0.2
                 .sqrt();
 
                 let output = format!(
-                    "\n\r┌────────────────────────────────────────┐\n\r\
-                     │           电压测量                     │\n\r\
-                     ├────────────────────────────────────────┤\n\r\
-                     │ 相位    相电压(V)    线电压(V)         │\n\r\
-                     ├────────────────────────────────────────┤\n\r\
-                     │ A        {:>8.2}      Uab: {:>8.2}     │\n\r\
-                     │ B        {:>8.2}      Ubc: {:>8.2}     │\n\r\
-                     │ C        {:>8.2}      Uca: {:>8.2}     │\n\r\
-                     └────────────────────────────────────────┘\n\r\n",
+                    "\n\r  [Voltage]\n\r  Phase  Phase(V)  Line(V)\n\r  -----  --------  --------\n\r  A        {:>8.2}  {:>8.2}\n\r  B        {:>8.2}  {:>8.2}\n\r  C        {:>8.2}  {:>8.2}\n\r  (Uab/Ubc/Uca)\n\r\n",
                     snap.phase_a.voltage,
                     v_ab,
                     snap.phase_b.voltage,
@@ -625,49 +648,21 @@ FeMeter 虚拟电表 v0.2
                 .sqrt();
 
                 let output = format!(
-                    "\n\r┌────────────────────────────────────────┐\n\r\
-                     │           电流测量                     │\n\r\
-                     ├────────────────────────────────────────┤\n\r\
-                     │ 相位    电流(A)                       │\n\r\
-                     ├────────────────────────────────────────┤\n\r\
-                     │ A        {:>8.3}                     │\n\r\
-                     │ B        {:>8.3}                     │\n\r\
-                     │ C        {:>8.3}                     │\n\r\
-                     │ N        {:>8.3}  (中性线)           │\n\r\
-                     └────────────────────────────────────────┘\n\r\n",
+                    "\n\r  [Current]\n\r  Phase  Current(A)\n\r  -----  ----------\n\r  A        {:>8.3}\n\r  B        {:>8.3}\n\r  C        {:>8.3}\n\r  N        {:>8.3}  (neutral)\n\r\n",
                     snap.phase_a.current, snap.phase_b.current, snap.phase_c.current, i_n
                 );
                 queue!(stdout, style::Print(output))?;
             }
             "angle" | "ang" | "a" => {
                 let output = format!(
-                    "\n\r┌────────────────────────────────────────┐\n\r\
-                     │           相角测量                     │\n\r\
-                     ├────────────────────────────────────────┤\n\r\
-                     │ 相位    角度(°)                       │\n\r\
-                     ├────────────────────────────────────────┤\n\r\
-                     │ A        {:>8.1}°                    │\n\r\
-                     │ B        {:>8.1}°                    │\n\r\
-                     │ C        {:>8.1}°                    │\n\r\
-                     └────────────────────────────────────────┘\n\r\
-                     注: 正常三相角度 A=0°, B=-120°, C=120°\n\r\n",
+                    "\n\r  [Angle]\n\r  Phase  Angle(deg)\n\r  -----  ----------\n\r  A        {:>8.1}\n\r  B        {:>8.1}\n\r  C        {:>8.1}\n\r  (Normal: A=0, B=-120, C=120)\n\r\n",
                     snap.phase_a.angle, snap.phase_b.angle, snap.phase_c.angle
                 );
                 queue!(stdout, style::Print(output))?;
             }
             "power" | "pow" | "p" => {
                 let output = format!(
-                    "\n\r┌────────────────────────────────────────────────┐\n\r\
-                     │                功率测量                        │\n\r\
-                     ├────────────────────────────────────────────────┤\n\r\
-                     │ 相位  有功(W)  无功(var)  视在(VA)    PF    │\n\r\
-                     ├────────────────────────────────────────────────┤\n\r\
-                     │ A    {:>7.1}  {:>8.1}  {:>8.1}  {:>5.3}│\n\r\
-                     │ B    {:>7.1}  {:>8.1}  {:>8.1}  {:>5.3}│\n\r\
-                     │ C    {:>7.1}  {:>8.1}  {:>8.1}  {:>5.3}│\n\r\
-                     ├────────────────────────────────────────────────┤\n\r\
-                     │ 总  {:>8.1}  {:>8.1}  {:>8.1}  {:>5.3}│\n\r\
-                     └────────────────────────────────────────────────┘\n\r\n",
+                    "\n\r  [Power]\n\r  Phase        W(W)     var(var)    VA(VA)      PF\n\r  -----  ----------  ----------  ---------  -------\n\r  A        {:>8.1}  {:>10.1}  {:>9.1}  {:>7.3}\n\r  B        {:>8.1}  {:>10.1}  {:>9.1}  {:>7.3}\n\r  C        {:>8.1}  {:>10.1}  {:>9.1}  {:>7.3}\n\r  Total    {:>8.1}  {:>10.1}  {:>9.1}  {:>7.3}\n\r\n",
                     snap.computed.p_a,
                     snap.computed.q_a,
                     snap.computed.s_a,
@@ -689,17 +684,7 @@ FeMeter 虚拟电表 v0.2
             }
             "energy" | "en" | "e" => {
                 let output = format!(
-                    "\n\r┌────────────────────────────────────────┐\n\r\
-                     │           电能累计                     │\n\r\
-                     ├────────────────────────────────────────┤\n\r\
-                     │ 相位    有功(kWh)    无功(kvarh)      │\n\r\
-                     ├────────────────────────────────────────┤\n\r\
-                     │ A        {:>10.4}    {:>10.4}      │\n\r\
-                     │ B        {:>10.4}    {:>10.4}      │\n\r\
-                     │ C        {:>10.4}    {:>10.4}      │\n\r\
-                     ├────────────────────────────────────────┤\n\r\
-                     │ 总      {:>10.4}    {:>10.4}      │\n\r\
-                     └────────────────────────────────────────┘\n\r\n",
+                    "\n\r  [Energy]\n\r  Phase       kWh       kvarh\n\r  -----  ---------  ---------\n\r  A        {:>9.4}  {:>9.4}\n\r  B        {:>9.4}  {:>9.4}\n\r  C        {:>9.4}  {:>9.4}\n\r  Total    {:>9.4}  {:>9.4}\n\r\n",
                     snap.energy.wh_a / 1000.0,
                     snap.energy.varh_a / 1000.0,
                     snap.energy.wh_b / 1000.0,
@@ -712,21 +697,12 @@ FeMeter 虚拟电表 v0.2
                 queue!(stdout, style::Print(output))?;
             }
             "frequency" | "freq" | "f" => {
-                let output = format!("\n\r  频率: {:.3} Hz\n\r\n", snap.freq);
+                let output = format!("\n\r  Freq: {:.3} Hz\n\r\n", snap.freq);
                 queue!(stdout, style::Print(output))?;
             }
             "power-factor" | "pf" => {
                 let output = format!(
-                    "\n\r┌────────────────────────────────────────┐\n\r\
-                     │           功率因数                     │\n\r\
-                     ├────────────────────────────────────────┤\n\r\
-                     │ 相位    功率因数                      │\n\r\
-                     ├────────────────────────────────────────┤\n\r\
-                     │ A        {:>8.4}                    │\n\r\
-                     │ B        {:>8.4}                    │\n\r\
-                     │ C        {:>8.4}                    │\n\r\
-                     │ 总       {:>8.4}                    │\n\r\
-                     └────────────────────────────────────────┘\n\r\n",
+                    "\n\r  [Power Factor]\n\r  Phase      PF\n\r  -----  -------\n\r  A       {:>7.4}\n\r  B       {:>7.4}\n\r  C       {:>7.4}\n\r  Total   {:>7.4}\n\r\n",
                     snap.computed.pf_a,
                     snap.computed.pf_b,
                     snap.computed.pf_c,
@@ -736,76 +712,69 @@ FeMeter 虚拟电表 v0.2
             }
             "status-word" | "status" | "sw" => {
                 let sw = self.compute_status_word(&snap);
-                let mut output = format!(
-                    "\n\r┌────────────────────────────────────────┐\n\r\
-                     │           状态字分析                   │\n\r\
-                     ├────────────────────────────────────────┤\n\r\
-                     │ 状态字: 0x{:08X}                    │\n\r\
-                     ├────────────────────────────────────────┤\n\r",
-                    sw
-                );
+                let mut output = format!("\n\r  [Status Word] 0x{:08X}\n\r", sw);
 
                 if sw == 0 {
-                    output.push_str("│ ✓ 所有参数正常                        │\n\r");
+                    output.push_str("  OK - All parameters normal\n\r");
                 } else {
                     if sw & 0x01 != 0 {
-                        output.push_str("│ ⚠ A相失压 (< 10V)                    │\n\r");
+                        output.push_str("  ! A-phase voltage loss (< 10V)\n\r");
                     }
                     if sw & 0x02 != 0 {
-                        output.push_str("│ ⚠ B相失压 (< 10V)                    │\n\r");
+                        output.push_str("  ! B-phase voltage loss (< 10V)\n\r");
                     }
                     if sw & 0x04 != 0 {
-                        output.push_str("│ ⚠ C相失压 (< 10V)                    │\n\r");
+                        output.push_str("  ! C-phase voltage loss (< 10V)\n\r");
                     }
                     if sw & 0x08 != 0 {
-                        output.push_str("│ ⚠ A相过压 (> 264V)                  │\n\r");
+                        output.push_str("  ! A-phase overvoltage (> 264V)\n\r");
                     }
                     if sw & 0x10 != 0 {
-                        output.push_str("│ ⚠ B相过压 (> 264V)                  │\n\r");
+                        output.push_str("  ! B-phase overvoltage (> 264V)\n\r");
                     }
                     if sw & 0x20 != 0 {
-                        output.push_str("│ ⚠ C相过压 (> 264V)                  │\n\r");
+                        output.push_str("  ! C-phase overvoltage (> 264V)\n\r");
                     }
                     if sw & 0x40 != 0 {
-                        output.push_str("│ ⚠ A相欠压 (< 198V)                  │\n\r");
+                        output.push_str("  ! A-phase undervoltage (< 198V)\n\r");
                     }
                     if sw & 0x80 != 0 {
-                        output.push_str("│ ⚠ B相欠压 (< 198V)                  │\n\r");
+                        output.push_str("  ! B-phase undervoltage (< 198V)\n\r");
                     }
                     if sw & 0x100 != 0 {
-                        output.push_str("│ ⚠ C相欠压 (< 198V)                  │\n\r");
+                        output.push_str("  ! C-phase undervoltage (< 198V)\n\r");
                     }
                     if sw & 0x200 != 0 {
-                        output.push_str("│ ⚠ A相过流 (> 60A)                   │\n\r");
+                        output.push_str("  ! A-phase overcurrent (> 60A)\n\r");
                     }
                     if sw & 0x400 != 0 {
-                        output.push_str("│ ⚠ B相过流 (> 60A)                   │\n\r");
+                        output.push_str("  ! B-phase overcurrent (> 60A)\n\r");
                     }
                     if sw & 0x800 != 0 {
-                        output.push_str("│ ⚠ C相过流 (> 60A)                   │\n\r");
+                        output.push_str("  ! C-phase overcurrent (> 60A)\n\r");
                     }
                     if sw & 0x1000 != 0 {
-                        output.push_str("│ ⚠ 电流不平衡 (> 20%)                │\n\r");
+                        output.push_str("  ! Current imbalance (> 20%)\n\r");
                     }
                     if sw & 0x2000 != 0 {
-                        output.push_str("│ ⚠ 电压不平衡 (> 2%)                 │\n\r");
+                        output.push_str("  ! Voltage imbalance (> 2%)\n\r");
                     }
                     if sw & 0x4000 != 0 {
-                        output.push_str("│ ⚠ 相序错误                          │\n\r");
+                        output.push_str("  ! Phase sequence error\n\r");
                     }
                     if sw & 0x8000 != 0 {
-                        output.push_str("│ ⚠ 反向功率                          │\n\r");
+                        output.push_str("  ! Reverse power\n\r");
                     }
                 }
-                output.push_str("└────────────────────────────────────────┘\n\r\n");
+                output.push('\n');
                 queue!(stdout, style::Print(output))?;
             }
             _ => {
-                queue!(stdout, style::Print(format!("未知查询: {}\n\r", sub)))?;
+                queue!(stdout, style::Print(format!("Unknown query: {}\n\r", sub)))?;
                 queue!(
                     stdout,
                     style::Print(
-                        "可用: voltage, current, angle, power, energy, freq, pf, status\n\r"
+                        "Available: voltage, current, angle, power, energy, freq, pf, status\n\r"
                     )
                 )?;
             }
@@ -904,7 +873,7 @@ FeMeter 虚拟电表 v0.2
     fn cmd_reset(&self, stdout: &mut impl Write) -> Result<()> {
         let mut meter = self.meter.lock().expect("mutex poisoned");
         meter.reset_energy();
-        queue!(stdout, style::Print("电能已重置\n\r"))?;
+        queue!(stdout, style::Print("Energy reset\n\r"))?;
         stdout.flush()?;
         Ok(())
     }
