@@ -1,6 +1,6 @@
 [package]
 name = "virtual-meter"
-version = "1.0.0"
+version = "0.1.0"
 edition = "2021"
 description = "跨平台虚拟电表，模拟 ATT7022E/RN8302B 计量芯片"
 

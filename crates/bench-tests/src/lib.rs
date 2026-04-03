@@ -12,12 +12,25 @@ macro_rules! bench {
         #[test]
         fn $name() {
             let start = Instant::now();
-            for _ in 0..ITERATIONS { $body; }
+            for _ in 0..ITERATIONS {
+                $body;
+            }
             let elapsed = start.elapsed();
             let per_iter = elapsed / ITERATIONS as u32;
-            eprintln!("{}: total={:?}, per_iter={:?} (target<{:?})", stringify!($name), elapsed, per_iter, std::time::Duration::from_millis($target_ms));
-            assert!(per_iter.as_millis() <= $target_ms as u128,
-                "{} exceeded target: {:?} > {:?}ms", stringify!($name), per_iter, $target_ms);
+            eprintln!(
+                "{}: total={:?}, per_iter={:?} (target<{:?})",
+                stringify!($name),
+                elapsed,
+                per_iter,
+                std::time::Duration::from_millis($target_ms)
+            );
+            assert!(
+                per_iter.as_millis() <= $target_ms as u128,
+                "{} exceeded target: {:?} > {:?}ms",
+                stringify!($name),
+                per_iter,
+                $target_ms
+            );
         }
     };
 }
@@ -44,7 +57,9 @@ bench!(bench_hdlc_address_encode_decode, 1, {
 });
 
 bench!(bench_hdlc_llc_roundtrip, 1, {
-    let payload = vec![0xE0, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x00, 0xFF, 0x02, 1, 2, 3];
+    let payload = vec![
+        0xE0, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x00, 0xFF, 0x02, 1, 2, 3,
+    ];
     let wrapped = dlms_hdlc::llc::add_llc_header(true, &payload);
     let _ = dlms_hdlc::llc::strip_llc_header(&wrapped);
 });
@@ -70,7 +85,11 @@ bench!(bench_axdr_encode_complex, 1, {
     let _ = enc.encode(&arr);
     let bytes = enc.to_bytes().to_vec();
     let mut dec = dlms_axdr::AxdrDecoder::new(&bytes);
-    while dec.remaining() > 0 { if dec.decode().is_err() { break; } }
+    while dec.remaining() > 0 {
+        if dec.decode().is_err() {
+            break;
+        }
+    }
 });
 
 bench!(bench_axdr_datetime, 1, {
@@ -82,10 +101,8 @@ bench!(bench_axdr_datetime, 1, {
 // ═══ ASN1 encode/decode ═══
 
 bench!(bench_asn1_aarq_roundtrip, 1, {
-    let initiate = dlms_asn1::InitiateRequest::new(
-        dlms_asn1::ConformanceBlock::standard_meter(),
-        2048,
-    );
+    let initiate =
+        dlms_asn1::InitiateRequest::new(dlms_asn1::ConformanceBlock::standard_meter(), 2048);
     let aarq = dlms_asn1::Aarq::new_ln_no_cipher(initiate);
     let bytes = aarq.encode();
     let _ = dlms_asn1::decode_aarq(&bytes);
@@ -106,10 +123,17 @@ bench!(bench_security_control_parse, 1, {
 bench!(bench_event_detection, 1, {
     let mut det = femeter_core::event_detect::EventDetector::new();
     let data = femeter_core::PhaseData {
-        voltage_a: 22000, voltage_b: 22050, voltage_c: 21950,
-        current_a: 5000, current_b: 4800, current_c: 5200,
-        active_power_total: 3300, reactive_power_total: 200,
-        frequency: 5000, power_factor_total: 998, ..Default::default()
+        voltage_a: 22000,
+        voltage_b: 22050,
+        voltage_c: 21950,
+        current_a: 5000,
+        current_b: 4800,
+        current_c: 5200,
+        active_power_total: 3300,
+        reactive_power_total: 200,
+        frequency: 5000,
+        power_factor_total: 998,
+        ..Default::default()
     };
     det.check(&data);
 });
@@ -117,32 +141,49 @@ bench!(bench_event_detection, 1, {
 bench!(bench_tamper_detection, 1, {
     let mut td = femeter_core::tamper_detection::TamperDetector::new(22000, 100);
     let data = femeter_core::PhaseData {
-        voltage_a: 22000, voltage_b: 22050, voltage_c: 21950,
-        current_a: 5000, current_b: 4800, current_c: 5200,
-        frequency: 5000, power_factor_total: 998, ..Default::default()
+        voltage_a: 22000,
+        voltage_b: 22050,
+        voltage_c: 21950,
+        current_a: 5000,
+        current_b: 4800,
+        current_c: 5200,
+        frequency: 5000,
+        power_factor_total: 998,
+        ..Default::default()
     };
     let accel = femeter_core::tamper_detection::AccelerometerData::default();
-    td.check([data.voltage_a, data.voltage_b, data.voltage_c],
-             [data.current_a, data.current_b, data.current_c],
-             [data.voltage_angle_a, data.voltage_angle_b, data.voltage_angle_c],
-             &accel, false, false, 0);
+    td.check(
+        [data.voltage_a, data.voltage_b, data.voltage_c],
+        [data.current_a, data.current_b, data.current_c],
+        [
+            data.voltage_angle_a,
+            data.voltage_angle_b,
+            data.voltage_angle_c,
+        ],
+        &accel,
+        false,
+        false,
+        0,
+    );
 });
 
 bench!(bench_power_quality_thd, 1, {
-    let harmonics = [1.0, 0.05, 0.03, 0.02, 0.01, 0.008, 0.006, 0.005, 0.004, 0.003,
-        0.002, 0.002, 0.001, 0.001, 0.001, 0.001, 0.001, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    let harmonics = [
+        1.0, 0.05, 0.03, 0.02, 0.01, 0.008, 0.006, 0.005, 0.004, 0.003, 0.002, 0.002, 0.001, 0.001,
+        0.001, 0.001, 0.001, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0,
+    ];
     let _ = femeter_core::power_quality::calculate_thd(&harmonics, 1, 50);
 });
 
 bench!(bench_power_quality_harmonics_analysis, 1, {
-    let harmonics = [1.0, 0.05, 0.03, 0.02, 0.01, 0.008, 0.006, 0.005, 0.004, 0.003,
-        0.002, 0.002, 0.001, 0.001, 0.001, 0.001, 0.001, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    let harmonics = [
+        1.0, 0.05, 0.03, 0.02, 0.01, 0.008, 0.006, 0.005, 0.004, 0.003, 0.002, 0.002, 0.001, 0.001,
+        0.001, 0.001, 0.001, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0,
+    ];
     let _ = femeter_core::power_quality::analyze_harmonics(&harmonics);
 });
 
