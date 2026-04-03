@@ -30,7 +30,7 @@ pub struct SerialConfig {
     pub flow_control: serialport::FlowControl,
 }
 
- impl Default for SerialConfig {
+impl Default for SerialConfig {
     fn default() -> Self {
         Self {
             baud_rate: 9600,
@@ -65,7 +65,7 @@ pub struct SerialService {
     /// 配置
     config: SerialConfig,
 }
- impl SerialService {
+impl SerialService {
     /// 创建串口服务
     pub fn new(meter: MeterHandle) -> Self {
         Self {
@@ -98,7 +98,8 @@ pub struct SerialService {
 
         let port_name_clone = port_name.clone();
         let handle = thread::spawn(move || {
-            if let Err(e) = Self::run_real_serial(&port_name_clone, meter, running.clone(), config) {
+            if let Err(e) = Self::run_real_serial(&port_name_clone, meter, running.clone(), config)
+            {
                 eprintln!("Serial server error: {}", e);
             }
         });
@@ -107,7 +108,6 @@ pub struct SerialService {
         self.port_name = Some(port_name);
         Ok(())
     }
-
 
     /// 启动虚拟串口服务(PTY)
     /// 返回 slave 端设备路径(如 /dev/ttys001)
@@ -146,7 +146,6 @@ pub struct SerialService {
         self.port_name = Some(slave_path.clone());
         Ok(slave_path)
     }
-
 
     /// 停止串口服务
     pub fn stop(&mut self) -> Result<()> {
@@ -189,7 +188,10 @@ pub struct SerialService {
             .timeout(Duration::from_millis(100))
             .open()?;
 
-        println!("[Serial] Port {} opened at {} baud", port_name, config.baud_rate);
+        println!(
+            "[Serial] Port {} opened at {} baud",
+            port_name, config.baud_rate
+        );
         Self::handle_serial_port(port, meter, running, config)
     }
 
@@ -276,7 +278,6 @@ pub struct SerialService {
             }
         }
 
-
         println!("[Serial] Server stopped");
         Ok(())
     }
@@ -308,7 +309,6 @@ pub struct SerialService {
                     std::mem::forget(_slave_file);
                     path_buf.to_string_lossy().into_owned()
                 };
-
 
                 Ok((master, slave_path))
             }
@@ -356,7 +356,6 @@ pub struct SerialService {
                         Ok(n) => {
                             // 处理读取到的 n 个字节
                             for &b in byte.iter().take(n) {
-
                                 // HDLC 帧处理
                                 if b == 0x7E {
                                     hdlc_mode = true;
@@ -429,7 +428,7 @@ pub struct SerialService {
         Ok(())
     }
 }
- impl Drop for SerialService {
+impl Drop for SerialService {
     fn drop(&mut self) {
         let _ = self.stop();
     }
