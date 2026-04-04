@@ -1,6 +1,9 @@
 //! HDLC control field encoding/decoding
 
-/// HDLC frame type
+/// HDLC frame type classification
+///
+/// I-frames carry data, S-frames supervise the link,
+/// U-frames provide unnumbered control functions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameType {
     /// Information frame (carries data)
@@ -25,6 +28,10 @@ pub enum FrameType {
 
 /// HDLC control field (1 or 2 bytes)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// HDLC frame control field
+///
+/// Encodes frame type, sequence numbers, and poll/final bit
+/// per IEC 62056-46 §8.4.2.
 pub struct ControlField {
     pub frame_type: FrameType,
     /// Send sequence number N(S) for I-frames

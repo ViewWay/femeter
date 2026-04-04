@@ -8,6 +8,10 @@ use core::fmt;
 /// OBIS code: six value groups A-B-C-D-E-F
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "defmt-log", derive(defmt::Format))]
+/// OBIS code (Object Identification System)
+///
+/// A 6-component identifier (A.B.C.D.E.F) that uniquely identifies
+/// a data object in a DLMS/COSEM meter per IEC 62056-61.
 pub struct ObisCode {
     pub a: u8, // Medium type (0-15)
     pub b: u8, // Channel number (0-255)

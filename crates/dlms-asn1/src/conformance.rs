@@ -3,6 +3,9 @@
 //! Reference: Green Book Ed.9 §8.3
 
 /// 24-bit conformance block for DLMS/COSEM
+///
+/// Indicates which DLMS services and features are supported.
+/// Reference: Green Book Ed.9 §8.3
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConformanceBlock {
     pub bits: [u8; 3],

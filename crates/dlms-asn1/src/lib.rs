@@ -1,6 +1,16 @@
 //! ASN.1 BER encoder/decoder for DLMS/COSEM
 //!
-//! Handles AARQ/AARE/RLRQ/RLRE PDUs and ConformanceBlock
+//! Handles AARQ/AARE/RLRQ/RLRE PDUs and ConformanceBlock.
+//!
+//! # Module Overview
+//!
+//! - [`aare`] — Application Association Response Entity
+//! - [`aarq`] — Application Association Request Entity
+//! - [`ber`] — Basic Encoding Rules encoder/decoder
+//! - [`conformance`] — Conformance block bit flags
+//! - [`context`] — Application context name definitions
+//! - [`initiate`] — Initiate request/response
+//! - [`rlrq_rlre`] — Release request/response
 
 #![no_std]
 
@@ -9,12 +19,19 @@ extern crate std;
 
 extern crate alloc;
 
+/// Application Association Response Entity
 pub mod aare;
+/// Application Association Request Entity
 pub mod aarq;
+/// Basic Encoding Rules encoder/decoder
 pub mod ber;
+/// Conformance block bit flags
 pub mod conformance;
+/// Application context name definitions
 pub mod context;
+/// Initiate request/response
 pub mod initiate;
+/// Release request/response
 pub mod rlrq_rlre;
 
 pub use aare::{decode_aare, encode_aare, Aare};

@@ -203,13 +203,12 @@ impl MockTransport {
     }
 
     /// Write an encoded HDLC frame into the transport
-    pub fn write_frame(&mut self, frame: &HdlcFrame) {
-        let mut f = frame.clone();
-        self.buffer.extend(f.encode());
+    pub fn write_frame(&mut self, frame: &mut HdlcFrame) {
+        self.buffer.extend(frame.encode());
     }
 
     /// Write multiple frames
-    pub fn write_frames(&mut self, frames: &[HdlcFrame]) {
+    pub fn write_frames(&mut self, frames: &mut [HdlcFrame]) {
         for f in frames {
             self.write_frame(f);
         }

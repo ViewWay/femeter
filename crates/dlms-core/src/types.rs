@@ -94,6 +94,10 @@ pub struct ScalerUnit {
 /// Maps directly to A-XDR tag values.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "defmt-log", derive(defmt::Format))]
+/// COSEM data type enum
+///
+/// Represents all possible DLMS/COSEM data types mapped to their
+/// A-XDR tag encoding per Green Book §9.5.
 pub enum DlmsType {
     /// null-data [0]
     Null,

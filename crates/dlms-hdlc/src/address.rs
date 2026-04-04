@@ -7,6 +7,10 @@ use alloc::vec::Vec;
 use dlms_core::errors::HdlcError;
 
 /// HDLC address (client + server upper/lower)
+///
+/// Uses extended addressing format per Green Book §8.4.2.2.
+/// The address is composed of a 1-byte client address and two 16-bit
+/// server address fields (upper = logical device, lower = physical).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HdlcAddress {
     /// Client address (1 byte, typically 0x01-0x7F)
@@ -34,6 +38,7 @@ impl HdlcAddress {
 
 /// Encode HDLC address to bytes (extended addressing)
 /// Returns encoded bytes with HDLC extension bits
+/// Encode an HDLC address to bytes (extended format)
 pub fn encode_address(addr: &HdlcAddress) -> Vec<u8> {
     let mut bytes = Vec::new();
 
@@ -64,6 +69,7 @@ pub fn encode_address(addr: &HdlcAddress) -> Vec<u8> {
 /// Returns (address, bytes_consumed)
 /// Decode Green Book format addresses (server first, then client)
 /// Used in DLMS HDLC frames where format/length bytes are present
+/// Decode address using strict Green Book extended format
 pub fn decode_address_green_book(data: &[u8]) -> Result<(HdlcAddress, usize), HdlcError> {
     if data.is_empty() {
         return Err(HdlcError::AddressError);
@@ -108,6 +114,7 @@ pub fn decode_address_green_book(data: &[u8]) -> Result<(HdlcAddress, usize), Hd
     ))
 }
 
+/// Decode address with fallback to legacy single-byte format
 pub fn decode_address(data: &[u8]) -> Result<(HdlcAddress, usize), HdlcError> {
     if data.len() < 2 {
         return Err(HdlcError::AddressError);
