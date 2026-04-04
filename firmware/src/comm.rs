@@ -822,28 +822,28 @@ impl IecDataId {
     /// Convert to IEC 62056-21 data identifier string
     pub fn to_id_string(&self) -> [u8; 16] {
         let mut buf = [0u8; 16];
-        let s = match self {
-            IecDataId::Manufacturer => b"B0(",
-            IecDataId::Model => b"B1(",
-            IecDataId::FirmwareVersion => b"B2(",
-            IecDataId::HardwareVersion => b"B3(",
-            IecDataId::SerialNumber => b"B4(",
-            IecDataId::CustomerId => b"B5(",
-            IecDataId::MeteringPoint => b"B6(",
-            IecDataId::BillingPeriod => b"B7(",
-            IecDataId::Tariff => b"B8(",
-            IecDataId::DateTime => b"B9(",
-            IecDataId::StatusWord => b"F.F(",
-            IecDataId::TotalActiveImport => b"0.0.0(",
-            IecDataId::TotalActiveExport => b"1.8.0(",
+        let s: &[u8] = match self {
+            IecDataId::Manufacturer => b"B0(" as &[u8],
+            IecDataId::Model => b"B1(" as &[u8],
+            IecDataId::FirmwareVersion => b"B2(" as &[u8],
+            IecDataId::HardwareVersion => b"B3(" as &[u8],
+            IecDataId::SerialNumber => b"B4(" as &[u8],
+            IecDataId::CustomerId => b"B5(" as &[u8],
+            IecDataId::MeteringPoint => b"B6(" as &[u8],
+            IecDataId::BillingPeriod => b"B7(" as &[u8],
+            IecDataId::Tariff => b"B8(" as &[u8],
+            IecDataId::DateTime => b"B9(" as &[u8],
+            IecDataId::StatusWord => b"F.F(" as &[u8],
+            IecDataId::TotalActiveImport => b"0.0.0(" as &[u8],
+            IecDataId::TotalActiveExport => b"1.8.0(" as &[u8],
             IecDataId::TariffActiveImport(t) => {
                 // e.g. "1.8.1("
                 buf[0] = b'1'; buf[1] = b'.'; buf[2] = b'8'; buf[3] = b'.';
                 buf[4] = b'0' + *t; buf[5] = b'(';
                 return buf;
             }
-            IecDataId::VoltageL1 => b"0.2.0(",
-            IecDataId::CurrentL1 => b"0.6.0(",
+            IecDataId::VoltageL1 => b"0.2.0(" as &[u8],
+            IecDataId::CurrentL1 => b"0.6.0(" as &[u8],
             IecDataId::Custom(id) => {
                 // Format: A.B.C.D.E.F(
                 let mut pos = 0;
