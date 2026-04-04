@@ -106,6 +106,32 @@ cargo build -p dlms-host
 
 ## 测试
 
+### 测试统计
+
+| 类型 | 数量 | 状态 |
+|------|------|------|
+| Rust 单元测试 | 1,024 | ✅ 全通过 |
+| Python 集成测试 | 58 | ✅ |
+| HDLC E2E (Python↔Rust) | 4/4 | ✅ |
+
+### HDLC 端到端测试
+
+Python `dlms-cosem` 客户端 ↔ Rust 虚拟电表完整流程验证：
+
+```bash
+# 启动虚拟电表
+cargo run --release --bin virtual-meter -- --non-interactive
+# 另一终端
+python test_hdlc_connection.py
+```
+
+| 步骤 | 状态 | 说明 |
+|------|------|------|
+| SNRM/UA 握手 | ✅ | CRC-16 完全匹配 |
+| AARQ/AARE 关联 | ✅ | BER 编码正确，DLMS READY |
+| GetRequest (电压) | ✅ | GetResponseNormal = 220.5V |
+| ReleaseRequest | ✅ | 返回 RLRE |
+
 ### Rust 单元测试
 
 ```bash
