@@ -378,6 +378,8 @@ pub struct EventDetector {
     neutral_current: u16,
     /// 零线电流过流阈值 (mA)
     neutral_over_current: u16,
+    /// 功率因数过低跟踪
+    low_pf_active: bool,
 }
 
 impl EventDetector {
@@ -405,6 +407,7 @@ impl EventDetector {
             flash_total_count: 0,
             neutral_current: 0,
             neutral_over_current: 60000,
+            low_pf_active: false,
         }
     }
 
@@ -625,6 +628,20 @@ impl EventDetector {
             }
         }
 
+        // 功率因数过低 (0.001, 低于 0.80 → 800)
+        if data.power_factor_total < 800 && data.power_factor_total > 0 {
+            if !self.is_event_active(MeterEvent::LowPowerFactor) {
+                self.log_event(
+                    MeterEvent::LowPowerFactor,
+                    data.power_factor_total as u32,
+                    1,
+                );
+                new_events |= 1 << (MeterEvent::LowPowerFactor as u8);
+            }
+        } else if self.is_event_active(MeterEvent::LowPowerFactor) {
+            self.log_event(MeterEvent::LowPowerFactor, data.power_factor_total as u32, 0);
+        }
+
         self.pending_events |= new_events;
         new_events
     }
@@ -649,6 +666,7 @@ impl EventDetector {
             MeterEvent::FrequencyDeviation => self.freq_deviation_active,
             MeterEvent::ReversePower => self.reverse_power_active,
             MeterEvent::MagneticTamper => self.magnetic.active,
+            MeterEvent::LowPowerFactor => self.low_pf_active,
             _ => false,
         }
     }
