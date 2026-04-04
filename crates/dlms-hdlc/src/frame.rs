@@ -20,7 +20,9 @@ pub const HDLC_ESCAPE_MASK: u8 = 0x20;
 pub const DEFAULT_MAX_FRAME_SIZE: usize = 128;
 
 /// HDLC frame
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Represents a complete HDLC frame with address, control field,
+/// optional information payload, HCS, and FCS.
 pub struct HdlcFrame {
     pub address: HdlcAddress,
     pub control: ControlField,

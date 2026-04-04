@@ -10,6 +10,9 @@ use alloc::vec::Vec;
 use dlms_core::errors::HdlcError;
 
 /// HDLC connection state
+///
+/// Tracks the HDLC connection lifecycle through the standard
+/// DLMS/COSEM connection phases.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionState {
     Disconnected,
@@ -19,6 +22,9 @@ pub enum ConnectionState {
 }
 
 /// HDLC connection manager (client side)
+///
+/// Manages the HDLC connection state machine, sequence numbers,
+/// and frame generation for a DLMS client.
 pub struct HdlcConnection {
     pub state: ConnectionState,
     pub address: HdlcAddress,

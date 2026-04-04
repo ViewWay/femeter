@@ -4,6 +4,8 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 /// BER Tag wrapper
+///
+/// Represents a BER tag with class, constructed flag, and tag number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BerTag {
     pub class: u8, // 0=universal, 1=application, 2=context, 3=private
@@ -121,7 +123,7 @@ impl BerTag {
     }
 }
 
-/// BER encode error
+/// BER encoding/decoding errors
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BerError {
     UnexpectedEnd,

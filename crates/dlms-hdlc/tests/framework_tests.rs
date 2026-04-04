@@ -87,9 +87,9 @@ fn test_connected_session_multi_exchange() {
 
 #[test]
 fn test_mock_transport_single_frame() {
-    let frame = FrameBuilder::new().ua(true).build();
+    let mut frame = FrameBuilder::new().ua(true).build();
     let mut transport = MockTransport::new();
-    transport.write_frame(&frame);
+    transport.write_frame(&mut frame);
 
     let read = transport.read_frame().unwrap();
     assert_eq!(read.control.frame_type, FrameType::UA);
@@ -98,7 +98,7 @@ fn test_mock_transport_single_frame() {
 
 #[test]
 fn test_mock_transport_multiple_frames() {
-    let frames = vec![
+    let mut frames = vec![
         FrameBuilder::new().ua(true).build(),
         FrameBuilder::new().rr(0, true).build(),
         FrameBuilder::new()
@@ -107,7 +107,7 @@ fn test_mock_transport_multiple_frames() {
             .build(),
     ];
     let mut transport = MockTransport::new();
-    transport.write_frames(&frames);
+    transport.write_frames(&mut frames);
 
     let read = transport.read_all_frames();
     assert_eq!(read.len(), 3);
@@ -119,12 +119,12 @@ fn test_mock_transport_multiple_frames() {
 
 #[test]
 fn test_mock_transport_with_inter_frame_garbage() {
-    let frame = FrameBuilder::new().ua(true).build();
+    let mut frame = FrameBuilder::new().ua(true).build();
     let mut transport = MockTransport::new();
 
     // Write garbage bytes before frame
     transport.write(&[0xFF, 0xAA, 0x00]);
-    transport.write_frame(&frame);
+    transport.write_frame(&mut frame);
     // More garbage after
     transport.write(&[0xBB, 0xCC]);
 
@@ -148,13 +148,13 @@ fn test_mock_transport_incomplete_frame() {
 
 #[test]
 fn test_mock_transport_raw_bytes_roundtrip() {
-    let frame = FrameBuilder::new()
+    let mut frame = FrameBuilder::new()
         .information(0, 0, false)
         .payload(vec![0x7E, 0x7D, 0x00, 0xFF])
         .build();
 
     let mut transport = MockTransport::new();
-    transport.write_frame(&frame);
+    transport.write_frame(&mut frame);
 
     let raw = transport.read_frame_bytes().unwrap();
     assert!(raw.starts_with(&[0x7E]));
