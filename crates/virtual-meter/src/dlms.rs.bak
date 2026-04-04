@@ -30,41 +30,33 @@ impl HdlcFrame {
     #[allow(dead_code)]
     pub const XESCAPE: u8 = 0x5D;
 
+    /// Encode I-frame in Green Book HDLC format
+    /// Format: 7E | A0/A1 | len | server_addr | client_addr | control | HCS | info | FCS | 7E
     pub fn encode(server_addr: u16, client_addr: u16, apdu: &[u8]) -> Vec<u8> {
-        let address = HdlcAddress::new(client_addr as u8, server_addr, 0);
-        let control = dlms_hdlc::control::ControlField::information(0, 0, false);
-        let mut frame = CrateHdlcFrame::new(address, control, apdu.to_vec());
-        frame.encode()
-    }
-
-    /// Encode UA frame in Green Book HDLC format (server-first addressing, correct byte order)
-    pub fn encode_ua(server_addr: u16, client_addr: u16, poll_final: bool) -> Vec<u8> {
         let server_byte = ((server_addr as u8) << 1 | 1) as u8;
         let client_byte = ((client_addr as u8) << 1 | 1) as u8;
-        let control = dlms_hdlc::control::ControlField::ua(poll_final);
+        let control = dlms_hdlc::control::ControlField::information(0, 0, false);
         let ctrl_byte = control.encode();
 
-        // Header (server + client + control)
+        // Header: server + client + control
         let header = vec![server_byte, client_byte, ctrl_byte];
-
-        // HCS: CRC-16/CCITT of header (little-endian: low byte first)
         let hcs = dlms_hdlc::crc::crc16(&header);
-        let hcs_lo = (hcs & 0xFF) as u8;
-        let hcs_hi = ((hcs >> 8) & 0xFF) as u8;
 
-        // Content: format + length + header + HCS
-        let len = 1 + header.len() + 2; // format(1) + header(3) + HCS(2)
-        let mut content = vec![0xA0, len as u8];
+        // Calculate total length: format(1) + length(1) + header + HCS(2) + info + FCS(2)
+        let total_content = 1 + 1 + header.len() + 2 + apdu.len();
+        let len_byte = (total_content + 2) as u8; // +2 for FCS
+
+        // Build content
+        let mut content = vec![0xA0, len_byte];
         content.extend_from_slice(&header);
-        content.push(hcs_lo);
-        content.push(hcs_hi);
+        content.push((hcs & 0xFF) as u8);
+        content.push((hcs >> 8) as u8);
+        content.extend_from_slice(apdu);
 
-        // FCS: CRC-16/CCITT of everything (little-endian)
+        // FCS
         let fcs = dlms_hdlc::crc::crc16(&content);
-        let fcs_lo = (fcs & 0xFF) as u8;
-        let fcs_hi = ((fcs >> 8) & 0xFF) as u8;
-        content.push(fcs_lo);
-        content.push(fcs_hi);
+        content.push((fcs & 0xFF) as u8);
+        content.push((fcs >> 8) as u8);
 
         let mut frame = vec![0x7E];
         frame.extend_from_slice(&content);
@@ -72,13 +64,170 @@ impl HdlcFrame {
         frame
     }
 
-    pub fn decode(data: &[u8]) -> Result<(u16, u16, Vec<u8>)> {
+    /// Encode UA frame in Green Book HDLC format
+    pub fn encode_ua(server_addr: u16, client_addr: u16, poll_final: bool) -> Vec<u8> {
+        let server_byte = ((server_addr as u8) << 1 | 1) as u8;
+        let client_byte = ((client_addr as u8) << 1 | 1) as u8;
+        let control = dlms_hdlc::control::ControlField::ua(poll_final);
+        let ctrl_byte = control.encode();
+
+        // Header content: server + client + control
+        let header = vec![server_byte, client_byte, ctrl_byte];
+        let hcs = dlms_hdlc::crc::crc16(&header);
+
+        // Full frame content: format + length + header + HCS
+        let len = 1 + header.len() + 2; // format + header + HCS
+        let mut content = vec![0xA0, len as u8];
+        content.extend_from_slice(&header);
+        content.push((hcs & 0xFF) as u8);
+        content.push((hcs >> 8) as u8);
+
+        // FCS over everything
+        let fcs = dlms_hdlc::crc::crc16(&content);
+        content.push((fcs & 0xFF) as u8);
+        content.push((fcs >> 8) as u8);
+
+        let mut frame = vec![0x7E];
+        frame.extend_from_slice(&content);
+        frame.push(0x7E);
+        frame
+    }
+
+    /// Encode DM frame in Green Book HDLC format
+    pub fn encode_dm(server_addr: u16, client_addr: u16, poll_final: bool) -> Vec<u8> {
+        let server_byte = ((server_addr as u8) << 1 | 1) as u8;
+        let client_byte = ((client_addr as u8) << 1 | 1) as u8;
+        let control = dlms_hdlc::control::ControlField::dm(poll_final);
+        let ctrl_byte = control.encode();
+
+        let header = vec![server_byte, client_byte, ctrl_byte];
+        let hcs = dlms_hdlc::crc::crc16(&header);
+
+        let len = 1 + header.len() + 2;
+        let mut content = vec![0xA0, len as u8];
+        content.extend_from_slice(&header);
+        content.push((hcs & 0xFF) as u8);
+        content.push((hcs >> 8) as u8);
+
+        let fcs = dlms_hdlc::crc::crc16(&content);
+        content.push((fcs & 0xFF) as u8);
+        content.push((fcs >> 8) as u8);
+
+        let mut frame = vec![0x7E];
+        frame.extend_from_slice(&content);
+        frame.push(0x7E);
+        frame
+    }
+
+    /// Decode Green Book HDLC format (with format/length prefix)
+    /// Used for dlms-cosem frames: 7E | A0/A1 | len | server | client | ctrl | HCS? | info | FCS | 7E
+    pub fn decode_green_book(data: &[u8]) -> Result<(u16, u16, Vec<u8>, dlms_hdlc::control::ControlField)> {
+        fn is_info_empty(info: &[u8]) -> bool {
+            info.is_empty() || (info.len() == 1 && info[0] == 0x00)
+        }
+
+        if data.len() < 4 || data[0] != 0x7E || data[data.len()-1] != 0x7E {
+            return Err(anyhow!("Invalid HDLC frame"));
+        }
+
+        // Extract frame content (without flags)
+        let content = &data[1..data.len()-1]; // 0x7E ... 0x7E
+        if content.len() < 2 {
+            return Err(anyhow!("Frame too short"));
+        }
+
+        let format_byte = content[0];
+        let length = if (format_byte & 0x80) != 0 {
+            if content.len() < 3 {
+                return Err(anyhow!("Invalid length field"));
+            }
+            u16::from_be_bytes([content[1], content[2]]) as usize
+        } else {
+            content[1] as usize
+        };
+
+        let addr_start = if (format_byte & 0x80) != 0 { 3 } else { 2 };
+        if addr_start + 2 >= content.len() {
+            return Err(anyhow!("No address data"));
+        }
+        // Simple 1-byte address parsing (for SNRM/UA/DISC):
+        let server = (content[addr_start] >> 1) as u16;
+        let client = (content[addr_start + 1] >> 1) as u16;
+        let pos = addr_start + 2;
+        eprintln!("[HDLC] Green Book content: {:02X?}", content);
+        loop {
+            if pos >= content.len() {
+                return Err(anyhow!("Truncated server address"));
+            }
+            server = (server << 7) | ((content[pos] >> 1) as u32);
+            let is_last = content[pos] & 0x01 != 0;
+            pos += 1;
+            if is_last {
+                break;
+            }
+            if pos - addr_start > 4 {
+                return Err(anyhow!("Server address too long"));
+            }
+        }
+
+        let server_upper = (server >> 16) as u16;
+
+        let server_lower = (server & 0xFFFF) as u16;
+
+        // Client address: 1 byte
+        if pos >= content.len() {
+            return Err(anyhow!("No client address"));
+        }
+        eprintln!("[HDLC]   client at pos={}, len={}", pos, content.len());
+        eprintln!("[HDLC]   content[{}]=0x{:02X}", pos, content[pos]);
+        let client = (content[pos] >> 1) as u16;
+        pos += 1;
+
+        // Control byte
+        if pos >= content.len() {
+            return Err(anyhow!("No control byte"));
+        }
+        let control = dlms_hdlc::control::ControlField::decode(content[pos]);
+        pos += 1;
+
+        // HCS (optional for U-frames without info)
+        // For U-frames without info: HCS may be omitted in some implementations
+        // For I-frames or frames with info: HCS is required
+        let hcs_bytes = if pos + 2 <= content.len() - 2 &&
+           (control.frame_type != dlms_hdlc::control::FrameType::I ||
+            !is_info_empty(&content[pos..content.len()-2])) {
+            Some([content[pos], content[pos+1]])
+        } else {
+            None
+        };
+        if let Some(hcs) = hcs_bytes {
+            pos += 2;
+        }
+
+        // Information field (between HCS and FCS)
+        let fcs_pos = content.len() - 2; // FCS is last 2 bytes
+        let info = if pos < fcs_pos {
+            content[pos..fcs_pos].to_vec()
+        } else {
+            Vec::new()
+        };
+
+        Ok((
+            server_upper,
+            client,
+            info,
+            control,
+        ))
+    }
+
+    pub fn decode(data: &[u8]) -> Result<(u16, u16, Vec<u8>, dlms_hdlc::control::ControlField)> {
         let frame =
             CrateHdlcFrame::decode(data).map_err(|e| anyhow!("HDLC decode error: {:?}", e))?;
         Ok((
             frame.address.server_upper,
             frame.address.client as u16,
             frame.information,
+            frame.control,
         ))
     }
 }
@@ -163,9 +312,55 @@ impl DlmsProcessor {
 
     /// 处理 HDLC 帧 -> 响应帧
     pub fn process_hdlc(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let (server, client, info) = HdlcFrame::decode(data)?;
-        let response_apdu = self.process_apdu(&info)?;
-        Ok(HdlcFrame::encode(server, client, &response_apdu))
+        eprintln!("[HDLC] process_hdlc called with {} bytes", data.len());
+        // Validate HDLC frame markers
+        if data.len() < 4 || data[0] != 0x7E || data[data.len()-1] != 0x7E {
+            return Err(anyhow!("Invalid HDLC frame"));
+        }
+        
+        // Use Green Book format decode for dlms-cosem compatibility
+        let (server_addr, client_addr, info, control): (u16, u16, Vec<u8>, _) = match HdlcFrame::decode_green_book(data) {
+            Ok(r) => {
+                eprintln!("[HDLC] decoded: server={}, client={}, info_len={}, frame_type={:?}", r.0, r.1, r.2.len(), r.3.frame_type);
+                r
+            }
+            Err(e) => {
+                eprintln!("[HDLC] decode_green_book FAILED: {}, raw: {:02X?}", e, data);
+                return Err(e);
+            }
+        };
+        
+        use dlms_hdlc::control::FrameType;
+        
+        match control.frame_type {
+            // SNRM: client requests connection, reply UA
+            FrameType::SNRM => {
+                Ok(HdlcFrame::encode_ua(server_addr, client_addr, control.poll_final))
+            }
+            // DISC: client disconnects, reply DM
+            FrameType::DISC => {
+                Ok(HdlcFrame::encode_dm(server_addr, client_addr, control.poll_final))
+            }
+            // I-frame: process APDU
+            FrameType::I => {
+                if !info.is_empty() {
+                    let response_apdu = self.process_apdu(&info)?;
+                    Ok(HdlcFrame::encode(server_addr, client_addr, &response_apdu))
+                } else {
+                    Ok(HdlcFrame::encode(server_addr, client_addr, &[]))
+                }
+            }
+            // RR/RNR: acknowledge, reply RR
+            FrameType::RR | FrameType::RNR => {
+                // Use crate to encode a proper RR frame
+                let address = HdlcAddress::new(client_addr as u8, server_addr, 0);
+                let rr_control = dlms_hdlc::control::ControlField::rr(control.recv_seq, true);
+                let mut frame = CrateHdlcFrame::new(address, rr_control, Vec::new());
+                Ok(frame.encode())
+            }
+            // Other frame types
+            _ => Err(anyhow!("unsupported frame type: {:?}", control.frame_type)),
+        }
     }
 
     /// 处理裸 APDU
@@ -491,7 +686,7 @@ mod tests {
         let frame = HdlcFrame::encode(0x0001, 0x0010, &apdu);
         assert_eq!(frame[0], 0x7E);
         assert_eq!(*frame.last().unwrap(), 0x7E);
-        let (server, client, decoded) = HdlcFrame::decode(&frame).unwrap();
+        let (server, client, decoded, _control) = HdlcFrame::decode(&frame).unwrap();
         assert_eq!(server, 0x0001);
         assert_eq!(client, 0x0010);
         assert_eq!(decoded, apdu);
@@ -502,7 +697,7 @@ mod tests {
         let apdu = [0x7E, 0x7D, 0x00];
         let frame = HdlcFrame::encode(0x0001, 0x0001, &apdu);
         assert!(frame.len() > apdu.len() + 8);
-        let (_, _, decoded) = HdlcFrame::decode(&frame).unwrap();
+        let (_, _, decoded, _) = HdlcFrame::decode(&frame).unwrap();
         assert_eq!(decoded, apdu);
     }
 
@@ -543,5 +738,20 @@ mod tests {
     fn test_dlms_type_conversions() {
         assert_eq!(DlmsType::from_u32(42).as_u32(), Some(42));
         assert_eq!(DlmsType::from_f32(220.5).tag(), 23);
+    }
+
+    #[test]
+    fn test_snrm_ua_handshake() {
+        // 测试 SNRM 帧编码
+        let snrm_frame = crate::dlms::HdlcFrame::encode_ua(0x0001, 0x0010, true);
+        assert_eq!(snrm_frame[0], 0x7E);
+        assert_eq!(*snrm_frame.last().unwrap(), 0x7E);
+
+        // 解码 UA 帧
+        let (server, client, info, control) = crate::dlms::HdlcFrame::decode(&snrm_frame).unwrap();
+        assert_eq!(server, 0x0001);
+        assert_eq!(client, 0x0010);
+        assert_eq!(control.frame_type, dlms_hdlc::control::FrameType::UA);
+        assert!(info.is_empty());
     }
 }

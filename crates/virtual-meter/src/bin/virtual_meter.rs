@@ -56,7 +56,7 @@ struct Args {
     freq: f64,
 
     /// 启用噪声模拟
-    #[arg(short, long)]
+    #[arg(short = 'N', long)]
     noise: bool,
 
     /// 列出可用串口并退出

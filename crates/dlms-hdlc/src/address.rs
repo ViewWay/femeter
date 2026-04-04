@@ -62,6 +62,52 @@ pub fn encode_address(addr: &HdlcAddress) -> Vec<u8> {
 
 /// Decode HDLC address from bytes
 /// Returns (address, bytes_consumed)
+/// Decode Green Book format addresses (server first, then client)
+/// Used in DLMS HDLC frames where format/length bytes are present
+pub fn decode_address_green_book(data: &[u8]) -> Result<(HdlcAddress, usize), HdlcError> {
+    if data.is_empty() {
+        return Err(HdlcError::AddressError);
+    }
+
+    // Server address (variable length, bit0=0 means more bytes, bit0=1 = last)
+    let mut server: u32 = 0;
+    let mut pos = 0;
+    let server_start = pos;
+    loop {
+        if pos >= data.len() {
+            return Err(HdlcError::AddressError);
+        }
+        server = (server << 7) | ((data[pos] >> 1) as u32);
+        if data[pos] & 0x01 != 0 {
+            pos += 1;
+            break;
+        }
+        pos += 1;
+        if pos - server_start > 4 {
+            return Err(HdlcError::AddressError);
+        }
+    }
+
+    // Client address (1 byte)
+    if pos >= data.len() {
+        return Err(HdlcError::AddressError);
+    }
+    let client = data[pos] >> 1;
+    pos += 1;
+
+    let server_upper = (server >> 16) as u16;
+    let server_lower = (server & 0xFFFF) as u16;
+
+    Ok((
+        HdlcAddress {
+            client,
+            server_upper,
+            server_lower,
+        },
+        pos,
+    ))
+}
+
 pub fn decode_address(data: &[u8]) -> Result<(HdlcAddress, usize), HdlcError> {
     if data.len() < 2 {
         return Err(HdlcError::AddressError);

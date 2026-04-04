@@ -195,6 +195,7 @@ fn handle_text_client(mut stream: TcpStream, handler: ProtocolHandler) {
 }
 
 fn handle_dlms_client(mut stream: TcpStream, processor: crate::dlms::DlmsProcessor) {
+    eprintln!("[TCP DLMS] New client connection from {:?}", stream.peer_addr());
     let _ = stream.set_read_timeout(Some(Duration::from_secs(CLIENT_TIMEOUT_SECS)));
     let mut buf = [0u8; 4096];
     // HDLC over TCP: 帧由 0x7E 分隔, 需要积累完整帧
@@ -202,26 +203,39 @@ fn handle_dlms_client(mut stream: TcpStream, processor: crate::dlms::DlmsProcess
 
     loop {
         match stream.read(&mut buf) {
-            Ok(0) => break,
+            Ok(0) => {
+                eprintln!("[TCP DLMS] Client disconnected");
+                break;
+            }
             Ok(n) => {
+                eprintln!("[TCP DLMS] Received {} bytes: {:02X?}", n, &buf[..n]);
                 frame_buf.extend_from_slice(&buf[..n]);
+                eprintln!("[TCP DLMS] Received {} bytes: {:02X?}", n, &buf[..n]);
 
                 // 查找完整 HDLC 帧 (以 0x7E 开头和结尾)
-                while let Some(end) = frame_buf.iter().position(|&b| b == 0x7E) {
-                    if end == 0 {
-                        // 跳过起始 flag
-                        frame_buf.remove(0);
-                        continue;
-                    }
-                    let frame_data: Vec<u8> = frame_buf[..=end].to_vec();
+                // 跳过起始的连续 0x7E
+                while !frame_buf.is_empty() && frame_buf[0] == 0x7E {
+                    frame_buf.remove(0);
+                }
+                
+                // 查找下一个 0x7E (结束 flag)
+                if let Some(end) = frame_buf.iter().position(|&b| b == 0x7E) {
+                    // 完整帧数据 = 0x7E + content + 0x7E
+                    let mut frame_data = vec![0x7E];
+                    frame_data.extend_from_slice(&frame_buf[..end]);
+                    frame_data.push(0x7E);
                     frame_buf.drain(..=end);
 
+                    eprintln!("[TCP DLMS] Processing frame: {:02X?}", frame_data);
+
                     if frame_data.len() < 4 {
+                        eprintln!("[TCP DLMS] Frame too short: {}", frame_data.len());
                         continue;
                     }
 
                     match processor.process_hdlc(&frame_data) {
                         Ok(resp) => {
+                            eprintln!("[TCP DLMS] Sending response: {:02X?}", resp);
                             if let Err(e) = stream.write_all(&resp) {
                                 eprintln!("[TCP DLMS] Write error: {}", e);
                                 return;

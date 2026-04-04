@@ -153,6 +153,12 @@ cargo doc --workspace --exclude femeter-firmware --no-deps
 - 上行：定时抄表 + 事件告警
 - 下行：参数配置 + OTA 触发
 
+## 测试统计
+
+- **Rust 单元测试**: 1,009 个全通过（21 个 crate）
+- **覆盖模块**: HDLC、AXDR、ASN.1、OBIS、APDU、COSEM 接口类、安全层、计量、虚拟电表
+- **CI**: `cargo test --workspace --exclude femeter-firmware` + `cargo clippy` + `cargo fmt`
+
 ## 贡献
 
 1. Fork 本仓库
