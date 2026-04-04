@@ -929,7 +929,7 @@ impl IecBaudRate {
 }
 
 /* ================================================================== */
-  Multi-Channel Communication Manager                                */
+/*  Multi-Channel Communication Manager                                */
 /* ================================================================== */
 
 /// Communication event returned by poll methods.

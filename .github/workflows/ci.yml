@@ -65,6 +65,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+          cargo install flip-link
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -102,6 +103,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+          cargo install flip-link
 
       - name: Cache cargo
         uses: actions/cache@v4

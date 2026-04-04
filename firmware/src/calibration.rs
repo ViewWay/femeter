@@ -65,7 +65,7 @@ pub struct CalibrationData {
 
 impl CalibrationData {
     /// 校准数据魔数
-    pub const MAGIC: u32 = 0xCA1B_DATA;
+    pub const MAGIC: u32 = 0xCA1B_DA7A;
     /// 数据大小（不含 CRC）
     pub const DATA_SIZE: usize = core::mem::size_of::<Self>() - 4;
 

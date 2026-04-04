@@ -637,6 +637,7 @@ unsafe extern "C" fn task_rtc_sync_entry(_arg: *mut c_void) {
             );
             // 触发 LoRaWAN/蜂窝 NTP 同步请求
             // 通过 SYS_EVENTS 通知 LoRaWAN 任务发起 NTP 同步
+            let ev = EventGroup::from_raw(SYS_EVENTS);
             ev.set(events::LORA_NTP_SYNC);
         } else {
             debug!(

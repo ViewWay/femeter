@@ -1372,9 +1372,9 @@ pub mod pulse_ext {
     pub fn toggle_active() {
         unsafe {
             let gpio = gpio_port(pins::PULSE_P.port);
-            let odr = core::ptr::read_volatile(&gpio.odr as *const u32);
+            let odr = core::ptr::read_volatile(&gpio.do_reg as *const u32);
             core::ptr::write_volatile(
-                &gpio.odr as *const u32 as *mut u32,
+                &gpio.do_reg as *const u32 as *mut u32,
                 odr ^ (1u32 << pins::PULSE_P.pin),
             );
         }
