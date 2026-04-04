@@ -67,31 +67,24 @@ impl HdlcFrame {
         // Encode control
         raw.push(self.control.encode());
 
-        // Calculate HCS (CRC of address + control)
+        // Calculate HCS (CRC of address + control) — big-endian
         self.hcs = crc16(&raw);
-        raw.push((self.hcs & 0xFF) as u8);
         raw.push((self.hcs >> 8) as u8);
+        raw.push((self.hcs & 0xFF) as u8);
 
         // Add information field (if present)
         if !self.information.is_empty() {
             raw.extend_from_slice(&self.information);
         }
 
-        // Calculate FCS (CRC of everything so far)
+        // Calculate FCS (CRC of everything so far) — big-endian
         self.fcs = crc16(&raw);
-        raw.push((self.fcs & 0xFF) as u8);
         raw.push((self.fcs >> 8) as u8);
+        raw.push((self.fcs & 0xFF) as u8);
 
-        // Apply byte stuffing and add flags
+        // Add flags (no byte stuffing — Python dlms-cosem doesn't do it)
         let mut result = vec![HDLC_FLAG];
-        for &b in &raw {
-            if b == HDLC_FLAG || b == HDLC_ESCAPE {
-                result.push(HDLC_ESCAPE);
-                result.push(b ^ HDLC_ESCAPE_MASK);
-            } else {
-                result.push(b);
-            }
-        }
+        result.extend_from_slice(&raw);
         result.push(HDLC_FLAG);
         result
     }
@@ -106,19 +99,12 @@ impl HdlcFrame {
             return Err(HdlcError::InvalidFlag);
         }
 
-        // Remove byte stuffing
+        // Remove byte stuffing (skip — Python dlms-cosem doesn't stuff)
         let mut raw = Vec::new();
         let mut i = 1; // skip opening flag
         while i < data.len() - 1 {
-            // skip closing flag
-            if data[i] == HDLC_ESCAPE {
-                if i + 1 >= data.len() - 1 {
-                    return Err(HdlcError::InvalidFrameFormat);
-                }
-                raw.push(data[i + 1] ^ HDLC_ESCAPE_MASK);
-                i += 2;
-            } else if data[i] == HDLC_FLAG {
-                break; // End of frame
+            if data[i] == HDLC_FLAG {
+                break;
             } else {
                 raw.push(data[i]);
                 i += 1;
@@ -129,9 +115,9 @@ impl HdlcFrame {
             return Err(HdlcError::InvalidFrameFormat);
         }
 
-        // Verify FCS
+        // Verify FCS (big-endian)
         let payload_len = raw.len() - 2;
-        let fcs = u16::from_le_bytes([raw[payload_len], raw[payload_len + 1]]);
+        let fcs = u16::from_be_bytes([raw[payload_len], raw[payload_len + 1]]);
         if crc16(&raw[..payload_len]) != fcs {
             return Err(HdlcError::CrcError);
         }
@@ -143,12 +129,20 @@ impl HdlcFrame {
         let ctrl_byte = raw[addr_consumed];
         let control = ControlField::decode(ctrl_byte);
 
-        // Parse HCS (2 bytes after address + control)
+        // Parse HCS (2 bytes after address + control) — big-endian
         let hcs_start = addr_consumed + 1;
         if hcs_start + 2 > payload_len {
-            return Err(HdlcError::InvalidFrameFormat);
+            // No HCS for frames without information (like SNRM)
+            // Information is empty
+            return Ok(Self {
+                address,
+                control,
+                hcs: 0,
+                fcs,
+                information: Vec::new(),
+            });
         }
-        let hcs = u16::from_le_bytes([raw[hcs_start], raw[hcs_start + 1]]);
+        let hcs = u16::from_be_bytes([raw[hcs_start], raw[hcs_start + 1]]);
 
         // Verify HCS
         let hcs_calc = crc16(&raw[..hcs_start]);

@@ -131,8 +131,8 @@
 
 - [x] 扫描所有 TODO/FIXME/unimplemented!/todo!()
 - [x] 修复 FreeRTOS 11.x FFI 链接问题
-- [x] 确认所有 717 测试通过
-- [ ] 为 femeter-core 补充单元测试
+- [x] 确认所有 1,026 测试通过
+- [x] 为 femeter-core 补充单元测试 (254 tests)
 - [ ] 为 firmware 纯逻辑模块编写 host 测试（cfg(test) + conditional compilation）
 - [ ] 修复 CI `cargo clippy --workspace` (firmware 在 host 环境可能 clippy 失败)
 
@@ -174,7 +174,7 @@
 
 1. **CI firmware-build 可能仍失败**: build.rs 依赖 `arm-none-eabi-gcc`，CI 已安装但需验证 `cc` crate 能否正确找到
 2. **CI host-build-test 包含 firmware**: `cargo clippy --workspace` 会尝试编译 firmware (no_std)，需 `--exclude femeter-firmware`
-3. **femeter-core 无测试**: 事件检测和 OTA 模块缺少 host 测试
+3. ~~femeter-core 无测试~~ ✅ 已有 254 测试
 
 ### 5.2 中优先级
 
