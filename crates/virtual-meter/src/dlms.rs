@@ -34,7 +34,13 @@ impl HdlcFrame {
         Self::encode_with_ssn(server_addr, client_addr, apdu, 0, 1)
     }
 
-    pub fn encode_with_ssn(server_addr: u16, client_addr: u16, apdu: &[u8], ssn: u8, rsn: u8) -> Vec<u8> {
+    pub fn encode_with_ssn(
+        server_addr: u16,
+        client_addr: u16,
+        apdu: &[u8],
+        ssn: u8,
+        rsn: u8,
+    ) -> Vec<u8> {
         let server_byte = ((server_addr as u8) << 1) | 1;
         let client_byte = ((client_addr as u8) << 1) | 1;
         let control = dlms_hdlc::control::ControlField::information(ssn, rsn, true);
@@ -64,10 +70,10 @@ impl HdlcFrame {
 
         // header_content = format + server + client + control
         let mut content = vec![0xA0, 0x07, server_byte, client_byte, ctrl_byte];
-        
+
         // FCS = CRC of header_content (big-endian, Python compatible)
         let fcs = dlms_hdlc::crc::crc16(&content);
-        content.push((fcs >> 8) as u8);   // MSB
+        content.push((fcs >> 8) as u8); // MSB
         content.push((fcs & 0xFF) as u8); // LSB
 
         let mut frame = vec![0x7E];
@@ -78,28 +84,32 @@ impl HdlcFrame {
 
     pub fn decode(data: &[u8]) -> Result<(u16, u16, Vec<u8>, u8)> {
         // Strip flags
-        if data.len() < 4 || data[0] != 0x7E || data[data.len()-1] != 0x7E {
+        if data.len() < 4 || data[0] != 0x7E || data[data.len() - 1] != 0x7E {
             return Err(anyhow!("Invalid HDLC frame"));
         }
-        let inner = &data[1..data.len()-1];
-        
+        let inner = &data[1..data.len() - 1];
+
         // Green Book format: first byte has bit7=1
         let (_format_len, addr_start) = if inner.len() >= 2 && (inner[0] & 0x80) != 0 {
             (inner[1] as usize, 2) // 2 format bytes
         } else {
             (0, 0) // No format bytes
         };
-        
+
         let raw = &inner[addr_start..];
-        
+
         // Verify FCS (last 2 bytes of inner, big-endian)
         let payload_len = inner.len() - 2;
         let fcs = u16::from_be_bytes([inner[payload_len], inner[payload_len + 1]]);
         let fcs_calc = dlms_hdlc::crc::crc16(&inner[..payload_len]);
         if fcs_calc != fcs {
-            return Err(anyhow!("HDLC CRC error: expected {:04X}, got {:04X}", fcs_calc, fcs));
+            return Err(anyhow!(
+                "HDLC CRC error: expected {:04X}, got {:04X}",
+                fcs_calc,
+                fcs
+            ));
         }
-        
+
         // Parse Green Book addresses (server-first)
         if raw.len() < 3 {
             return Err(anyhow!("Frame too short"));
@@ -107,7 +117,7 @@ impl HdlcFrame {
         let server_addr = (raw[0] >> 1) as u16;
         let client_addr = (raw[1] >> 1) as u16;
         let ctrl_byte = raw[2];
-        
+
         // Parse HCS if frame has information
         let ctrl_field = dlms_hdlc::control::ControlField::decode(ctrl_byte);
         let info = if ctrl_field.frame_type == dlms_hdlc::control::FrameType::I {
@@ -124,7 +134,7 @@ impl HdlcFrame {
         } else {
             Vec::new()
         };
-        
+
         Ok((server_addr, client_addr, info, ctrl_byte))
     }
 }
@@ -234,7 +244,13 @@ impl DlmsProcessor {
         let ssn = self.ssn.load(std::sync::atomic::Ordering::Relaxed);
         self.ssn.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let response_apdu = self.process_apdu(&info)?;
-        Ok(HdlcFrame::encode_with_ssn(server, client, &response_apdu, ssn, ssn.wrapping_add(1)))
+        Ok(HdlcFrame::encode_with_ssn(
+            server,
+            client,
+            &response_apdu,
+            ssn,
+            ssn.wrapping_add(1),
+        ))
     }
 
     /// 处理裸 APDU
@@ -252,7 +268,11 @@ impl DlmsProcessor {
                 // Check actual APDU tag after LLC header strip
                 if !apdu_payload.is_empty() && (apdu_payload[0] & 0xF0) == 0xC0 {
                     // GetRequestNormal: tag(1) + type(1) + invoke_id_and_priority(1) + ...
-                    let invoke_id_and_priority = if apdu_payload.len() > 2 { apdu_payload[2] } else { 0xC0 };
+                    let invoke_id_and_priority = if apdu_payload.len() > 2 {
+                        apdu_payload[2]
+                    } else {
+                        0xC0
+                    };
                     let voltage: f64 = 220.5;
                     let voltage_bytes = voltage.to_be_bytes();
                     // GetResponseNormal: tag(0xC4) + type(0x01) + invoke_id_and_priority + choice(0x00=data) + data_type(0x06) + value
@@ -264,7 +284,11 @@ impl DlmsProcessor {
                 }
                 if !apdu_payload.is_empty() && (apdu_payload[0] & 0xF0) == 0xD0 {
                     // SetRequest — accept
-                    let invoke_id = if apdu_payload.len() > 1 { apdu_payload[1] } else { 0x01 };
+                    let invoke_id = if apdu_payload.len() > 1 {
+                        apdu_payload[1]
+                    } else {
+                        0x01
+                    };
                     let mut response = vec![0xD4, invoke_id, 0x00]; // SetResponse success
                     let mut full_response = vec![0xE6, 0xE7, 0x00];
                     full_response.append(&mut response);
@@ -272,7 +296,11 @@ impl DlmsProcessor {
                 }
                 if !apdu_payload.is_empty() && apdu_payload[0] == 0xC2 {
                     // ActionRequest — execute
-                    let invoke_id = if apdu_payload.len() > 1 { apdu_payload[1] } else { 0x01 };
+                    let invoke_id = if apdu_payload.len() > 1 {
+                        apdu_payload[1]
+                    } else {
+                        0x01
+                    };
                     let mut response = vec![0xC6, invoke_id, 0x00]; // ActionResponse success
                     let mut full_response = vec![0xE6, 0xE7, 0x00];
                     full_response.append(&mut response);
@@ -301,7 +329,8 @@ impl DlmsProcessor {
 
     // --- 关联 ---
     fn handle_association(&self, _apdu: &[u8]) -> Result<Vec<u8>> {
-        if false { // Skip ASN1 decode, use hardcoded AARE
+        if false {
+            // Skip ASN1 decode, use hardcoded AARE
             let aare = dlms_asn1::Aare::accepted_ln_no_cipher(dlms_asn1::InitiateResponse {
                 negotiated_conformance: dlms_asn1::ConformanceBlock::standard_meter(),
                 negotiated_max_pdu_size: 0xFFFF,
@@ -313,12 +342,10 @@ impl DlmsProcessor {
         } else {
             // 简单 AARE 回退
             Ok(vec![
-                0x61, 0x29,
-                0xA1, 0x09, 0x06, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01,
-                0xA2, 0x03, 0x02, 0x01, 0x00,
-                0xA3, 0x05, 0xA1, 0x03, 0x02, 0x01, 0x00,
-                0xBE, 0x10, 0x04, 0x0E,
-                0x08, 0x00, 0x06, 0x5F, 0x1F, 0x04, 0x00, 0x20, 0x52, 0x5F, 0xFF, 0xFF, 0x00, 0x07,
+                0x61, 0x29, 0xA1, 0x09, 0x06, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01, 0xA2,
+                0x03, 0x02, 0x01, 0x00, 0xA3, 0x05, 0xA1, 0x03, 0x02, 0x01, 0x00, 0xBE, 0x10, 0x04,
+                0x0E, 0x08, 0x00, 0x06, 0x5F, 0x1F, 0x04, 0x00, 0x20, 0x52, 0x5F, 0xFF, 0xFF, 0x00,
+                0x07,
             ])
         }
     }

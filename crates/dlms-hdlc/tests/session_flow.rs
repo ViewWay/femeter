@@ -5,15 +5,15 @@
 //!
 //! This test verifies the full HDLC + APDU pipeline end-to-end.
 
-use dlms_hdlc::*;
 use dlms_hdlc::connection::{ConnectionState, HdlcConnection};
 use dlms_hdlc::control::FrameType;
+use dlms_hdlc::*;
 
 #[test]
 fn test_full_dlms_session_normal_flow() {
     // --- Setup ---
     let client_addr = HdlcAddress::new(1, 0x10, 0); // client address 0x10
-    let server_addr = HdlcAddress::new(1, 1, 0);    // server logical address 1
+    let server_addr = HdlcAddress::new(1, 1, 0); // server logical address 1
     let config = HdlcConfig::default();
     let mut client = HdlcConnection::new(client_addr, config);
 
@@ -25,7 +25,10 @@ fn test_full_dlms_session_normal_flow() {
 
     // Verify SNRM encodes/decodes correctly
     let snrm_bytes = snrm.encode();
-    assert!(snrm_bytes.starts_with(&[0x7E]), "Frame must start with flag");
+    assert!(
+        snrm_bytes.starts_with(&[0x7E]),
+        "Frame must start with flag"
+    );
     assert!(snrm_bytes.ends_with(&[0x7E]), "Frame must end with flag");
     let snrm_decoded = HdlcFrame::decode(&snrm_bytes).expect("SNRM roundtrip");
     assert_eq!(snrm_decoded.control.frame_type, FrameType::SNRM);
@@ -36,7 +39,9 @@ fn test_full_dlms_session_normal_flow() {
         dlms_hdlc::control::ControlField::ua(true),
         vec![],
     );
-    client.handle_ua(&ua_frame).expect("UA handling should succeed");
+    client
+        .handle_ua(&ua_frame)
+        .expect("UA handling should succeed");
     assert_eq!(client.state, ConnectionState::Connected);
     assert_eq!(client.send_seq, 0);
     assert_eq!(client.recv_seq, 0);
@@ -67,26 +72,30 @@ fn test_full_dlms_session_normal_flow() {
         dlms_hdlc::control::ControlField::information(0, 0, false),
         aare_payload.clone(),
     );
-    let received_data = client.receive(&server_response).expect("receive should succeed");
+    let received_data = client
+        .receive(&server_response)
+        .expect("receive should succeed");
     assert_eq!(received_data, aare_payload);
     assert_eq!(client.recv_seq, 1);
 
     // === Step 6: Send GetRequest ===
     let get_request: Vec<u8> = vec![
         0xC0, 0x01, // Get-Request-Normal
-        0x01,       // invoke-id = 1
+        0x01, // invoke-id = 1
         0x00, 0x01, // class_id = 1 (Data)
         0x01, 0x00, 0x00, 0x02, 0x00, 0xFF, // OBIS 1.0.0.2.0.255 (current summation)
-        0x02,       // attribute 2 (value)
+        0x02, // attribute 2 (value)
     ];
-    let iframe2 = client.send(get_request.clone()).expect("GetRequest I-frame");
+    let iframe2 = client
+        .send(get_request.clone())
+        .expect("GetRequest I-frame");
     assert_eq!(iframe2.control.send_seq, 1);
 
     // === Step 7: Server sends GetResponse ===
     let get_response: Vec<u8> = vec![
         0xC4, 0x01, // Get-Response-Normal
-        0x01,       // invoke-id = 1
-        0x00,       // result = success
+        0x01, // invoke-id = 1
+        0x00, // result = success
         0x06, 0x00, 0x00, 0x01, 0x00, // double-long: 65536
     ];
     let server_get_resp = HdlcFrame::new(
@@ -94,7 +103,9 @@ fn test_full_dlms_session_normal_flow() {
         dlms_hdlc::control::ControlField::information(1, 1, false),
         get_response.clone(),
     );
-    let resp_data = client.receive(&server_get_resp).expect("GetResponse receive");
+    let resp_data = client
+        .receive(&server_get_resp)
+        .expect("GetResponse receive");
     assert_eq!(resp_data, get_response);
     assert_eq!(client.recv_seq, 2);
 
@@ -163,11 +174,7 @@ fn test_multiple_sequential_frames() {
     for seq in 0..8u8 {
         let data = vec![seq; 10];
         let frame = conn.send(data).unwrap();
-        assert_eq!(
-            frame.control.send_seq, seq,
-            "send_seq should be {}",
-            seq
-        );
+        assert_eq!(frame.control.send_seq, seq, "send_seq should be {}", seq);
     }
 
     // 9th frame wraps to 0
@@ -211,7 +218,10 @@ fn test_reject_connect_when_not_disconnected() {
     // Already connected
     let ua = HdlcFrame::new(addr, dlms_hdlc::control::ControlField::ua(true), vec![]);
     conn.handle_ua(&ua).unwrap();
-    assert!(conn.connect().is_err(), "connect when connected should fail");
+    assert!(
+        conn.connect().is_err(),
+        "connect when connected should fail"
+    );
 }
 
 #[test]

@@ -195,7 +195,10 @@ fn handle_text_client(mut stream: TcpStream, handler: ProtocolHandler) {
 }
 
 fn handle_dlms_client(mut stream: TcpStream, processor: crate::dlms::DlmsProcessor) {
-    eprintln!("[TCP DLMS] New client connection from {:?}", stream.peer_addr());
+    eprintln!(
+        "[TCP DLMS] New client connection from {:?}",
+        stream.peer_addr()
+    );
     let _ = stream.set_read_timeout(Some(Duration::from_secs(CLIENT_TIMEOUT_SECS)));
     let mut buf = [0u8; 4096];
     // HDLC over TCP: 帧由 0x7E 分隔, 需要积累完整帧
@@ -217,7 +220,7 @@ fn handle_dlms_client(mut stream: TcpStream, processor: crate::dlms::DlmsProcess
                 while !frame_buf.is_empty() && frame_buf[0] == 0x7E {
                     frame_buf.remove(0);
                 }
-                
+
                 // 查找下一个 0x7E (结束 flag)
                 if let Some(end) = frame_buf.iter().position(|&b| b == 0x7E) {
                     // 完整帧数据 = 0x7E + content + 0x7E

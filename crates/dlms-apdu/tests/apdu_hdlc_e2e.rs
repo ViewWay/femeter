@@ -3,11 +3,11 @@
 //! Tests the complete DLMS/COSEM application layer pipeline:
 //!   APDU encode → LLC wrap → HDLC frame → byte stream → decode → verify
 
+use dlms_apdu::types::ServiceError;
 use dlms_apdu::*;
 use dlms_core::{DlmsType, ObisCode};
 use dlms_hdlc::frame::HdlcFrame;
 use dlms_hdlc::llc;
-use dlms_apdu::types::ServiceError;
 
 /// Wrap APDU bytes in LLC + HDLC I-frame, encode→decode→extract payload
 fn apdu_over_hdlc_roundtrip(apdu_bytes: &[u8], send_seq: u8, recv_seq: u8) -> Vec<u8> {
@@ -18,7 +18,9 @@ fn apdu_over_hdlc_roundtrip(apdu_bytes: &[u8], send_seq: u8, recv_seq: u8) -> Ve
     let encoded = frame.encode();
     assert!(encoded.starts_with(&[0x7E]));
     let decoded = HdlcFrame::decode(&encoded).expect("HDLC decode");
-    llc::strip_llc_header(&decoded.information).expect("LLC strip").to_vec()
+    llc::strip_llc_header(&decoded.information)
+        .expect("LLC strip")
+        .to_vec()
 }
 
 // ============================================================
@@ -27,9 +29,7 @@ fn apdu_over_hdlc_roundtrip(apdu_bytes: &[u8], send_seq: u8, recv_seq: u8) -> Ve
 
 #[test]
 fn test_get_request_normal_roundtrip() {
-    let descriptor = types::AttributeDescriptor::new(
-        1, ObisCode::new(1, 0, 1, 8, 0, 255), 2,
-    );
+    let descriptor = types::AttributeDescriptor::new(1, ObisCode::new(1, 0, 1, 8, 0, 255), 2);
     let req = get::GetRequestNormal::new(InvokeId::new(42), descriptor);
     let encoded = req.encode().expect("encode");
     assert_eq!(encoded[0], 0xC0);
@@ -72,9 +72,10 @@ fn test_get_response_error_roundtrip() {
 
 #[test]
 fn test_get_response_enum_dispatch() {
-    let resp = get::GetResponse::Data(
-        get::GetResponseNormal::success(InvokeId::new(3), DlmsType::UInt16(220))
-    );
+    let resp = get::GetResponse::Data(get::GetResponseNormal::success(
+        InvokeId::new(3),
+        DlmsType::UInt16(220),
+    ));
     let encoded = resp.encode().expect("encode");
     let decoded = get::GetResponse::decode(&encoded).expect("decode");
     assert_eq!(decoded.invoke_id(), InvokeId::new(3));
@@ -86,9 +87,7 @@ fn test_get_response_enum_dispatch() {
 
 #[test]
 fn test_set_request_normal_roundtrip() {
-    let descriptor = types::AttributeDescriptor::new(
-        3, ObisCode::new(0, 0, 96, 1, 0, 255), 2,
-    );
+    let descriptor = types::AttributeDescriptor::new(3, ObisCode::new(0, 0, 96, 1, 0, 255), 2);
     let req = set::SetRequestNormal::new(InvokeId::new(10), descriptor, DlmsType::UInt32(86400));
     let encoded = req.encode().expect("encode");
     assert_eq!(encoded[0], 0xC1);
@@ -115,9 +114,7 @@ fn test_set_response_success_roundtrip() {
 
 #[test]
 fn test_action_request_normal_roundtrip() {
-    let descriptor = types::MethodDescriptor::new(
-        1, ObisCode::new(0, 0, 96, 1, 0, 255), 1,
-    );
+    let descriptor = types::MethodDescriptor::new(1, ObisCode::new(0, 0, 96, 1, 0, 255), 1);
     let req = action::ActionRequestNormal::new(InvokeId::new(7), descriptor);
     let encoded = req.encode().expect("encode");
     assert_eq!(encoded[0], 0xC2);
@@ -144,7 +141,8 @@ fn test_action_response_success_roundtrip() {
 
 #[test]
 fn test_exception_response_roundtrip() {
-    let exc = exception::ExceptionResponse::new(InvokeId::new(1), ServiceError::OperationNotPossible);
+    let exc =
+        exception::ExceptionResponse::new(InvokeId::new(1), ServiceError::OperationNotPossible);
     let encoded = exc.encode();
     assert_eq!(encoded[0], 0xC3);
 

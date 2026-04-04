@@ -86,8 +86,14 @@ impl HdlcFrame {
         let mut stuffed = Vec::new();
         for &b in &raw {
             match b {
-                HDLC_FLAG => { stuffed.push(HDLC_ESCAPE); stuffed.push(0x5E); }
-                HDLC_ESCAPE => { stuffed.push(HDLC_ESCAPE); stuffed.push(0x5D); }
+                HDLC_FLAG => {
+                    stuffed.push(HDLC_ESCAPE);
+                    stuffed.push(0x5E);
+                }
+                HDLC_ESCAPE => {
+                    stuffed.push(HDLC_ESCAPE);
+                    stuffed.push(0x5D);
+                }
                 _ => stuffed.push(b),
             }
         }
