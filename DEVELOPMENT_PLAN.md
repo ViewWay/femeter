@@ -1,6 +1,7 @@
 # FeMeter 三相智能电表 — 开发计划
 
-> 生成时间: 2026-04-03 | 项目路径: firmware/ + crates/
+> 生成时间: 2026-04-04 | 项目路径: firmware/ + crates/
+> 更新: 测试统计、代码规模同步
 
 ---
 
@@ -11,31 +12,32 @@
 | 指标 | 数值 |
 |------|------|
 | Workspace crates | 15 (14 + firmware) |
-| Rust 源文件 | ~259 |
-| 代码行数 | ~90,559 |
-| 单元测试 | **717 (全部通过)** |
-| 固件模块 | 28 个 .rs 文件 |
+| Rust 源文件 | 307 (267 crates + 40 firmware) |
+| 代码行数 | ~95,130 (53,904 crates + 41,226 firmware) |
+| 单元测试 | **1,026 (全部通过)** |
+| 固件模块 | 40 个 .rs 文件 |
 | 目标 MCU | FM33A068EV (Cortex-M0+ @ 64MHz) |
 
 ### 1.2 测试分布
 
 | Crate | 测试数 | 状态 |
 |-------|--------|------|
-| dlms-apdu | 77 | ✅ |
-| dlms-meter-app | 191 | ✅ |
-| dlms-security | 119 | ✅ |
-| dlms-hdlc | 42 | ✅ |
-| dlms-rtos | 29 | ✅ |
-| dlms-cosem | 25 | ✅ |
-| dlms-axdr | 33 | ✅ |
-| dlms-obis | 6 | ✅ |
-| dlms-core | 8 | ✅ |
-| dlms-hal | 20 | ✅ |
-| virtual-meter | 27 | ✅ |
-| dlms-host | 30 | ✅ |
-| dlms-asn1 | 8 | ✅ |
-| femeter-core | 0 | ⚠️ 无测试 |
+| dlms-apdu | 86 | ✅ |
+| dlms-meter-app | 129 | ✅ |
+| dlms-security | 198 | ✅ |
+| dlms-hdlc | 41 | ✅ |
+| dlms-rtos | 17 | ✅ |
+| dlms-cosem | 111 | ✅ |
+| dlms-axdr | 54 | ✅ |
+| dlms-obis | 8 | ✅ |
+| dlms-core | 6 | ✅ |
+| dlms-hal | 25 | ✅ |
+| virtual-meter | 35 | ✅ |
+| dlms-host | 11 | ✅ |
+| dlms-asn1 | 19 | ✅ |
+| femeter-core | 254 | ✅ |
 | firmware | N/A (no_std, ARM only) | — |
+| **总计** | **1,026** | ✅ |
 
 ---
 
@@ -207,7 +209,7 @@
 | Python E2E 测试 | ✅ | 12/12 通过 (连接/计量/寄存器/数据流/设备信息/复位) |
 | CI 配置 | ✅ | host-build-test 排除 firmware, 添加 Python 测试, FreeRTOS 符号 |
 | Clippy 零警告 | ✅ | 所有 workspace crate (排除 firmware) |
-| Rust 测试 | ✅ | 908 tests passed |
+| Rust 测试 | ✅ | 1,026 tests passed |
 | 文档更新 | ✅ | README.md 架构图 + 模块清单 + 构建指南 |
 | 代码质量 | ✅ | div_ceil/derive/range patterns 等修复 |
 
@@ -228,6 +230,6 @@
 
 | 类型 | 数量 | 状态 |
 |------|------|------|
-| Rust 单元测试 | 908 | ✅ 全部通过 |
+| Rust 单元测试 | 1,026 | ✅ 全部通过 |
 | Python E2E 测试 | 12 | ✅ 全部通过 |
 | Clippy 警告 | 0 | ✅ |
