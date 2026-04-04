@@ -43,6 +43,7 @@ pub mod clock;
 pub mod comm;
 pub mod common;
 pub mod control;
+pub mod cosem_server;
 pub mod firmware;
 pub mod measurement;
 pub mod meter_app;
@@ -58,6 +59,7 @@ pub use common::{
     DisplayFormat, PhaseEnergy, PowerQuality, TariffSchedule,
 };
 pub use control::{ControlMode, OutputState, RelayControl, RelayState};
+pub use cosem_server::CosemServer;
 pub use firmware::{FirmwareManager, ImageInfo, TransferState, TransferStats};
 pub use measurement::{MeasurementEngine, Phase, MAX_TARIFFS};
 pub use meter_app::{AlarmEvent, BillingData, MeterApp, MeterAppState, MeterConfig, MeterData};
