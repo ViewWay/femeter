@@ -115,7 +115,7 @@ impl LcdPanel {
             mode: LcdDisplayMode::Off,
             rotate_timer: 0,
             rotate_page: 0,
-            rotate_total: 8,
+            rotate_total: 12,
             enabled: false,
         }
     }
@@ -277,24 +277,27 @@ impl LcdPanel {
         match page {
             0 => {
                 // A 相: 电压 + 电流
-                self.write_number(0, content.voltage as i32, 1); // xxx.x V
-                self.write_number(4, content.current as i32, 0); // xxxx mA
+                self.write_number(0, content.voltage_a as i32, 1);
+                self.write_number(4, content.current_a as i32, 0);
                 self.write_symbol(LcdSymbol::PhaseA, true);
                 self.write_symbol(LcdSymbol::UnitV, true);
+                self.write_symbol(LcdSymbol::UnitA, true);
             }
             1 => {
                 // B 相: 电压 + 电流
-                self.write_number(0, content.voltage as i32, 1);
-                self.write_number(4, content.current as i32, 0);
+                self.write_number(0, content.voltage_b as i32, 1);
+                self.write_number(4, content.current_b as i32, 0);
                 self.write_symbol(LcdSymbol::PhaseB, true);
                 self.write_symbol(LcdSymbol::UnitV, true);
+                self.write_symbol(LcdSymbol::UnitA, true);
             }
             2 => {
                 // C 相: 电压 + 电流
-                self.write_number(0, content.voltage as i32, 1);
-                self.write_number(4, content.current as i32, 0);
+                self.write_number(0, content.voltage_c as i32, 1);
+                self.write_number(4, content.current_c as i32, 0);
                 self.write_symbol(LcdSymbol::PhaseC, true);
                 self.write_symbol(LcdSymbol::UnitV, true);
+                self.write_symbol(LcdSymbol::UnitA, true);
             }
             3 => {
                 // 总有功功率
@@ -307,24 +310,54 @@ impl LcdPanel {
                 self.write_symbol(LcdSymbol::UnitVar, true);
             }
             5 => {
+                // 视在功率 + 零线电流
+                self.write_number(0, content.apparent_power as i32, 0);
+                self.write_number(4, content.neutral_current as i32, 0);
+                self.write_symbol(LcdSymbol::UnitVA, true);
+                self.write_symbol(LcdSymbol::UnitA, true);
+            }
+            6 => {
                 // 功率因数 + 频率
-                self.write_number(0, content.power_factor as i32, 3); // x.xxx
-                self.write_number(4, content.frequency as i32, 2); // xx.xx Hz
+                self.write_number(0, content.power_factor as i32, 3);
+                self.write_number(4, content.frequency as i32, 2);
                 self.write_symbol(LcdSymbol::UnitPF, true);
                 self.write_symbol(LcdSymbol::UnitHz, true);
             }
-            6 => {
+            7 => {
                 // 正向有功总电能
                 self.write_number(0, (content.active_import_energy / 100) as i32, 2);
                 self.write_symbol(LcdSymbol::UnitKWh, true);
                 self.write_symbol(LcdSymbol::Forward, true);
             }
-            7 => {
+            8 => {
+                // 反向有功电能
+                self.write_number(0, (content.active_export_energy / 100) as i32, 2);
+                self.write_symbol(LcdSymbol::UnitKWh, true);
+                self.write_symbol(LcdSymbol::Reverse, true);
+            }
+            9 => {
+                // 当前需量 + 最大需量
+                self.write_number(0, content.demand_power as i32, 0);
+                self.write_number(4, content.max_demand_power as i32, 0);
+                self.write_symbol(LcdSymbol::UnitW, true);
+            }
+            10 => {
+                // 日期时间
+                self.write_number(0, content.date_year as i32, 0);
+                self.write_number(4, (content.date_month as i32) * 100 + content.date_day as i32, 0);
+                self.write_number(0, (content.time_hour as i32) * 10000
+                    + (content.time_min as i32) * 100
+                    + content.time_sec as i32, 0);
+            }
+            11 => {
                 // 通信状态 + 费率
                 self.write_number(0, content.tariff as i32, 0);
                 self.write_symbol(LcdSymbol::Tariff, true);
                 if content.comm_status & 0x01 != 0 {
                     self.write_symbol(LcdSymbol::RS485, true);
+                }
+                if content.comm_status & 0x02 != 0 {
+                    self.write_symbol(LcdSymbol::IR, true);
                 }
                 if content.comm_status & 0x04 != 0 {
                     self.write_symbol(LcdSymbol::LoRa, true);
@@ -501,7 +534,7 @@ mod tests {
     fn test_lcd_panel_new() {
         let panel = LcdPanel::new();
         assert!(!panel.enabled);
-        assert_eq!(panel.rotate_total, 8);
+        assert_eq!(panel.rotate_total, 12);
         assert_eq!(panel.rotate_page, 0);
     }
 
@@ -565,5 +598,61 @@ mod tests {
         panel.rotate_timer = 3000;
         panel.next_page();
         assert_eq!(panel.rotate_timer, 0);
+    }
+
+    #[test]
+    fn test_lcd_content_new_fields() {
+        let content = LcdContent::default();
+        assert_eq!(content.voltage_a, 0);
+        assert_eq!(content.voltage_b, 0);
+        assert_eq!(content.voltage_c, 0);
+        assert_eq!(content.current_a, 0);
+        assert_eq!(content.demand_power, 0);
+        assert_eq!(content.max_demand_power, 0);
+        assert_eq!(content.apparent_power, 0);
+        assert_eq!(content.neutral_current, 0);
+        assert_eq!(content.active_export_energy, 0);
+        assert_eq!(content.date_year, 0);
+        assert_eq!(content.date_month, 0);
+    }
+
+    #[test]
+    fn test_lcd_content_with_data() {
+        let mut content = LcdContent::default();
+        content.voltage_a = 22050; // 220.50V
+        content.voltage_b = 22100;
+        content.voltage_c = 21980;
+        content.current_a = 5000; // 5A
+        content.active_power = -1100; // negative = reverse
+        content.power_factor = 985; // 0.985
+        content.tariff = 2;
+        content.comm_status = 0x05; // RS485 + LoRa
+        content.demand_power = 5000;
+        content.max_demand_power = 8000;
+        content.date_year = 2026;
+        content.date_month = 4;
+        content.date_day = 4;
+        content.time_hour = 22;
+        content.time_min = 11;
+
+        assert_eq!(content.voltage_a, 22050);
+        assert_eq!(content.active_power, -1100);
+        assert_eq!(content.tariff, 2);
+        assert_eq!(content.comm_status, 0x05);
+    }
+
+    #[test]
+    fn test_lcd_page_overflow() {
+        let mut panel = LcdPanel::new();
+        // Page 11 should wrap to 0
+        panel.rotate_page = 11;
+        panel.next_page();
+        assert_eq!(panel.current_page(), 0);
+    }
+
+    #[test]
+    fn test_lcd_display_mode_debug() {
+        assert_eq!(format!("{:?}", LcdDisplayMode::Off), "Off");
+        assert_eq!(format!("{:?}", LcdDisplayMode::TestAllOn), "TestAllOn");
     }
 }

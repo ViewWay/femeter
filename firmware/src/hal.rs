@@ -416,26 +416,58 @@ pub trait GpioDriver {
 /// LCD 段码内容 (由应用层填充)
 #[derive(Clone, Copy, Default, Debug)]
 pub struct LcdContent {
-    /// 电压显示值 (0.01V)
-    pub voltage: u16,
-    /// 电流显示值 (mA)
-    pub current: u16,
-    /// 有功功率 (W)
+    /// A 相电压 (0.01V)
+    pub voltage_a: u16,
+    /// B 相电压 (0.01V)
+    pub voltage_b: u16,
+    /// C 相电压 (0.01V)
+    pub voltage_c: u16,
+    /// A 相电流 (mA)
+    pub current_a: u16,
+    /// B 相电流 (mA)
+    pub current_b: u16,
+    /// C 相电流 (mA)
+    pub current_c: u16,
+    /// 合相有功功率 (W, signed)
     pub active_power: i32,
-    /// 无功功率 (var)
+    /// 合相无功功率 (var, signed)
     pub reactive_power: i32,
-    /// 功率因数 (0~1000)
+    /// 合相功率因数 (0~1000)
     pub power_factor: u16,
-    /// 频率 (0.01Hz)
+    /// 电网频率 (0.01Hz)
     pub frequency: u16,
     /// 正向有功总电能 (0.01 kWh)
     pub active_import_energy: u64,
+    /// 反向有功总电能 (0.01 kWh)
+    pub active_export_energy: u64,
+    /// 正向无功总电能 (0.01 kvarh)
+    pub reactive_import_energy: u64,
     /// 当前费率 (0~3)
     pub tariff: u8,
     /// 通信状态 (bit0=RS485, bit1=红外, bit2=LoRa, bit3=蜂窝)
     pub comm_status: u8,
     /// 告警标志 (bit0=过压, bit1=欠压, bit2=过流, bit3=功率反向)
     pub alarm_flags: u8,
+    /// 当前需量 (W)
+    pub demand_power: u32,
+    /// 最大需量 (W)
+    pub max_demand_power: u32,
+    /// 视在功率 (VA)
+    pub apparent_power: u32,
+    /// 零线电流 (mA)
+    pub neutral_current: u16,
+    /// 日期: 年 (BCD 或普通, 由显示层决定)
+    pub date_year: u16,
+    /// 日期: 月 (1~12)
+    pub date_month: u8,
+    /// 日期: 日 (1~31)
+    pub date_day: u8,
+    /// 时间: 时 (0~23)
+    pub time_hour: u8,
+    /// 时间: 分 (0~59)
+    pub time_min: u8,
+    /// 时间: 秒 (0~59)
+    pub time_sec: u8,
 }
 
 /// LCD 显示模式
