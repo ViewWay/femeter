@@ -14,7 +14,7 @@
 | Workspace crates | 15 (14 + firmware) |
 | Rust 源文件 | 307 (267 crates + 40 firmware) |
 | 代码行数 | ~95,130 (53,904 crates + 41,226 firmware) |
-| 单元测试 | **1,026 (全部通过)** |
+| 单元测试 | **1,024 (全部通过)** |
 | 固件模块 | 40 个 .rs 文件 |
 | 目标 MCU | FM33A068EV (Cortex-M0+ @ 64MHz) |
 
@@ -25,7 +25,7 @@
 | dlms-apdu | 86 | ✅ |
 | dlms-meter-app | 129 | ✅ |
 | dlms-security | 198 | ✅ |
-| dlms-hdlc | 41 | ✅ |
+| dlms-hdlc | 45 | ✅ |
 | dlms-rtos | 17 | ✅ |
 | dlms-cosem | 111 | ✅ |
 | dlms-axdr | 54 | ✅ |
@@ -230,6 +230,7 @@
 
 | 类型 | 数量 | 状态 |
 |------|------|------|
-| Rust 单元测试 | 1,026 | ✅ 全部通过 |
+| Rust 单元测试 | 1,024 | ✅ 全部通过 |
 | Python E2E 测试 | 12 | ✅ 全部通过 |
+| HDLC E2E (Python↔Rust) | 4/4 | ✅ SNRM+AARQ+Get+Release |
 | Clippy 警告 | 0 | ✅ |

@@ -207,7 +207,7 @@ impl SerialService {
         // 2. HDLC 帧协议（0x7E 分隔）
 
         let handler = create_protocol_handler(meter.clone());
-        let mut dlms_processor = create_dlms_processor(meter);
+        let dlms_processor = create_dlms_processor(meter);
 
         let mut line_buf = Vec::new();
         let mut hdlc_buf = Vec::new();
@@ -331,7 +331,7 @@ impl SerialService {
         );
 
         let handler = create_protocol_handler(meter.clone());
-        let mut dlms_processor = create_dlms_processor(meter);
+        let dlms_processor = create_dlms_processor(meter);
 
         let mut line_buf = Vec::new();
         let mut hdlc_buf = Vec::new();

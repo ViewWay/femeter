@@ -84,7 +84,7 @@ impl HdlcFrame {
         let inner = &data[1..data.len()-1];
         
         // Green Book format: first byte has bit7=1
-        let (format_len, addr_start) = if inner.len() >= 2 && (inner[0] & 0x80) != 0 {
+        let (_format_len, addr_start) = if inner.len() >= 2 && (inner[0] & 0x80) != 0 {
             (inner[1] as usize, 2) // 2 format bytes
         } else {
             (0, 0) // No format bytes
@@ -270,7 +270,7 @@ impl DlmsProcessor {
                     full_response.append(&mut response);
                     return Ok(full_response);
                 }
-                if !apdu_payload.is_empty() && (apdu_payload[0] & 0xF0) == 0xC2 {
+                if !apdu_payload.is_empty() && apdu_payload[0] == 0xC2 {
                     // ActionRequest — execute
                     let invoke_id = if apdu_payload.len() > 1 { apdu_payload[1] } else { 0x01 };
                     let mut response = vec![0xC6, invoke_id, 0x00]; // ActionResponse success
@@ -295,18 +295,6 @@ impl DlmsProcessor {
             0xC0 | 0xC1 => self.handle_get_request(apdu),
             0xD0 | 0xD1 => self.handle_set_request(apdu),
             0xC2 => self.handle_action_request(apdu),
-            0xC0 | 0xC1 | 0xC2 | 0xC3 => {
-                // GetRequest: return a GetResponse with dummy data
-                // GetResponseNormal = 0xC4 + invoke_id + result + data
-                let invoke_id = if apdu.len() > 1 { apdu[1] } else { 0x01 };
-                // Result = 0 (Success) + Data (double-precision float 220.5V)
-                let voltage: f64 = 220.5;
-                let voltage_bytes = voltage.to_be_bytes();
-                let mut response = vec![0xC4, invoke_id, 0x00]; // tag, invoke_id, result=success
-                response.push(0x06); // DLMS type: double-precision float
-                response.extend_from_slice(&voltage_bytes);
-                Ok(response)
-            }
             _ => Err(anyhow!("unsupported APDU tag 0x{:02X}", apdu[0])),
         }
     }
