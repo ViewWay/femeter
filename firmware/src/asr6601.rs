@@ -281,6 +281,20 @@ mod at {
     pub const SLEEP: &str = "AT+SLEEP=ON\r\n";
     /// 唤醒
     pub const WAKEUP: &str = "AT\r\n";
+
+    // 链路检查与配置
+    /// 查询 DevAddr
+    pub const DEVADDR: &str = "AT+ID=DevAddr\r\n";
+    /// 设置确认重试次数
+    pub const RETRY: &str = "AT+RETRY=";
+    /// 设置 RX1 延迟
+    pub const RX1_DELAY: &str = "AT+RXDELAY1=";
+    /// 设置 RX2 数据速率
+    pub const RX2_DR: &str = "AT+RX2DR=";
+    /// 查询链路状态
+    pub const LINK_STATUS: &str = "AT+STATE?\r\n";
+    /// 查询 SNR
+    pub const SNR: &str = "AT+SNR?\r\n";
 }
 
 /* ================================================================== */
@@ -330,6 +344,35 @@ pub struct Asr6601 {
     state: LorawanStatus,
     /// 当前 RSSI
     last_rssi: i16,
+}
+
+/// LoRaWAN 链路状态
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LinkState {
+    Idle,
+    Joining,
+    Joined,
+    Sending,
+    Sleep,
+    Unknown,
+}
+
+impl LinkState {
+    /// 解析 AT+STATE? 响应
+    pub fn from_at_response(buf: &[u8]) -> Self {
+        if buf.windows(7).any(|w| w == b"+STATE:") {
+            if buf.windows(6).any(|w| w == b"Joined") {
+                return LinkState::Joined;
+            }
+            if buf.windows(4).any(|w| w == b"Idle") {
+                return LinkState::Idle;
+            }
+            if buf.windows(5).any(|w| w == b"Sleep") {
+                return LinkState::Sleep;
+            }
+        }
+        LinkState::Unknown
+    }
 }
 
 impl Asr6601 {
@@ -438,6 +481,119 @@ impl Asr6601 {
             b'A'..=b'F' => Ok(b - b'A' + 10),
             _ => Err(LorawanError::AtError),
         }
+    }
+
+    /// 配置 ABP 入网参数
+    pub fn configure_abp(
+        &mut self,
+        dev_addr: &[u8; 4],
+        nwk_skey: &[u8; 16],
+        app_skey: &[u8; 16],
+    ) -> Result<(), LorawanError> {
+        self.send_at_ok(at::SET_ABP, 1000)?;
+
+        let mut hex_buf = [0u8; 32];
+        let mut cmd_buf = [0u8; 64];
+
+        let hex_str = Self::bytes_to_hex(dev_addr, &mut hex_buf);
+        let pos = Self::build_set_cmd(at::SET_DEVADDR, hex_str, &mut cmd_buf);
+        self.send_at_ok(core::str::from_utf8(&cmd_buf[..pos]).unwrap_or("AT\r\n"), 1000)?;
+
+        let hex_str = Self::bytes_to_hex(nwk_skey, &mut hex_buf);
+        let pos = Self::build_set_cmd(at::SET_NWKSKEY, hex_str, &mut cmd_buf);
+        self.send_at_ok(core::str::from_utf8(&cmd_buf[..pos]).unwrap_or("AT\r\n"), 1000)?;
+
+        let hex_str = Self::bytes_to_hex(app_skey, &mut hex_buf);
+        let pos = Self::build_set_cmd(at::SET_APPSKEY, hex_str, &mut cmd_buf);
+        self.send_at_ok(core::str::from_utf8(&cmd_buf[..pos]).unwrap_or("AT\r\n"), 1000)?;
+
+        Ok(())
+    }
+
+    /// 设置数据速率 (DR0~DR5)
+    pub fn set_data_rate(&mut self, dr: u8) -> Result<(), LorawanError> {
+        let mut cmd = [0u8; 32];
+        let prefix = at::SET_DR.as_bytes();
+        let mut pos = 0;
+        for &b in prefix { cmd[pos] = b; pos += 1; }
+        cmd[pos] = b'0' + dr.min(5); pos += 1;
+        cmd[pos] = b'\r'; pos += 1;
+        cmd[pos] = b'\n'; pos += 1;
+        self.send_at_ok(core::str::from_utf8(&cmd[..pos]).unwrap_or("AT\r\n"), 1000)
+    }
+
+    /// 设置发射功率 (0~14, 对应 2~22dBm)
+    pub fn set_tx_power(&mut self, power: u8) -> Result<(), LorawanError> {
+        let pw = power.min(14);
+        let mut cmd = [0u8; 32];
+        let prefix = at::SET_PWR.as_bytes();
+        let mut pos = 0;
+        for &b in prefix { cmd[pos] = b; pos += 1; }
+        cmd[pos] = b'0' + pw / 10; pos += 1;
+        if pw >= 10 { cmd[pos] = b'0' + pw % 10; pos += 1; }
+        cmd[pos] = b'\r'; pos += 1;
+        cmd[pos] = b'\n'; pos += 1;
+        self.send_at_ok(core::str::from_utf8(&cmd[..pos]).unwrap_or("AT\r\n"), 1000)
+    }
+
+    /// 设置确认重试次数 (0~15)
+    pub fn set_retry(&mut self, count: u8) -> Result<(), LorawanError> {
+        let mut cmd = [0u8; 32];
+        let prefix = at::RETRY.as_bytes();
+        let mut pos = 0;
+        for &b in prefix { cmd[pos] = b; pos += 1; }
+        cmd[pos] = b'0' + count.min(15); pos += 1;
+        cmd[pos] = b'\r'; pos += 1;
+        cmd[pos] = b'\n'; pos += 1;
+        self.send_at_ok(core::str::from_utf8(&cmd[..pos]).unwrap_or("AT\r\n"), 1000)
+    }
+
+    /// 进入休眠模式
+    pub fn enter_sleep(&mut self) -> Result<(), LorawanError> {
+        self.send_at_ok(at::SLEEP, 2000)
+    }
+
+    /// 查询链路状态
+    pub fn query_link_state(&mut self) -> Result<LinkState, LorawanError> {
+        let len = self.send_at(at::LINK_STATUS, 2000)?;
+        Ok(LinkState::from_at_response(&self.rx_buf[..len]))
+    }
+
+    /// 查询 SNR
+    pub fn query_snr(&mut self) -> Result<i8, LorawanError> {
+        let len = self.send_at(at::SNR, 2000)?;
+        let buf = &self.rx_buf[..len];
+        for i in 0..buf.len() {
+            if buf[i] == b':' {
+                let mut j = i + 1;
+                let mut neg = false;
+                let mut val: i8 = 0;
+                while j < buf.len() && (buf[j] == b' ') { j += 1; }
+                if j < buf.len() && buf[j] == b'-' { neg = true; j += 1; }
+                while j < buf.len() && buf[j].is_ascii_digit() {
+                    val = val.saturating_mul(10).saturating_add((buf[j] - b'0') as i8);
+                    j += 1;
+                }
+                return Ok(if neg { -val } else { val });
+            }
+        }
+        Ok(0)
+    }
+
+    /// 恢复出厂设置
+    pub fn factory_reset(&mut self) -> Result<(), LorawanError> {
+        self.send_at_ok(at::RESTORE, 3000)
+    }
+
+    /// 构建设置命令
+    fn build_set_cmd<'a>(prefix: &str, hex: &[u8], buf: &'a mut [u8]) -> usize {
+        let mut pos = 0;
+        for &b in prefix.as_bytes() { buf[pos] = b; pos += 1; }
+        for &b in hex { buf[pos] = b; pos += 1; }
+        buf[pos] = b'"'; pos += 1;
+        buf[pos] = b'\r'; pos += 1;
+        buf[pos] = b'\n'; pos += 1;
+        pos
     }
 
     /// 字节数组转十六进制字符串 (写入缓冲区, 不含前缀)
@@ -803,6 +959,14 @@ mod tests {
         let mut out = [0u8; 1];
         let len = build_dlms_lora_frame(DlmsLoraType::GetRequest, 0x01, &[0x01], false, 0, &mut out);
         assert_eq!(len, 0);
+    }
+
+    #[test]
+    fn test_link_state_parse() {
+        assert_eq!(LinkState::from_at_response(b"+STATE: Idle\r\n"), LinkState::Idle);
+        assert_eq!(LinkState::from_at_response(b"+STATE: Joined\r\n"), LinkState::Joined);
+        assert_eq!(LinkState::from_at_response(b"+STATE: Sleep\r\n"), LinkState::Sleep);
+        assert_eq!(LinkState::from_at_response(b"garbage"), LinkState::Unknown);
     }
 
     #[test]
