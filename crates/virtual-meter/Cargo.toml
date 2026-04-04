@@ -27,6 +27,11 @@ dlms-apdu = { path = "../dlms-apdu", features = ["std"] }
 dlms-obis = { path = "../dlms-obis", features = ["std"] }
 femeter-core = { path = "../femeter-core" }
 
+[dev-dependencies]
+dlms-meter-app = { path = "../dlms-meter-app" }
+dlms-cosem = { path = "../dlms-cosem" }
+dlms-apdu = { path = "../dlms-apdu", features = ["std"] }
+
 [features]
 default = []
 tcp = []

@@ -13,11 +13,7 @@ use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 
 use dlms_core::{
-    errors::CosemError,
-    obis::ObisCode,
-    traits::CosemClass,
-    types::DlmsType,
-    units::Unit,
+    errors::CosemError, obis::ObisCode, traits::CosemClass, types::DlmsType, units::Unit,
 };
 
 use crate::meter_app::MeterApp;
@@ -25,7 +21,9 @@ use crate::meter_app::MeterApp;
 // Re-export from dlms-cosem
 pub use dlms_cosem::data_register::ic3_register::Register;
 pub use dlms_cosem::data_register::ic5_demand_register::DemandRegister;
-pub use dlms_cosem::data_register::ic7_profile_generic::{CaptureObject, ProfileGeneric, SortMethod};
+pub use dlms_cosem::data_register::ic7_profile_generic::{
+    CaptureObject, ProfileGeneric, SortMethod,
+};
 pub use dlms_cosem::time_control::ic8_clock::Clock;
 
 /// A COSEM object identifier: (class_id, obis_code)
@@ -123,11 +121,7 @@ impl CosemServer {
     }
 
     /// Look up a mutable object by class_id and OBIS code
-    pub fn get_object_mut(
-        &mut self,
-        class_id: u16,
-        obis: &ObisCode,
-    ) -> Option<&mut CosemObject> {
+    pub fn get_object_mut(&mut self, class_id: u16, obis: &ObisCode) -> Option<&mut CosemObject> {
         let id = CosemObjectId {
             class_id,
             obis: *obis,
@@ -147,7 +141,9 @@ impl CosemServer {
         obis: &ObisCode,
         attribute_id: u8,
     ) -> Result<DlmsType, CosemError> {
-        let obj = self.get_object(class_id, obis).ok_or(CosemError::ObjectNotFound)?;
+        let obj = self
+            .get_object(class_id, obis)
+            .ok_or(CosemError::ObjectNotFound)?;
         obj.get_attribute(attribute_id)
     }
 
@@ -293,9 +289,7 @@ impl CosemServer {
             (2, [1, 0, 72, 7, 0, 255]),
         ] {
             if let Some(v) = app.measurement.voltage(phase) {
-                if let Some(obj) =
-                    self.get_object_mut(3, &ObisCode::from_bytes(&obis_bytes))
-                {
+                if let Some(obj) = self.get_object_mut(3, &ObisCode::from_bytes(&obis_bytes)) {
                     let _ = obj.set_attribute(2, DlmsType::UInt32(v as u32));
                 }
             }
@@ -303,9 +297,7 @@ impl CosemServer {
 
         // Update Current L1
         if let Some(i) = app.measurement.current(0) {
-            if let Some(obj) =
-                self.get_object_mut(3, &ObisCode::new(1, 0, 31, 7, 0, 255))
-            {
+            if let Some(obj) = self.get_object_mut(3, &ObisCode::new(1, 0, 31, 7, 0, 255)) {
                 let _ = obj.set_attribute(2, DlmsType::UInt32(i));
             }
         }
@@ -404,7 +396,9 @@ mod tests {
         assert!(result.is_ok());
 
         // Verify it was set
-        let val = server.get_attribute(3, &ObisCode::new(1, 0, 1, 8, 0, 255), 2).unwrap();
+        let val = server
+            .get_attribute(3, &ObisCode::new(1, 0, 1, 8, 0, 255), 2)
+            .unwrap();
         assert_eq!(val, DlmsType::Int64(12345));
     }
 
