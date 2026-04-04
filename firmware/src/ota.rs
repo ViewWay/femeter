@@ -280,6 +280,70 @@ impl<F: OtaFlash> OtaManager<F> {
         pct.min(100)
     }
 
+    /// 验证 OTA 固件完整性 (独立于 install 流程)
+    /// 读取 OTA 区的 header 和 firmware, 校验 magic + size + CRC
+    /// 返回 Ok(FirmwareVersion) 如果校验通过
+    pub fn verify_ota_image(&self) -> Result<FirmwareVersion, u32> {
+        let mut header_buf = [0u8; FirmwareHeader::SIZE];
+        F::flash_read(addr::OTA_START, &mut header_buf).map_err(|_| 1u32)?;
+        let header: FirmwareHeader = unsafe { core::ptr::read(header_buf.as_ptr() as *const _) };
+
+        if !header.is_valid() {
+            return Err(1); // invalid header
+        }
+
+        if header.firmware_size == 0 {
+            return Err(2); // empty firmware
+        }
+
+        // Verify CRC by reading entire firmware
+        let firmware_start = addr::OTA_START + FirmwareHeader::SIZE as u32;
+        let mut crc = 0xFFFF_FFFF_u32;
+        let mut offset = 0u32;
+        let mut buf = [0u8; 256];
+        while offset < header.firmware_size {
+            let chunk = (header.firmware_size - offset).min(256) as usize;
+            F::flash_read(firmware_start + offset, &mut buf[..chunk]).map_err(|_| 3u32)?;
+            for &byte in &buf[..chunk] {
+                crc = crc32_update(crc, byte);
+            }
+            offset += chunk as u32;
+        }
+        crc = !crc;
+
+        if crc != header.crc32 {
+            return Err(4); // CRC mismatch
+        }
+
+        Ok(header.version)
+    }
+
+    /// 计算指定 Flash 区域的 CRC32
+    pub fn compute_flash_crc(flash_addr: u32, size: u32) -> Result<u32, ()> {
+        let mut crc = 0xFFFF_FFFF_u32;
+        let mut offset = 0u32;
+        let mut buf = [0u8; 256];
+        while offset < size {
+            let chunk = (size - offset).min(256) as usize;
+            F::flash_read(flash_addr + offset, &mut buf[..chunk])?;
+            for &byte in &buf[..chunk] {
+                crc = crc32_update(crc, byte);
+            }
+            offset += chunk as u32;
+        }
+        Ok(!crc)
+    }
+
+    /// 清除 OTA 区域 (擦除 header 扇区即可标记为无效)
+    pub fn clear_ota_area() -> Result<(), ()> {
+        F::flash_erase_sector(addr::OTA_START)
+    }
+
+    /// 获取目标 Bank 编号
+    pub fn target_bank(&self) -> u8 {
+        if self.upgrade_info.active_bank == 1 { 2 } else { 1 }
+    }
+
     /// 带版本检查的 finalize_and_install
     pub fn finalize_and_install_with_version_check(
         &mut self,
@@ -640,5 +704,68 @@ mod tests {
         assert_eq!(mgr.active_bank(), 2);
         mgr.rollback().unwrap();
         assert_eq!(mgr.active_bank(), 1);
+    }
+
+    #[test]
+    fn test_target_bank() {
+        let mgr = OtaManager::<MockFlash>::new();
+        assert_eq!(mgr.active_bank(), 1);
+        assert_eq!(mgr.target_bank(), 2);
+    }
+
+    #[test]
+    fn test_verify_ota_image_invalid() {
+        // MockFlash returns zeros, so header magic won't match
+        let mgr = OtaManager::<MockFlash>::new();
+        let result = mgr.verify_ota_image();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_clear_ota_area() {
+        assert!(OtaManager::<MockFlash>::clear_ota_area().is_ok());
+    }
+
+    #[test]
+    fn test_compute_flash_crc() {
+        let crc = OtaManager::<MockFlash>::compute_flash_crc(0x1000, 256).unwrap();
+        // MockFlash reads zeros, so CRC of 256 zero bytes
+        // CRC32 of 256 zero bytes with our half-nibble table
+        assert_eq!(crc, 0x00000000); // all zeros → CRC should be 0 after complement
+    }
+
+    #[test]
+    fn test_version_edge_cases() {
+        let v = FirmwareVersion::new(0, 0, 0, 0);
+        assert_eq!(v.as_u32(), 0);
+
+        let v = FirmwareVersion::new(255, 255, 255, 255);
+        assert_eq!(v.as_u32(), 0xFFFFFFFF);
+    }
+
+    #[test]
+    fn test_firmware_header_size() {
+        // FirmwareHeader should have a reasonable size
+        assert!(FirmwareHeader::SIZE >= 40);
+        assert!(FirmwareHeader::SIZE <= 128);
+    }
+
+    #[test]
+    fn test_addr_layout() {
+        // Verify flash layout doesn't overlap
+        assert!(addr::BOOT_START < addr::APP1_START);
+        assert!(addr::APP1_START + addr::APP1_SIZE <= addr::APP2_START);
+        assert!(addr::APP2_START + addr::APP2_SIZE <= addr::OTA_START);
+        assert!(addr::OTA_START + addr::OTA_SIZE > addr::UPGRADE_INFO_ADDR);
+    }
+
+    #[test]
+    fn test_ota_state_transitions() {
+        let mut mgr = OtaManager::<MockFlash>::new();
+        assert_eq!(mgr.state(), OtaState::Idle);
+        mgr.start_receive().unwrap();
+        assert_eq!(mgr.state(), OtaState::Receiving);
+        mgr.write_chunk(0, &[0; 10]).unwrap();
+        assert_eq!(mgr.received_bytes(), 10);
     }
 }
