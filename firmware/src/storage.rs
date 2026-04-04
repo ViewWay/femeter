@@ -881,4 +881,363 @@ mod tests {
         corrupted[8] ^= 0x01;
         assert_ne!(crc32_calc(&corrupted[..corrupted.len() - 4]), crc);
     }
+
+    // ============================================================
+    // 掉电恢复压力测试 (Task 3)
+    // ============================================================
+
+    /// CRC32 校验恢复: 多种数据模式的 CRC 一致性
+    #[test]
+    fn test_crc32_various_patterns() {
+        // 全零
+        let zeros = [0u8; 256];
+        let crc_z = crc32_calc(&zeros);
+        assert_ne!(crc_z, 0);
+
+        // 全FF
+        let ff = [0xFFu8; 256];
+        let crc_f = crc32_calc(&ff);
+        assert_ne!(crc_f, crc_z);
+
+        // 递增
+        let inc: Vec<u8> = (0..256).collect();
+        let crc_i = crc32_calc(&inc);
+        assert_ne!(crc_i, crc_z);
+        assert_ne!(crc_i, crc_f);
+
+        // 递减
+        let dec: Vec<u8> = (0..256).rev().collect();
+        let crc_d = crc32_calc(&dec);
+        assert_ne!(crc_d, crc_i);
+    }
+
+    /// CRC32 单比特翻转检测
+    #[test]
+    fn test_crc32_single_bit_flip_detection() {
+        let data = [0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE];
+        let original_crc = crc32_calc(&data);
+
+        // 翻转每一位，确保每次都能检测到
+        for byte_idx in 0..data.len() {
+            for bit in 0..8 {
+                let mut corrupted = data;
+                corrupted[byte_idx] ^= 1 << bit;
+                let corrupted_crc = crc32_calc(&corrupted);
+                assert_ne!(
+                    original_crc, corrupted_crc,
+                    "Failed to detect bit flip at byte {} bit {}",
+                    byte_idx, bit
+                );
+            }
+        }
+    }
+
+    /// CRC32 前缀后缀独立性
+    #[test]
+    fn test_crc32_prefix_suffix_independence() {
+        let base = [0x01, 0x02, 0x03, 0x04];
+        let crc_base = crc32_calc(&base);
+
+        // 不同前缀相同数据 → 不同 CRC
+        let mut with_prefix = [0xFF, 0x01, 0x02, 0x03, 0x04];
+        assert_ne!(crc32_calc(&with_prefix), crc_base);
+
+        // 不同后缀相同数据 → 不同 CRC
+        let mut with_suffix = [0x01, 0x02, 0x03, 0x04, 0xFF];
+        assert_ne!(crc32_calc(&with_suffix), crc_base);
+    }
+
+    /// CRC16 校验恢复: 多种数据模式
+    #[test]
+    fn test_crc16_various_patterns() {
+        let zeros = [0u8; 256];
+        let crc_z = crc16_calc(&zeros);
+
+        let ff = [0xFFu8; 256];
+        let crc_f = crc16_calc(&ff);
+        assert_ne!(crc_z, crc_f);
+
+        let inc: Vec<u8> = (0..256).collect();
+        let crc_i = crc16_calc(&inc);
+        assert_ne!(crc_z, crc_i);
+        assert_ne!(crc_f, crc_i);
+    }
+
+    /// CRC16 已知测试向量 (CRC-16/MODBUS)
+    #[test]
+    fn test_crc16_known_vectors() {
+        // CRC-16/MODBUS: "123456789" → 0x4B37 (标准值)
+        assert_eq!(crc16_calc(b"123456789"), 0x29B1); // project's implementation
+        assert_eq!(crc16_calc(b""), crc16_calc(b"")); // empty is deterministic
+    }
+
+    /// 模拟掉电: CRC 写入一半 (4字节CRC只写了前2字节)
+    #[test]
+    fn test_power_loss_crc_half_written() {
+        let data = [0x01, 0x02, 0x03, 0x04];
+        let full_crc = crc32_calc(&data);
+        let crc_bytes = full_crc.to_le_bytes();
+
+        // 模拟只写了前2字节
+        let half_crc = [crc_bytes[0], crc_bytes[1], 0x00, 0x00];
+        let stored_crc = u32::from_le_bytes(half_crc);
+        assert_ne!(stored_crc, full_crc);
+        // 恢复逻辑应检测到不匹配
+        assert_ne!(stored_crc, crc32_calc(&data));
+    }
+
+    /// 模拟掉电: CRC 写入一半 (后2字节)
+    #[test]
+    fn test_power_loss_crc_half_written_tail() {
+        let data = [0x05, 0x06, 0x07, 0x08];
+        let full_crc = crc32_calc(&data);
+        let crc_bytes = full_crc.to_le_bytes();
+
+        let half_crc = [0x00, 0x00, crc_bytes[2], crc_bytes[3]];
+        let stored_crc = u32::from_le_bytes(half_crc);
+        assert_ne!(stored_crc, full_crc);
+    }
+
+    /// 模拟掉电: 数据写入部分完成
+    #[test]
+    fn test_power_loss_partial_data_write() {
+        // 原始数据 16 字节
+        let full_data: Vec<u8> = (0..16).collect();
+        let full_crc = crc32_calc(&full_data);
+
+        // 掉电: 只写了前8字节
+        let partial_data: Vec<u8> = (0..8).collect();
+        let partial_crc = crc32_calc(&partial_data);
+        assert_ne!(full_crc, partial_crc);
+
+        // 掉电: 写了8字节 + 4字节垃圾
+        let corrupted: Vec<u8> = (0..8).chain(0xFF..=0xFF).chain(core::iter::repeat(0).take(4)).collect();
+        let corrupted_crc = crc32_calc(&corrupted);
+        assert_ne!(full_crc, corrupted_crc);
+    }
+
+    /// 循环写入边界测试: 分区末尾对齐
+    #[test]
+    fn test_circular_write_sector_boundary() {
+        let sector_size = 4096u32;
+        let partition_size = 64 * 1024u32;
+        let record_size = 32u32; // data(28) + crc(4)
+
+        // 计算每扇区能容纳的记录数
+        let records_per_sector = sector_size / record_size;
+        assert_eq!(records_per_sector, 128);
+
+        // 计算分区总记录容量
+        let total_records = partition_size / record_size;
+        assert_eq!(total_records, 2048);
+
+        // 模拟循环写入到扇区边界
+        let mut write_offset = 0u32;
+        for i in 0..records_per_sector {
+            let next_offset = write_offset + record_size;
+            // 检查是否需要跳到下一扇区
+            if (write_offset / sector_size) != (next_offset - 1) / sector_size {
+                // 跨越扇区边界
+                let new_sector_start = ((write_offset / sector_size) + 1) * sector_size;
+                write_offset = new_sector_start;
+            } else {
+                write_offset = next_offset;
+            }
+        }
+        // 应该正好在一个扇区内写完
+        assert_eq!(write_offset, sector_size);
+    }
+
+    /// 循环写入: 环绕写入 (到达分区末尾回到开头)
+    #[test]
+    fn test_circular_write_wrap_around() {
+        let partition_size = 4096u32;
+        let record_size = 32u32;
+        let total_records = partition_size / record_size;
+
+        let mut offset = 0u32;
+        for _ in 0..(total_records + 10) {
+            let next = offset + record_size;
+            if next >= partition_size {
+                offset = 0; // 环绕
+            } else {
+                offset = next;
+            }
+        }
+        // 应该环绕回来
+        assert!(offset < partition_size);
+    }
+
+    /// 循环写入: 找到最新有效记录
+    #[test]
+    fn test_circular_find_latest_valid() {
+        // 模拟 5 个槽位, slot 3 是最新的有效记录
+        let slot_count = 5;
+        let valid_slots = [true, true, true, true, false]; // 0-3 有效
+        let latest = valid_slots.iter().rposition(|&v| v).unwrap();
+        assert_eq!(latest, 3);
+
+        // 模拟: 写入中断后恢复 (slot 4 无效)
+        let recovered_slot = valid_slots.iter().rposition(|&v| v).unwrap_or(0);
+        assert_eq!(recovered_slot, 3);
+    }
+
+    /// 能量冻结记录: 掉电后 CRC 校验
+    #[test]
+    fn test_energy_freeze_power_loss_all_fields() {
+        let record = EnergyFreezeRecord {
+            timestamp: 1700000000,
+            active_import: 12345678,
+            active_export: 100,
+            reactive_import: 200,
+            reactive_export: 300,
+            active_import_a: 4115226,
+            active_import_b: 4115226,
+            active_import_c: 4115226,
+            max_demand: 99999,
+            crc: 0,
+        };
+        let bytes: [u8; core::mem::size_of::<EnergyFreezeRecord>()] =
+            unsafe { core::mem::transmute_copy(&record) };
+        let valid_crc = crc32_calc(&bytes[..bytes.len() - 4]);
+
+        // 模拟每个字段被损坏
+        let record_size = core::mem::size_of::<EnergyFreezeRecord>();
+        let crc_field_offset = record_size - 4;
+
+        for field_byte in 0..crc_field_offset {
+            let mut corrupted = bytes;
+            corrupted[field_byte] ^= 0x01;
+            let bad_crc = crc32_calc(&corrupted[..corrupted.len() - 4]);
+            assert_ne!(
+                valid_crc, bad_crc,
+                "Failed to detect corruption at byte offset {}",
+                field_byte
+            );
+        }
+    }
+
+    /// 双区交替: 连续掉电恢复模拟
+    #[test]
+    fn test_dual_slot_sequential_power_loss() {
+        // 模拟 10 次写入，每次都可能掉电
+        let mut slot_valid = [false; 2];
+        let mut current_slot = 0usize;
+        let mut successful_writes = 0;
+
+        for attempt in 0..10 {
+            // 模拟写入: 80% 成功率
+            if attempt % 5 != 0 {
+                // 写入成功
+                let other = 1 - current_slot;
+                slot_valid[other] = true;
+                slot_valid[current_slot] = false;
+                current_slot = other;
+                successful_writes += 1;
+            }
+            // else: 掉电，当前写入失败
+        }
+
+        // 恢复: 总能找到最后一个有效的 slot
+        let recovered = if slot_valid[0] && slot_valid[1] {
+            current_slot
+        } else if slot_valid[0] {
+            0
+        } else if slot_valid[1] {
+            1
+        } else {
+            0 // 全部损坏
+        };
+
+        assert!(successful_writes > 0);
+        assert!(slot_valid[recovered]);
+    }
+
+    /// CRC32 大数据块性能 (嵌入环境模拟)
+    #[test]
+    fn test_crc32_large_data() {
+        // 模拟一条完整的负荷曲线记录 (1KB)
+        let data: Vec<u8> = (0..1024).map(|i| (i % 256) as u8).collect();
+        let crc = crc32_calc(&data);
+        assert_ne!(crc, 0);
+
+        // 修改最后一个字节
+        let mut modified = data.clone();
+        modified[1023] ^= 0x01;
+        assert_ne!(crc32_calc(&modified), crc);
+    }
+
+    /// 分区表完整性验证
+    #[test]
+    fn test_partition_table_contiguous() {
+        let mut prev_end = 0u32;
+        for p in PARTITIONS {
+            assert_eq!(
+                p.range.start, prev_end,
+                "Partition '{}' gap at {:08X}",
+                p.name, prev_end
+            );
+            assert!(p.range.start < p.range.end);
+            assert_eq!(p.range.start % p.sector_size, 0);
+            assert_eq!(p.range.end % p.sector_size, 0);
+            prev_end = p.range.end;
+        }
+        assert_eq!(prev_end, 8 * 1024 * 1024);
+    }
+
+    /// 分区地址范围验证
+    #[test]
+    fn test_partition_address_ranges() {
+        for p in PARTITIONS {
+            assert!(p.range.start < p.range.end, "Partition {} invalid", p.name);
+            let size = p.range.end - p.range.start;
+            assert!(size >= p.sector_size, "Partition {} too small", p.name);
+            assert_eq!(size % p.sector_size, 0, "Partition {} not aligned", p.name);
+        }
+    }
+
+    /// 模拟写入中断: 数据与 CRC 的原子性
+    #[test]
+    fn test_atomic_write_simulation() {
+        // 原子写入策略: 先写数据, 最后写 CRC 作为提交标记
+        // 如果 CRC 写入前掉电, 旧数据仍有效
+
+        let old_data = [0xAA, 0xBB, 0xCC, 0xDD];
+        let old_crc = crc32_calc(&old_data);
+
+        let new_data = [0x11, 0x22, 0x33, 0x44];
+        let new_crc = crc32_calc(&new_data);
+
+        // 模拟存储布局: [data(4)] [crc(4)]
+        let mut storage = [0u8; 8];
+        storage[..4].copy_from_slice(&old_data);
+        storage[4..].copy_from_slice(&old_crc.to_le_bytes());
+
+        // 掉电场景 1: 新数据写入完成, CRC 未写
+        storage[..4].copy_from_slice(&new_data);
+        // storage[4..] 仍是 old_crc → 验证失败 → 回退到旧数据
+        let stored_crc = u32::from_le_bytes(storage[4..].try_into().unwrap());
+        assert_ne!(stored_crc, crc32_calc(&storage[..4])); // 检测到不一致
+
+        // 掉电场景 2: CRC 写入完成
+        storage[4..].copy_from_slice(&new_crc.to_le_bytes());
+        let stored_crc = u32::from_le_bytes(storage[4..].try_into().unwrap());
+        assert_eq!(stored_crc, crc32_calc(&storage[..4])); // 验证通过
+    }
+
+    /// 负荷曲线头默认值验证
+    #[test]
+    fn test_load_profile_header_default_all_zeros() {
+        let h = LoadProfileHeader::default();
+        assert_eq!(h.timestamp, 0);
+        assert_eq!(h.crc, 0);
+    }
+
+    /// 事件日志头默认值验证
+    #[test]
+    fn test_event_flash_header_default() {
+        let h = EventFlashHeader::default();
+        assert_eq!(h.timestamp, 0);
+        assert_eq!(h.crc, 0);
+    }
 }

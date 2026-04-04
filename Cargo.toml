@@ -17,6 +17,7 @@ members = [
     "crates/femeter-core",
     "crates/fuzz-tests",
     "crates/bench-tests",
+    "crates/storage-test",
 ]
 
 [workspace.dependencies]

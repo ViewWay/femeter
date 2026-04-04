@@ -1,0 +1,8 @@
+[package]
+name = "storage-test"
+version.workspace = true
+edition.workspace = true
+description = "Host-testable storage logic (CRC, partition table, crash recovery)"
+
+[lib]
+doctest = false
