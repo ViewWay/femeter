@@ -278,6 +278,14 @@ impl DlmsProcessor {
                     full_response.append(&mut response);
                     return Ok(full_response);
                 }
+                // ReleaseRequest (tag 0x62) -> return RLRE (tag 0x82)
+                if !apdu_payload.is_empty() && apdu_payload[0] == 0x62 {
+                    // RLRE: Release-Response, result=0 (normal)
+                    let mut response = vec![0x82, 0x00, 0x00];
+                    let mut full_response = vec![0xE6, 0xE7, 0x00];
+                    full_response.append(&mut response);
+                    return Ok(full_response);
+                }
                 let mut response = self.handle_association(apdu_payload)?;
                 let mut full_response = vec![0xE6, 0xE7, 0x00];
                 full_response.append(&mut response);
