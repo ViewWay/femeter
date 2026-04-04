@@ -269,8 +269,8 @@ unsafe extern "C" fn task_metering_entry(_arg: *mut c_void) {
         let data = (*state).metering_mgr.poll_instant();
 
         // 更新 LCD 缓冲 — A 相 (主显示相)
-        (*state).lcd_content.voltage = data.voltage_a;
-        (*state).lcd_content.current = data.current_a;
+        (*state).lcd_content.voltage_a = data.voltage_a;
+        (*state).lcd_content.current_a = data.current_a;
         (*state).lcd_content.active_power = data.active_power_total;
         (*state).lcd_content.reactive_power = data.reactive_power_total;
         (*state).lcd_content.power_factor = data.power_factor_total;
@@ -1126,8 +1126,8 @@ fn main() -> ! {
             match ready_buf[i] {
                 task::METERING => {
                     let data = state.metering_mgr.poll_instant();
-                    state.lcd_content.voltage = data.voltage_a;
-                    state.lcd_content.current = data.current_a;
+                    state.lcd_content.voltage_a = data.voltage_a;
+                    state.lcd_content.current_a = data.current_a;
                     state.lcd_content.active_power = data.active_power_total;
                     state.lcd_content.reactive_power = data.reactive_power_total;
                     state.lcd_content.power_factor = data.power_factor_total;
