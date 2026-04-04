@@ -82,9 +82,17 @@ impl HdlcFrame {
         raw.push((self.fcs >> 8) as u8);
         raw.push((self.fcs & 0xFF) as u8);
 
-        // Add flags (no byte stuffing — Python dlms-cosem doesn't do it)
+        // Byte stuffing: escape 0x7E → 0x7D 0x5E, 0x7D → 0x7D 0x5D
+        let mut stuffed = Vec::new();
+        for &b in &raw {
+            match b {
+                HDLC_FLAG => { stuffed.push(HDLC_ESCAPE); stuffed.push(0x5E); }
+                HDLC_ESCAPE => { stuffed.push(HDLC_ESCAPE); stuffed.push(0x5D); }
+                _ => stuffed.push(b),
+            }
+        }
         let mut result = vec![HDLC_FLAG];
-        result.extend_from_slice(&raw);
+        result.extend_from_slice(&stuffed);
         result.push(HDLC_FLAG);
         result
     }
@@ -99,12 +107,22 @@ impl HdlcFrame {
             return Err(HdlcError::InvalidFlag);
         }
 
-        // Remove byte stuffing (skip — Python dlms-cosem doesn't stuff)
+        // Remove byte stuffing: 0x7D 0x5E → 0x7E, 0x7D 0x5D → 0x7D
         let mut raw = Vec::new();
         let mut i = 1; // skip opening flag
         while i < data.len() - 1 {
             if data[i] == HDLC_FLAG {
                 break;
+            } else if data[i] == HDLC_ESCAPE {
+                if i + 1 >= data.len() - 1 {
+                    return Err(HdlcError::InvalidFrameFormat);
+                }
+                match data[i + 1] {
+                    0x5E => raw.push(HDLC_FLAG),
+                    0x5D => raw.push(HDLC_ESCAPE),
+                    _ => raw.push(data[i + 1] ^ 0x20),
+                }
+                i += 2;
             } else {
                 raw.push(data[i]);
                 i += 1;

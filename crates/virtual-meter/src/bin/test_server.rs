@@ -36,7 +36,7 @@ fn main() {
         .and_then(|s| s.parse().ok())
         .unwrap_or(4059);
 
-    let dlms_processor = Arc::new(std::sync::Mutex::new(create_dlms_processor(meter_clone)));
+    let dlms_processor = Arc::new(create_dlms_processor(meter_clone));
 
     let dlms_handle = thread::spawn(move || {
         start_dlms_server(dlms_processor, dlms_port);

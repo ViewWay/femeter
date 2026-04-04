@@ -192,7 +192,7 @@ pub struct DlmsProcessor {
     meter: MeterHandle,
     #[allow(dead_code)]
     ln_mode: bool,
-    ssn: std::cell::Cell<u8>,
+    ssn: std::sync::atomic::AtomicU8,
 }
 
 impl DlmsProcessor {
@@ -200,7 +200,7 @@ impl DlmsProcessor {
         Self {
             meter,
             ln_mode: true,
-            ssn: std::cell::Cell::new(0),
+            ssn: std::sync::atomic::AtomicU8::new(0),
         }
     }
 
@@ -218,7 +218,7 @@ impl DlmsProcessor {
         match ctrl_field.frame_type {
             dlms_hdlc::control::FrameType::SNRM => {
                 tracing::info!("[HDLC] Received SNRM, responding with UA");
-                self.ssn.set(0);
+                self.ssn.store(0, std::sync::atomic::Ordering::Relaxed);
                 return Ok(HdlcFrame::encode_ua(server, client, true));
             }
             dlms_hdlc::control::FrameType::DISC => {
@@ -231,8 +231,8 @@ impl DlmsProcessor {
             _ => {}
         }
 
-        let ssn = self.ssn.get();
-        self.ssn.set(ssn.wrapping_add(1));
+        let ssn = self.ssn.load(std::sync::atomic::Ordering::Relaxed);
+        self.ssn.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let response_apdu = self.process_apdu(&info)?;
         Ok(HdlcFrame::encode_with_ssn(server, client, &response_apdu, ssn, ssn.wrapping_add(1)))
     }
@@ -633,7 +633,7 @@ mod tests {
         let apdu = [0x7E, 0x7D, 0x00];
         let frame = HdlcFrame::encode(0x0001, 0x0001, &apdu);
         assert!(frame.len() > apdu.len() + 8);
-        let (_, _, decoded) = HdlcFrame::decode(&frame).unwrap();
+        let (_, _, decoded, _) = HdlcFrame::decode(&frame).unwrap();
         assert_eq!(decoded, apdu);
     }
 
