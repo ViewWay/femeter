@@ -53,11 +53,67 @@ pub fn find_partition(name: &str) -> Option<&'static FlashPartition> {
 
 /* ── 记录结构体 ── */
 
-#[derive(Clone, Copy, Debug, Default)]
+/// 负荷曲线记录头（每条记录 8 字节头 + N 字节数据）
+/// 与 firmware/src/storage.rs 保持一致
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(C)]
 pub struct LoadProfileHeader {
+    /// 时间戳（秒，从 2000-01-01 起）
     pub timestamp: u32,
-    pub crc: u32,
+    /// 记录间隔（分钟）：15 或 60
+    pub interval_min: u8,
+    /// 通道数
+    pub channels: u8,
+    /// CRC16
+    pub crc: u16,
+}
+
+impl LoadProfileHeader {
+    /// 记录头大小（字节）
+    pub const SIZE: usize = 8;
+    
+    /// 从字节数组解析
+    pub fn from_bytes(buf: &[u8; 8]) -> Self {
+        Self {
+            timestamp: u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]),
+            interval_min: buf[4],
+            channels: buf[5],
+            crc: u16::from_le_bytes([buf[6], buf[7]]),
+        }
+    }
+    
+    /// 序列化为字节数组
+    pub fn to_bytes(&self) -> [u8; 8] {
+        let mut buf = [0u8; 8];
+        buf[0..4].copy_from_slice(&self.timestamp.to_le_bytes());
+        buf[4] = self.interval_min;
+        buf[5] = self.channels;
+        buf[6..8].copy_from_slice(&self.crc.to_le_bytes());
+        buf
+    }
+    
+    /// 计算并设置 CRC（不含 CRC 字段本身）
+    pub fn compute_crc(&mut self, data: &[u8]) {
+        let header_bytes = [
+            (self.timestamp & 0xFF) as u8,
+            ((self.timestamp >> 8) & 0xFF) as u8,
+            ((self.timestamp >> 16) & 0xFF) as u8,
+            ((self.timestamp >> 24) & 0xFF) as u8,
+            self.interval_min,
+            self.channels,
+        ];
+        let mut combined = header_bytes.to_vec();
+        combined.extend_from_slice(data);
+        self.crc = crc16_calc(&combined);
+    }
+    
+    /// 验证 CRC
+    pub fn verify_crc(&self, data: &[u8]) -> bool {
+        let mut temp = *self;
+        let expected_crc = self.crc;
+        temp.compute_crc(data);
+        temp.crc == expected_crc
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -168,6 +224,300 @@ pub fn circular_next_offset(current: u32, record_size: u32, partition_size: u32)
         0
     } else {
         next
+    }
+}
+
+/* ── 时间戳寻址系统 ── */
+
+/// 时间戳寻址配置
+#[derive(Clone, Copy, Debug)]
+pub struct TimestampAddressingConfig {
+    /// 分区起始地址
+    pub partition_start: u32,
+    /// 分区大小（字节）
+    pub partition_size: u32,
+    /// 扇区大小（字节）
+    pub sector_size: u32,
+    /// 记录大小（字节，包含头）
+    pub record_size: u32,
+    /// 记录间隔（分钟）
+    pub interval_min: u8,
+    /// 最大记录数
+    pub max_records: u32,
+    /// 基准时间戳（2000-01-01 00:00:00 UTC）
+    pub base_timestamp: u32,
+}
+
+impl TimestampAddressingConfig {
+    /// 从分区创建配置
+    pub fn from_partition(partition: &FlashPartition, record_size: u32, interval_min: u8) -> Self {
+        let partition_size = partition.range.end - partition.range.start;
+        let max_records = partition_size / record_size;
+        Self {
+            partition_start: partition.range.start,
+            partition_size,
+            sector_size: partition.sector_size,
+            record_size,
+            interval_min,
+            max_records,
+            base_timestamp: 946684800, // 2000-01-01 00:00:00 UTC
+        }
+    }
+    
+    /// 计算时间戳对应的记录索引
+    /// 
+    /// # Arguments
+    /// * `timestamp` - Unix 时间戳（秒）
+    /// 
+    /// # Returns
+    /// 记录索引（0 到 max_records-1）
+    pub fn timestamp_to_index(&self, timestamp: u32) -> u32 {
+        if timestamp < self.base_timestamp {
+            return 0;
+        }
+        
+        let elapsed = timestamp - self.base_timestamp;
+        let interval_seconds = (self.interval_min as u32) * 60;
+        let index = elapsed / interval_seconds;
+        
+        index % self.max_records
+    }
+    
+    /// 计算记录索引对应的 Flash 偏移
+    /// 
+    /// # Arguments
+    /// * `index` - 记录索引
+    /// 
+    /// # Returns
+    /// Flash 偏移（相对于分区起始）
+    pub fn index_to_offset(&self, index: u32) -> u32 {
+        index * self.record_size
+    }
+    
+    /// 计算时间戳对应的 Flash 偏移
+    /// 
+    /// # Arguments
+    /// * `timestamp` - Unix 时间戳（秒）
+    /// 
+    /// # Returns
+    /// Flash 偏移（相对于分区起始）
+    pub fn timestamp_to_offset(&self, timestamp: u32) -> u32 {
+        let index = self.timestamp_to_index(timestamp);
+        self.index_to_offset(index)
+    }
+    
+    /// 计算索引对应的时间戳
+    /// 
+    /// # Arguments
+    /// * `index` - 记录索引
+    /// 
+    /// # Returns
+    /// Unix 时间戳（秒）
+    pub fn index_to_timestamp(&self, index: u32) -> u32 {
+        let interval_seconds = (self.interval_min as u32) * 60;
+        self.base_timestamp + (index * interval_seconds)
+    }
+    
+    /// 计算时间戳范围对应的记录范围
+    /// 
+    /// # Arguments
+    /// * `start_ts` - 起始时间戳
+    /// * `end_ts` - 结束时间戳
+    /// 
+    /// # Returns
+    /// (起始索引, 记录数)
+    pub fn timestamp_range_to_indices(&self, start_ts: u32, end_ts: u32) -> (u32, u32) {
+        if end_ts < start_ts {
+            return (0, 0);
+        }
+        
+        let start_index = self.timestamp_to_index(start_ts);
+        let end_index = self.timestamp_to_index(end_ts);
+        
+        if end_index >= start_index {
+            let count = end_index - start_index + 1;
+            (start_index, count.min(self.max_records))
+        } else {
+            // 跨越循环边界
+            let count = (self.max_records - start_index) + end_index + 1;
+            (start_index, count.min(self.max_records))
+        }
+    }
+    
+    /// 计算所在的扇区索引
+    /// 
+    /// # Arguments
+    /// * `offset` - Flash 偏移
+    /// 
+    /// # Returns
+    /// 扇区索引
+    pub fn offset_to_sector(&self, offset: u32) -> u32 {
+        offset / self.sector_size
+    }
+    
+    /// 检查是否需要擦除新扇区
+    /// 
+    /// # Arguments
+    /// * `current_offset` - 当前写入偏移
+    /// * `next_offset` - 下一次写入偏移
+    /// 
+    /// # Returns
+    /// true 如果需要擦除新扇区
+    pub fn needs_sector_erase(&self, current_offset: u32, next_offset: u32) -> bool {
+        self.offset_to_sector(current_offset) != self.offset_to_sector(next_offset)
+    }
+    
+    /// 计算一天有多少条记录
+    pub fn records_per_day(&self) -> u32 {
+        let minutes_per_day = 24 * 60;
+        minutes_per_day / (self.interval_min as u32)
+    }
+    
+    /// 计算可存储多少天的数据
+    pub fn storage_days(&self) -> u32 {
+        self.max_records / self.records_per_day()
+    }
+}
+
+/// 时间戳寻址写入器
+#[derive(Clone, Debug)]
+pub struct TimestampAddressedWriter {
+    config: TimestampAddressingConfig,
+    /// 当前写入偏移
+    current_offset: u32,
+    /// 已写入记录数
+    records_written: u32,
+}
+
+impl TimestampAddressedWriter {
+    /// 创建新的写入器
+    pub fn new(config: TimestampAddressingConfig) -> Self {
+        Self {
+            config,
+            current_offset: 0,
+            records_written: 0,
+        }
+    }
+    
+    /// 根据时间戳计算写入位置
+    /// 
+    /// # Arguments
+    /// * `timestamp` - Unix 时间戳
+    /// 
+    /// # Returns
+    /// (偏移, 是否需要擦除扇区)
+    pub fn prepare_write(&mut self, timestamp: u32) -> (u32, bool) {
+        let offset = self.config.timestamp_to_offset(timestamp);
+        let needs_erase = self.config.needs_sector_erase(self.current_offset, offset);
+        self.current_offset = offset;
+        self.records_written += 1;
+        (offset, needs_erase)
+    }
+    
+    /// 写入负荷曲线记录
+    /// 
+    /// # Arguments
+    /// * `timestamp` - 时间戳
+    /// * `data` - 负荷数据
+    /// 
+    /// # Returns
+    /// 写入偏移
+    pub fn write_record(&mut self, timestamp: u32, data: &[u8]) -> Result<(u32, bool), FlashError> {
+        let header_size = LoadProfileHeader::SIZE;
+        let record_size = header_size + data.len();
+        
+        if record_size as u32 > self.config.record_size {
+            return Err(FlashError::NoSpace);
+        }
+        
+        let (offset, needs_erase) = self.prepare_write(timestamp);
+        
+        // 构建记录头
+        let mut header = LoadProfileHeader {
+            timestamp,
+            interval_min: self.config.interval_min,
+            channels: data.len() as u8,
+            crc: 0,
+        };
+        header.compute_crc(data);
+        
+        Ok((offset, needs_erase))
+    }
+    
+    /// 获取当前状态
+    pub fn status(&self) -> (u32, u32) {
+        (self.current_offset, self.records_written)
+    }
+}
+
+/// 时间戳寻址读取器
+#[derive(Clone, Debug)]
+pub struct TimestampAddressedReader {
+    config: TimestampAddressingConfig,
+}
+
+impl TimestampAddressedReader {
+    /// 创建新的读取器
+    pub fn new(config: TimestampAddressingConfig) -> Self {
+        Self { config }
+    }
+    
+    /// 根据时间戳计算读取位置
+    /// 
+    /// # Arguments
+    /// * `timestamp` - Unix 时间戳
+    /// 
+    /// # Returns
+    /// Flash 偏移
+    pub fn get_read_offset(&self, timestamp: u32) -> u32 {
+        self.config.timestamp_to_offset(timestamp)
+    }
+    
+    /// 获取时间戳范围内的所有偏移
+    /// 
+    /// # Arguments
+    /// * `start_ts` - 起始时间戳
+    /// * `end_ts` - 结束时间戳
+    /// 
+    /// # Returns
+    /// 偏移列表
+    pub fn get_range_offsets(&self, start_ts: u32, end_ts: u32) -> Vec<u32> {
+        let (start_index, count) = self.config.timestamp_range_to_indices(start_ts, end_ts);
+        
+        (0..count)
+            .map(|i| {
+                let index = (start_index + i) % self.config.max_records;
+                self.config.index_to_offset(index)
+            })
+            .collect()
+    }
+    
+    /// 解析记录头
+    /// 
+    /// # Arguments
+    /// * `buf` - 包含记录头的缓冲区（至少8字节）
+    /// 
+    /// # Returns
+    /// 解析后的记录头
+    pub fn parse_header(&self, buf: &[u8]) -> Result<LoadProfileHeader, FlashError> {
+        if buf.len() < LoadProfileHeader::SIZE {
+            return Err(FlashError::InvalidData);
+        }
+        
+        let header_bytes: [u8; 8] = buf[..8].try_into().map_err(|_| FlashError::InvalidData)?;
+        Ok(LoadProfileHeader::from_bytes(&header_bytes))
+    }
+    
+    /// 验证记录完整性
+    /// 
+    /// # Arguments
+    /// * `header` - 记录头
+    /// * `data` - 负荷数据
+    /// 
+    /// # Returns
+    /// true 如果 CRC 校验通过
+    pub fn verify_record(&self, header: &LoadProfileHeader, data: &[u8]) -> bool {
+        header.verify_crc(data)
     }
 }
 
@@ -693,5 +1043,268 @@ mod tests {
                 assert_eq!(offset, 0);
             }
         }
+    }
+
+    // ============================================================
+    // 时间戳寻址系统测试
+    // ============================================================
+
+    #[test]
+    fn test_load_profile_header_size_updated() {
+        assert_eq!(core::mem::size_of::<LoadProfileHeader>(), 8);
+    }
+
+    #[test]
+    fn test_load_profile_header_serde() {
+        let header = LoadProfileHeader {
+            timestamp: 0x12345678,
+            interval_min: 15,
+            channels: 6,
+            crc: 0xABCD,
+        };
+        
+        let bytes = header.to_bytes();
+        let decoded = LoadProfileHeader::from_bytes(&bytes);
+        
+        assert_eq!(decoded.timestamp, header.timestamp);
+        assert_eq!(decoded.interval_min, header.interval_min);
+        assert_eq!(decoded.channels, header.channels);
+        assert_eq!(decoded.crc, header.crc);
+    }
+
+    #[test]
+    fn test_load_profile_header_crc() {
+        let data = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
+        let mut header = LoadProfileHeader {
+            timestamp: 1609459200, // 2021-01-01 00:00:00
+            interval_min: 15,
+            channels: 6,
+            crc: 0,
+        };
+        
+        header.compute_crc(&data);
+        assert_ne!(header.crc, 0);
+        assert!(header.verify_crc(&data));
+        
+        // 修改数据后 CRC 应该校验失败
+        let bad_data = [0x01, 0x02, 0x03, 0x04, 0x05, 0x07];
+        assert!(!header.verify_crc(&bad_data));
+    }
+
+    #[test]
+    fn test_timestamp_addressing_config_creation() {
+        let partition = find_partition("load").unwrap();
+        let config = TimestampAddressingConfig::from_partition(
+            partition,
+            64, // record_size
+            15, // interval_min
+        );
+        
+        assert_eq!(config.partition_start, 0x100000);
+        assert_eq!(config.partition_size, 0x100000);
+        assert_eq!(config.record_size, 64);
+        assert_eq!(config.interval_min, 15);
+        assert!(config.max_records > 0);
+    }
+
+    #[test]
+    fn test_timestamp_to_index() {
+        let partition = find_partition("load").unwrap();
+        let config = TimestampAddressingConfig::from_partition(
+            partition,
+            64,
+            15,
+        );
+        
+        // 2000-01-01 00:00:00 -> index 0
+        let index0 = config.timestamp_to_index(946684800);
+        assert_eq!(index0, 0);
+        
+        // 15分钟后 -> index 1
+        let index1 = config.timestamp_to_index(946684800 + 15 * 60);
+        assert_eq!(index1, 1);
+        
+        // 1小时后 -> index 4
+        let index4 = config.timestamp_to_index(946684800 + 60 * 60);
+        assert_eq!(index4, 4);
+        
+        // 1天后 -> index 96 (24*60/15)
+        let index96 = config.timestamp_to_index(946684800 + 24 * 60 * 60);
+        assert_eq!(index96, 96);
+    }
+
+    #[test]
+    fn test_index_to_offset() {
+        let partition = find_partition("load").unwrap();
+        let config = TimestampAddressingConfig::from_partition(
+            partition,
+            64,
+            15,
+        );
+        
+        assert_eq!(config.index_to_offset(0), 0);
+        assert_eq!(config.index_to_offset(1), 64);
+        assert_eq!(config.index_to_offset(10), 640);
+    }
+
+    #[test]
+    fn test_timestamp_range_to_indices() {
+        let partition = find_partition("load").unwrap();
+        let config = TimestampAddressingConfig::from_partition(
+            partition,
+            64,
+            15,
+        );
+        
+        let base = 946684800u32; // 2000-01-01 00:00:00
+        
+        // 1小时范围
+        let (start, count) = config.timestamp_range_to_indices(base, base + 60 * 60);
+        assert_eq!(start, 0);
+        assert_eq!(count, 5); // 0, 1, 2, 3, 4
+        
+        // 无效范围
+        let (start, count) = config.timestamp_range_to_indices(base + 60, base);
+        assert_eq!(start, 0);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_records_per_day() {
+        let partition = find_partition("load").unwrap();
+        
+        // 15分钟间隔 -> 96条/天
+        let config15 = TimestampAddressingConfig::from_partition(partition, 64, 15);
+        assert_eq!(config15.records_per_day(), 96);
+        
+        // 60分钟间隔 -> 24条/天
+        let config60 = TimestampAddressingConfig::from_partition(partition, 64, 60);
+        assert_eq!(config60.records_per_day(), 24);
+    }
+
+    #[test]
+    fn test_storage_days() {
+        let partition = find_partition("load").unwrap();
+        let config = TimestampAddressingConfig::from_partition(
+            partition,
+            64,  // record_size
+            15,  // interval_min
+        );
+        
+        // load 分区 1MB，每条记录 64 字节，可存储 ~16384 条
+        // 96 条/天 -> ~170 天
+        let days = config.storage_days();
+        assert!(days >= 150);
+        assert!(days <= 200);
+    }
+
+    #[test]
+    fn test_needs_sector_erase() {
+        let partition = find_partition("load").unwrap();
+        let config = TimestampAddressingConfig::from_partition(
+            partition,
+            64,
+            15,
+        );
+        
+        // 同一扇区内不需要擦除
+        assert!(!config.needs_sector_erase(0, 64));
+        assert!(!config.needs_sector_erase(1000, 2000));
+        
+        // 跨扇区需要擦除
+        assert!(config.needs_sector_erase(4090, 4096));
+    }
+
+    #[test]
+    fn test_timestamp_addressed_writer() {
+        let partition = find_partition("load").unwrap();
+        let config = TimestampAddressingConfig::from_partition(
+            partition,
+            64,
+            15,
+        );
+        
+        let mut writer = TimestampAddressedWriter::new(config);
+        let data = [0u8; 56]; // 64 - 8 (header)
+        
+        let base = 946684800u32;
+        let (offset1, _) = writer.write_record(base, &data).unwrap();
+        assert_eq!(offset1, 0);
+        
+        let (offset2, _) = writer.write_record(base + 15 * 60, &data).unwrap();
+        assert_eq!(offset2, 64);
+        
+        let (current_offset, records_written) = writer.status();
+        assert_eq!(records_written, 2);
+    }
+
+    #[test]
+    fn test_timestamp_addressed_reader() {
+        let partition = find_partition("load").unwrap();
+        let config = TimestampAddressingConfig::from_partition(
+            partition,
+            64,
+            15,
+        );
+        
+        let reader = TimestampAddressedReader::new(config);
+        let base = 946684800u32;
+        
+        // 单个时间戳
+        let offset = reader.get_read_offset(base);
+        assert_eq!(offset, 0);
+        
+        // 时间范围
+        let offsets = reader.get_range_offsets(base, base + 60 * 60);
+        assert_eq!(offsets.len(), 5);
+        assert_eq!(offsets[0], 0);
+        assert_eq!(offsets[1], 64);
+    }
+
+    #[test]
+    fn test_timestamp_addressing_circular_wrap() {
+        let partition = find_partition("load").unwrap();
+        let config = TimestampAddressingConfig::from_partition(
+            partition,
+            64,
+            15,
+        );
+        
+        // 写入超过最大记录数后应该循环
+        let base = 946684800u32;
+        let interval = 15 * 60;
+        
+        // 超过最大记录数的时间戳
+        let far_future = base + (config.max_records + 10) * interval;
+        let index = config.timestamp_to_index(far_future);
+        
+        // 应该循环回到较小的索引
+        assert!(index < config.max_records);
+    }
+
+    #[test]
+    fn test_timestamp_addressing_edge_cases() {
+        let partition = find_partition("load").unwrap();
+        let config = TimestampAddressingConfig::from_partition(
+            partition,
+            64,
+            15,
+        );
+        
+        // 早于基准时间的时间戳
+        let early_ts = 0u32;
+        let index = config.timestamp_to_index(early_ts);
+        assert_eq!(index, 0);
+        
+        // 精确对齐间隔的时间戳
+        let base = 946684800u32;
+        let aligned = base + 15 * 60 * 100;
+        let index = config.timestamp_to_index(aligned);
+        assert_eq!(index, 100);
+        
+        // 未对齐的时间戳（向下取整）
+        let unaligned = base + 15 * 60 * 100 + 7 * 60; // 7分钟偏移
+        let index = config.timestamp_to_index(unaligned);
+        assert_eq!(index, 100); // 应该向下取整到 100
     }
 }
