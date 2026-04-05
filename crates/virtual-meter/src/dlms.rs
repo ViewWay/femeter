@@ -496,10 +496,144 @@ impl DlmsProcessor {
         }
     }
 
-    /// 通用 OBIS 读取
+    /// 通用 OBIS 读取 (扩展对象字典)
     fn read_cosem_object(&self, obis: &ObisPath, snap: &crate::MeterSnapshot) -> DlmsType {
         match (obis.0, obis.1, obis.2, obis.3, obis.4) {
-            (0, 0, 1, _, _) => DlmsType::VisibleString(b"FeMeter Virtual Meter".to_vec()),
+            // === 数据对象 (class 1) ===
+            // 0.0.1 - logical_device_name
+            (0, 0, 1, _, _) => DlmsType::OctetString(b"FeMeter VM\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0".to_vec()),
+
+            // 0.0.96.1.0.255 - status_word (2-byte)
+            (0, 0, 96, 1, 0) => {
+                let sw = self.compute_status_word(snap);
+                DlmsType::OctetString(sw.to_be_bytes().to_vec())
+            }
+            // 0.0.96.1.0.255 alias
+            (0, 0, 96, 1, 255) => {
+                let sw = self.compute_status_word(snap);
+                DlmsType::OctetString(sw.to_be_bytes().to_vec())
+            }
+
+            // === 时钟 (class 8) ===
+            // 0.9.1.0.255.255 - clock (octet-string datetime)
+            (0, 9, 1, 0, 255) => DlmsType::OctetString(encode_cosem_datetime(&chrono::Utc::now())),
+
+            // === 电压 (L+N, scaler=1, unit=V) ===
+            // 1.0.31.7.0.255 - voltage A/B/C (array)
+            (1, 0, 31, 7, 0) | (1, 0, 31, 7, 255) => DlmsType::Array(vec![
+                DlmsType::UInt32((snap.phase_a.voltage * 10.0) as u32),
+                DlmsType::UInt32((snap.phase_b.voltage * 10.0) as u32),
+                DlmsType::UInt32((snap.phase_c.voltage * 10.0) as u32),
+            ]),
+            // 1.0.32.7.0.255 - voltage L1
+            (1, 0, 32, 7, 0) | (1, 0, 32, 7, 255) => DlmsType::UInt32((snap.phase_a.voltage * 10.0) as u32),
+            // 1.0.52.7.0.255 - voltage L2
+            (1, 0, 52, 7, 0) | (1, 0, 52, 7, 255) => DlmsType::UInt32((snap.phase_b.voltage * 10.0) as u32),
+            // 1.0.72.7.0.255 - voltage L3
+            (1, 0, 72, 7, 0) | (1, 0, 72, 7, 255) => DlmsType::UInt32((snap.phase_c.voltage * 10.0) as u32),
+
+            // === 电流 (L+N, scaler=1, unit=A) ===
+            // 1.0.51.7.0.255 - current A/B/C (array)
+            (1, 0, 51, 7, 0) | (1, 0, 51, 7, 255) => DlmsType::Array(vec![
+                DlmsType::UInt32((snap.phase_a.current * 1000.0) as u32),
+                DlmsType::UInt32((snap.phase_b.current * 1000.0) as u32),
+                DlmsType::UInt32((snap.phase_c.current * 1000.0) as u32),
+            ]),
+            // (current L1 legacy removed — handled by 1.0.51.7.0.255)
+
+            // === 频率 ===
+            // 1.0.12.7.0.255 - frequency (scaler=-2, unit=Hz)
+            (1, 0, 12, 7, 0) | (1, 0, 12, 7, 255) => DlmsType::UInt32((snap.freq * 100.0) as u32),
+
+            // === 功率因数 ===
+            // 1.0.13.7.0.255 - power factor total (scaler=-3)
+            (1, 0, 13, 7, 0) | (1, 0, 13, 7, 255) => DlmsType::UInt32((snap.computed.pf_total * 1000.0) as u32),
+            // (PF total array legacy removed — handled by 1.0.13.7.0.255)
+
+            // === 相角 ===
+            // 1.0.14.7.0.255 - phase angle A/B/C (scaler=-1, unit=deg)
+            (1, 0, 14, 7, 255) => DlmsType::Array(vec![
+                DlmsType::Int32((snap.phase_a.angle * 10.0) as i32),
+                DlmsType::Int32((snap.phase_b.angle * 10.0) as i32),
+                DlmsType::Int32((snap.phase_c.angle * 10.0) as i32),
+            ]),
+            (1, 0, 14, 7, 0) => DlmsType::Array(vec![
+                DlmsType::Int32((snap.phase_a.angle * 10.0) as i32),
+                DlmsType::Int32((snap.phase_b.angle * 10.0) as i32),
+                DlmsType::Int32((snap.phase_c.angle * 10.0) as i32),
+            ]),
+
+            // === 有功功率 ===
+            // 1.0.81.7.27.255 - active power total (scaler=-1, unit=W)
+            (1, 0, 81, 7, 27) | (1, 0, 81, 7, 255) => DlmsType::Int32((snap.computed.p_total * 10.0) as i32),
+            // 1.0.81.7.4.255 - active power A/B/C (array)
+            (1, 0, 81, 7, 4) => DlmsType::Array(vec![
+                DlmsType::Int32((snap.computed.p_a * 10.0) as i32),
+                DlmsType::Int32((snap.computed.p_b * 10.0) as i32),
+                DlmsType::Int32((snap.computed.p_c * 10.0) as i32),
+            ]),
+
+            // === 无功功率 ===
+            // 1.0.82.7.27.255 - reactive power total
+            (1, 0, 82, 7, 27) | (1, 0, 82, 7, 255) => DlmsType::Int32((snap.computed.q_total * 10.0) as i32),
+
+            // === 视在功率 ===
+            // 1.0.83.7.27.255 - apparent power total
+            (1, 0, 83, 7, 27) | (1, 0, 83, 7, 255) => DlmsType::UInt32((snap.computed.s_total * 10.0) as u32),
+
+            // === 有功电能 ===
+            // 1.1.1.8.0.255 - active energy +import total (Wh)
+            (1, 1, 1, 8, 0) | (1, 1, 1, 8, 255) => DlmsType::UInt64((snap.energy.wh_total) as u64),
+            // 1.1.2.8.0.255 - active energy -export total
+            (1, 1, 2, 8, 0) | (1, 1, 2, 8, 255) => DlmsType::UInt64(0),
+            // 1.1.3.8.0.255 - active energy +import A/B/C
+            (1, 1, 3, 8, 0) | (1, 1, 3, 8, 255) => DlmsType::Array(vec![
+                DlmsType::UInt64(snap.energy.wh_a as u64),
+                DlmsType::UInt64(snap.energy.wh_b as u64),
+                DlmsType::UInt64(snap.energy.wh_c as u64),
+            ]),
+            // 1.1.4.8.0.255 - active energy -export A/B/C
+            (1, 1, 4, 8, 0) | (1, 1, 4, 8, 255) => DlmsType::Array(vec![
+                DlmsType::UInt64(0),
+                DlmsType::UInt64(0),
+                DlmsType::UInt64(0),
+            ]),
+
+            // === 无功电能 ===
+            // 1.1.5.8.0.255 - reactive energy +import total
+            (1, 1, 5, 8, 0) | (1, 1, 5, 8, 255) => DlmsType::UInt64(snap.energy.varh_total as u64),
+            // 1.1.6.8.0.255 - reactive energy -import total
+            (1, 1, 6, 8, 0) | (1, 1, 6, 8, 255) => DlmsType::UInt64(0),
+            // 1.1.7.8.0.255 - reactive energy Q1/Q2/Q3/Q4
+            (1, 1, 7, 8, 0) | (1, 1, 7, 8, 255) => DlmsType::Array(vec![
+                DlmsType::UInt64(snap.energy.varh_total as u64 / 4),
+                DlmsType::UInt64(snap.energy.varh_total as u64 / 4),
+                DlmsType::UInt64(snap.energy.varh_total as u64 / 4),
+                DlmsType::UInt64(snap.energy.varh_total as u64 / 4),
+            ]),
+
+            // === 视在电能 ===
+            // 1.1.8.8.0.255 - apparent energy total
+            (1, 1, 8, 8, 0) | (1, 1, 8, 8, 255) => DlmsType::UInt64(
+                ((snap.computed.s_total * snap.energy.wh_total).abs().max(snap.energy.wh_total)) as u64
+            ),
+
+            // === 需量 ===
+            // 1.0.99.1.0.255 - demand max (structure: value + datetime)
+            (1, 0, 99, 1, 0) | (1, 0, 99, 1, 255) => DlmsType::Structure(vec![
+                DlmsType::UInt64(0), // placeholder - would need demand data
+                DlmsType::OctetString(encode_cosem_datetime(&chrono::Utc::now())),
+            ]),
+
+            // === 需量电流 ===
+            // 1.0.94.7.4.255 - demand current A/B/C
+            (1, 0, 94, 7, 4) | (1, 0, 94, 7, 255) => DlmsType::Array(vec![
+                DlmsType::UInt32((snap.phase_a.current * 1000.0) as u32),
+                DlmsType::UInt32((snap.phase_b.current * 1000.0) as u32),
+                DlmsType::UInt32((snap.phase_c.current * 1000.0) as u32),
+            ]),
+
+            // === Legacy OBIS codes (backward compat) ===
             (1, 0, 1, 8, 255) | (1, 0, 0, 0, 255) => {
                 DlmsType::UInt64((snap.energy.wh_total / 10.0) as u64)
             }
@@ -510,32 +644,30 @@ impl DlmsProcessor {
             (1, 0, 1, 8, 2) => DlmsType::UInt64(300),
             (1, 0, 1, 8, 3) => DlmsType::UInt64(200),
             (1, 0, 1, 8, 4) => DlmsType::UInt64(0),
-            (1, 0, 32, 7, 0) => DlmsType::Float32((snap.phase_a.voltage) as f32),
-            (1, 0, 52, 7, 0) => DlmsType::Float32((snap.phase_b.voltage) as f32),
-            (1, 0, 72, 7, 0) => DlmsType::Float32((snap.phase_c.voltage) as f32),
-            (1, 0, 12, 7, 0) => DlmsType::Array(vec![
-                DlmsType::Float32((snap.phase_a.voltage) as f32),
-                DlmsType::Float32((snap.phase_b.voltage) as f32),
-                DlmsType::Float32((snap.phase_c.voltage) as f32),
-            ]),
-            (1, 0, 31, 7, 0) => DlmsType::Float32((snap.phase_a.current) as f32),
-            (1, 0, 51, 7, 0) => DlmsType::Float32((snap.phase_b.current) as f32),
-            (1, 0, 71, 7, 0) => DlmsType::Float32((snap.phase_c.current) as f32),
-            (1, 0, 13, 7, 0) => DlmsType::Array(vec![
-                DlmsType::Float32((snap.phase_a.current) as f32),
-                DlmsType::Float32((snap.phase_b.current) as f32),
-                DlmsType::Float32((snap.phase_c.current) as f32),
-            ]),
-            (1, 0, 14, 7, 0) | (1, 0, 1, 7, 0) => DlmsType::Float32(snap.computed.p_total as f32),
-            (1, 0, 15, 7, 0) | (1, 0, 3, 7, 0) => DlmsType::Float32(snap.computed.q_total as f32),
-            (1, 0, 14, 7, 255) => DlmsType::Float32(snap.freq as f32),
             (1, 0, 21, 7, 0) => DlmsType::Float32(snap.computed.pf_total as f32),
-            (0, 0, 96, 1, 0) => DlmsType::OctetString(encode_cosem_datetime(&chrono::Utc::now())),
             (0, 0, 96, 10, 1) => DlmsType::Enum(3),
-            (1, 0, 0, 1, 0) | (1, 0, 99, 1, 0) => DlmsType::Array(vec![]),
+            (1, 0, 0, 1, 0) => DlmsType::Array(vec![]),
             (1, 0, 1, 6, 0) => DlmsType::Float32(snap.computed.p_total as f32),
             _ => DlmsType::Null,
         }
+    }
+
+    fn compute_status_word(&self, snap: &crate::MeterSnapshot) -> u32 {
+        let mut sw: u32 = 0;
+        if snap.phase_a.voltage < 10.0 { sw |= 0x01; }
+        if snap.phase_b.voltage < 10.0 { sw |= 0x02; }
+        if snap.phase_c.voltage < 10.0 { sw |= 0x04; }
+        if snap.phase_a.voltage > 264.0 { sw |= 0x08; }
+        if snap.phase_b.voltage > 264.0 { sw |= 0x10; }
+        if snap.phase_c.voltage > 264.0 { sw |= 0x20; }
+        if snap.phase_a.voltage < 198.0 && snap.phase_a.voltage >= 10.0 { sw |= 0x40; }
+        if snap.phase_b.voltage < 198.0 && snap.phase_b.voltage >= 10.0 { sw |= 0x80; }
+        if snap.phase_c.voltage < 198.0 && snap.phase_c.voltage >= 10.0 { sw |= 0x100; }
+        if snap.phase_a.current > 60.0 { sw |= 0x200; }
+        if snap.phase_b.current > 60.0 { sw |= 0x400; }
+        if snap.phase_c.current > 60.0 { sw |= 0x800; }
+        if snap.computed.p_total < 0.0 { sw |= 0x8000; }
+        sw
     }
 
     fn read_energy_value(&self, obis: &ObisPath, snap: &crate::MeterSnapshot) -> DlmsType {

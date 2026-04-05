@@ -48,6 +48,7 @@ pub mod statistics;
 pub mod tariff;
 pub mod tcp_server;
 pub mod tou;
+pub mod web;
 
 pub use dlms::{create_dlms_processor, DlmsProcessor};
 pub use meter::*;
@@ -55,3 +56,4 @@ pub use protocol::*;
 pub use serial::*;
 pub use shell::*;
 pub use tcp_server::TcpServer;
+pub use web::WebServer;

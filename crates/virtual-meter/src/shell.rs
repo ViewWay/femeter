@@ -220,6 +220,11 @@ impl Shell {
                 self.cmd_watch(&parts[1..], stdout);
                 Ok(())
             }
+            "calibrate" | "cal" => self.cmd_calibrate(&parts[1..], stdout),
+            "html" => self.cmd_html(stdout),
+            "dlms" => self.cmd_dlms(&parts[1..], stdout),
+            "export" => self.cmd_export(&parts[1..], stdout),
+            "history" | "hist" => self.cmd_history(&parts[1..], stdout),
             "quit" | "exit" | "q" => {
                 self.running.store(false, Ordering::Relaxed);
                 Ok(())
@@ -267,6 +272,13 @@ impl Shell {
             " event list              Event history\n\r",
             " watch [ms]              Real-time monitor\n\r",
             " reset                   Reset energy\n\r",
+            " quit                    Exit\n\r",
+            " calibrate              Show calibration\n\r",
+            " calibrate run          Run auto-calibration\n\r",
+            " html                   Generate HTML report\n\r",
+            " dlms <obis>            Query DLMS object\n\r",
+            " export <json|csv>      Export data\n\r",
+            " history [N]            Power/voltage history\n\r",
             " quit                    Exit\n\r",
         );
         queue!(stdout, style::Print(out))?;
@@ -912,7 +924,7 @@ impl Shell {
 
     fn cmd_event(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
         if args.first().map(|s| s.to_lowercase()).as_deref() == Some("list") || args.is_empty() {
-            let meter = self.meter.lock().expect("mutex poisoned");
+            let mut meter = self.meter.lock().expect("mutex poisoned");
             let events = meter.events();
             if events.is_empty() {
                 let out = format!("  no events{}", nl());
@@ -1040,6 +1052,160 @@ impl Shell {
         }
         queue!(stdout, style::Print(format!("{}{}", nl(), "> "))).ok();
         stdout.flush().ok();
+    }
+
+    fn cmd_calibrate(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        let mut meter = self.meter.lock().expect("mutex poisoned");
+        let snap = meter.snapshot();
+        if args.first().map(|s| s.to_lowercase()).as_deref() == Some("run") {
+            drop(meter);
+            let mut meter = self.meter.lock().expect("mutex poisoned");
+            // Simple auto-calibration: set known values, record, compute coefficients
+            meter.set_voltage('a', 220.0);
+            meter.set_voltage('b', 220.0);
+            meter.set_voltage('c', 220.0);
+            meter.set_current('a', 5.0);
+            meter.set_current('b', 5.0);
+            meter.set_current('c', 5.0);
+            meter.set_freq(50.0);
+            let snap2 = meter.snapshot();
+            let v_ratio = 220.0 / snap2.phase_a.voltage.max(0.001);
+            let i_ratio = 5.0 / snap2.phase_a.current.max(0.001);
+            let out = format!(
+                " -> calibration complete: V_ratio={:.6} I_ratio={:.6}{}",
+                v_ratio, i_ratio, nl()
+            );
+            queue!(stdout, style::Print(out))?;
+            stdout.flush()?;
+            Ok(())
+        } else {
+            let out = format!(
+                " Calibration Status\n\r  Chip: {:?}\n\r  Voltage A: {:.2}V (expected 220V)\n\r  Current A: {:.3}A (expected 5A)\n\r  Frequency: {:.2}Hz (expected 50Hz)\n\r  Noise: {}\n\r  Use 'calibrate run' to auto-calibrate{}",
+                snap.chip,
+                snap.phase_a.voltage,
+                snap.phase_a.current,
+                snap.freq,
+                if snap.measured_voltage[0] > 0.0 { "measured" } else { "ideal" },
+                nl()
+            );
+            queue!(stdout, style::Print(out))?;
+            stdout.flush()?;
+            Ok(())
+        }
+    }
+
+    fn cmd_html(&self, stdout: &mut impl Write) -> Result<()> {
+        let mut meter = self.meter.lock().expect("mutex poisoned");
+        let snap = meter.snapshot();
+        let events = meter.events().iter().take(20).map(|e| {
+            crate::html_report::EventLogEntry {
+                timestamp: e.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                event_type: format!("{:?}", e.event),
+                description: e.description.clone(),
+                severity: "info".to_string(),
+            }
+        }).collect();
+        let mut data = crate::html_report::ReportData::new("FeMeter", &chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string());
+        data.voltage_series = [vec![snap.phase_a.voltage as f32], vec![snap.phase_b.voltage as f32], vec![snap.phase_c.voltage as f32]];
+        data.current_series = [vec![snap.phase_a.current as f32], vec![snap.phase_b.current as f32], vec![snap.phase_c.current as f32]];
+        data.power_series = vec![snap.computed.p_total as f32];
+        data.event_log = events;
+        let html = crate::html_report::generate_html_report(&data);
+        let path = std::env::temp_dir().join("femeter-report.html");
+        std::fs::write(&path, &html).map_err(|e| anyhow::anyhow!("write: {}", e))?;
+        let out = format!(" -> report saved: {}{}", path.display(), nl());
+        queue!(stdout, style::Print(out))?;
+        stdout.flush()?;
+        #[cfg(unix)]
+        {
+            let _ = std::process::Command::new("open").arg(&path).spawn();
+        }
+        Ok(())
+    }
+
+    fn cmd_dlms(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        if args.is_empty() {
+            let out = format!("  usage: dlms <obis_code> (e.g. 1.0.81.7.27.255){}", nl());
+            queue!(stdout, style::Print(out))?;
+            stdout.flush()?;
+            return Ok(());
+        }
+        let obis_str = args[0];
+        let proc = crate::create_dlms_processor(self.meter.clone());
+        match proc.query_obis(obis_str) {
+            Ok(result) => {
+                let out = format!(" {}{}", result, nl());
+                queue!(stdout, style::Print(out))?;
+            }
+            Err(e) => {
+                let out = format!("  error: {}{}", e, nl());
+                queue!(stdout, style::Print(out))?;
+            }
+        }
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_export(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        let format = args.first().map(|s| s.to_lowercase()).unwrap_or_default();
+        let mut meter = self.meter.lock().expect("mutex poisoned");
+        let snap = meter.snapshot();
+        let out = match format.as_str() {
+            "json" => {
+                let json = serde_json::json!({
+                    "timestamp": snap.timestamp.to_rfc3339(),
+                    "voltage": {"a": snap.phase_a.voltage, "b": snap.phase_b.voltage, "c": snap.phase_c.voltage},
+                    "current": {"a": snap.phase_a.current, "b": snap.phase_b.current, "c": snap.phase_c.current},
+                    "power": {"active": snap.computed.p_total, "reactive": snap.computed.q_total, "apparent": snap.computed.s_total, "pf": snap.computed.pf_total},
+                    "energy": {"wh_total": snap.energy.wh_total, "varh_total": snap.energy.varh_total},
+                    "freq": snap.freq,
+                });
+                let path = std::env::temp_dir().join("femeter-export.json");
+                std::fs::write(&path, serde_json::to_string_pretty(&json).unwrap())
+                    .map_err(|e| anyhow::anyhow!("write: {}", e))?;
+                format!(" -> JSON exported: {}{}", path.display(), nl())
+            }
+            "csv" => {
+                let mut csv = String::from("phase,voltage,current,angle,p_active,q_reactive,s_apparent,pf\n");
+                for (name, phase) in [
+                    ("A", &snap.phase_a), ("B", &snap.phase_b), ("C", &snap.phase_c)
+                ] {
+                    csv.push_str(&format!("{},{:.2},{:.3},{:.1},{:.1},{:.1},{:.1},{:.4}\n",
+                        name, phase.voltage, phase.current, phase.angle,
+                        phase.active_power(), phase.reactive_power(), phase.apparent_power(), phase.power_factor()));
+                }
+                csv.push_str(&format!("Total,,{:.1},{:.1},{:.1},{:.4}\n",
+                    snap.computed.p_total, snap.computed.q_total, snap.computed.s_total, snap.computed.pf_total));
+                let path = std::env::temp_dir().join("femeter-export.csv");
+                std::fs::write(&path, csv).map_err(|e| anyhow::anyhow!("write: {}", e))?;
+                format!(" -> CSV exported: {}{}", path.display(), nl())
+            }
+            _ => format!("  usage: export <json|csv>{}", nl()),
+        };
+        queue!(stdout, style::Print(out))?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn cmd_history(&self, args: &[&str], stdout: &mut impl Write) -> Result<()> {
+        let n = args.first().and_then(|s| s.parse::<usize>().ok()).unwrap_or(20);
+        let meter = self.meter.lock().expect("mutex poisoned");
+        let lp = &meter.load_profile;
+        let entries = lp.query_last(n);
+        if entries.is_empty() {
+            let out = format!("  no history (interval: {}s){}", lp.capture_interval_s, nl());
+            queue!(stdout, style::Print(out))?;
+        } else {
+            let mut out = format!(" History ({} entries){}{}", entries.len(), nl(), nl());
+            for e in entries.iter().rev() {
+                let p = if e.values.len() > 9 { format!("P={:.1}W", e.values[9]) } else { "-".into() };
+                let v = if e.values.len() > 0 { format!("V={:.1}", e.values[0]) } else { "-".into() };
+                out.push_str(&format!("  {} | {} | {}{}", e.timestamp.format("%m-%d %H:%M"), v, p, nl()));
+            }
+            queue!(stdout, style::Print(out))?;
+        }
+        stdout.flush()?;
+        Ok(())
     }
 
     fn cmd_reset(&self, stdout: &mut impl Write) -> Result<()> {

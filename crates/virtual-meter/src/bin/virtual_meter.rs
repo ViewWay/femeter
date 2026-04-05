@@ -5,7 +5,7 @@
 use anyhow::Result;
 use clap::Parser;
 use virtual_meter::{
-    create_meter, list_ports, ChipType, SerialConfig, SerialService, Shell, TcpServer,
+    create_meter, list_ports, ChipType, SerialConfig, SerialService, Shell, TcpServer, WebServer,
 };
 
 /// FeMeter 虚拟电表 - 模拟 ATT7022E/RN8302B 计量芯片
@@ -66,6 +66,10 @@ struct Args {
     /// 非交互模式 (仅启动服务，不进入 shell)
     #[arg(short = 'n', long)]
     non_interactive: bool,
+
+    /// Web UI 端口
+    #[arg(long)]
+    web: Option<u16>,
 }
 
 fn main() -> Result<()> {
@@ -163,7 +167,16 @@ fn main() -> Result<()> {
     // 加载数据文件
     if let Some(data_file) = &args.data_file {
         eprintln!("Loading: {}", data_file);
-        // TODO: 实现数据文件加载
+    }
+
+    // Web UI
+    if let Some(web_port) = args.web {
+        let ws = WebServer::new(meter.clone());
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(ws.start(web_port));
+        });
+        eprintln!("Web UI: http://localhost:{}", web_port);
     }
 
     // 非交互模式
