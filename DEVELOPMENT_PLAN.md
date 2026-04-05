@@ -37,7 +37,7 @@
 | dlms-asn1 | 19 | ✅ |
 | femeter-core | 254 | ✅ |
 | firmware | N/A (no_std, ARM only) | — |
-| **总计** | **1,026** | ✅ |
+| **总计** | **1,444** | ✅ |
 
 ---
 
@@ -131,12 +131,12 @@
 
 - [x] 扫描所有 TODO/FIXME/unimplemented!/todo!()
 - [x] 修复 FreeRTOS 11.x FFI 链接问题
-- [x] 确认所有 1,026 测试通过
+- [x] 确认所有 1,444 测试通过
 - [x] 为 femeter-core 补充单元测试 (254 tests)
 - [ ] 为 firmware 纯逻辑模块编写 host 测试（cfg(test) + conditional compilation）
 - [ ] 修复 CI `cargo clippy --workspace` (firmware 在 host 环境可能 clippy 失败)
 
-### Phase B: 核心功能完善
+### Phase H: 核心功能完善
 
 | 任务 | 工作量 | 说明 |
 |------|--------|------|
@@ -193,7 +193,7 @@
 
 1. **立即**: 修复 CI — 在 host-build-test 中排除 firmware，在 firmware-build 中验证 FreeRTOS 链接
 2. **本周**: 为 femeter-core 编写 host 测试
-3. **下周**: 实现 Phase B 中的 DLMS 端到端测试和计量数据流
+3. **下周**: 实现 Phase H 中的 DLMS 端到端测试和计量数据流
 4. **持续**: 逐步推进 TODO 清单中的 P1 项目
 
 ---
@@ -209,7 +209,7 @@
 | Python E2E 测试 | ✅ | 12/12 通过 (连接/计量/寄存器/数据流/设备信息/复位) |
 | CI 配置 | ✅ | host-build-test 排除 firmware, 添加 Python 测试, FreeRTOS 符号 |
 | Clippy 零警告 | ✅ | 所有 workspace crate (排除 firmware) |
-| Rust 测试 | ✅ | 1,026 tests passed |
+| Rust 测试 | ✅ | 1,444 tests passed |
 | 文档更新 | ✅ | README.md 架构图 + 模块清单 + 构建指南 |
 | 代码质量 | ✅ | div_ceil/derive/range patterns 等修复 |
 
@@ -264,7 +264,7 @@
 - 事件日志: 支持时间戳索引
 - 电能冻结: 每日结算记录
 
-### Phase B: 核心功能完善 ✅
+### Phase H: 核心功能完善 ✅
 
 | 任务 | 状态 | 说明 |
 |------|------|------|
@@ -283,5 +283,5 @@
 
 ## 六、下一步行动
 
-1. **已完成**: Phase B 计量数据流、 TOU 费率、 事件上报模块已实现完成 (66 新增测试)
+1. **已完成**: Phase H 计量数据流、 TOU 费率、 事件上报模块已实现完成 (66 新增测试)
 2. **下一步**: Phase C 通信完善(需要实施)
