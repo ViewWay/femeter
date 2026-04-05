@@ -1000,4 +1000,296 @@ mod tests {
             assert_eq!(parsed.0, *t);
         }
     }
+
+    // ============================================================
+    // Mock-based LoRaWAN Driver Tests
+    // ============================================================
+
+    /// Mock UART driver for testing
+    struct MockUart {
+        tx_buffer: heapless::Vec<u8, 1024>,
+        rx_buffer: heapless::Vec<u8, 1024>,
+        rx_pos: usize,
+    }
+
+    impl MockUart {
+        fn new() -> Self {
+            Self {
+                tx_buffer: heapless::Vec::new(),
+                rx_buffer: heapless::Vec::new(),
+                rx_pos: 0,
+            }
+        }
+
+        fn push_response(&mut self, response: &str) {
+            for byte in response.bytes() {
+                let _ = self.rx_buffer.push(byte);
+            }
+        }
+
+        fn push_bytes(&mut self, bytes: &[u8]) {
+            for byte in bytes {
+                let _ = self.rx_buffer.push(*byte);
+            }
+        }
+
+        fn get_sent_data(&self) -> heapless::Vec<u8, 1024> {
+            self.tx_buffer.clone()
+        }
+
+        fn clear(&mut self) {
+            self.tx_buffer.clear();
+            self.rx_buffer.clear();
+            self.rx_pos = 0;
+        }
+    }
+
+    impl crate::hal::UartDriver for MockUart {
+        fn init(&mut self, _config: &crate::hal::UartConfig) -> Result<(), crate::hal::UartError> {
+            Ok(())
+        }
+
+        fn write(&mut self, data: &[u8]) -> Result<(), crate::hal::UartError> {
+            for byte in data {
+                let _ = self.tx_buffer.push(*byte);
+            }
+            Ok(())
+        }
+
+        fn read(&mut self, buf: &mut [u8], timeout_ms: u32) -> Result<usize, crate::hal::UartError> {
+            let mut total = 0;
+            for b in buf.iter_mut() {
+                if self.rx_pos < self.rx_buffer.len() {
+                    *b = self.rx_buffer[self.rx_pos];
+                    self.rx_pos += 1;
+                    total += 1;
+                } else {
+                    break;
+                }
+            }
+            Ok(total)
+        }
+
+        fn readable(&self) -> bool {
+            self.rx_pos < self.rx_buffer.len()
+        }
+
+        fn channel(&self) -> crate::hal::UartChannel {
+            crate::hal::UartChannel::Lorawan
+        }
+    }
+
+    #[test]
+    fn test_asr6601_init() {
+        let mut uart = MockUart::new();
+        uart.push_response("OK\r\n");
+        
+        let mut driver = Asr6601::new(&mut uart);
+        let result = driver.init();
+        
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_asr6601_configure_otaa() {
+        let mut uart = MockUart::new();
+        // Mock multiple OK responses
+        for _ in 0..4 {
+            uart.push_response("OK\r\n");
+        }
+        
+        let mut driver = Asr6601::new(&mut uart);
+        driver.init().unwrap();
+        
+        let config = LorawanConfig {
+            join_mode: crate::hal::LorawanJoinMode::Otaa,
+            dev_eui: [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08],
+            app_eui: [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08],
+            app_key: [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+                        0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10],
+        };
+        
+        let result = driver.configure(&config);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_asr6601_join_success() {
+        let mut uart = MockUart::new();
+        uart.push_response("OK\r\n");
+        uart.push_response("+JOIN: Network joined\r\n");
+        uart.push_response("OK\r\n");
+        
+        let mut driver = Asr6601::new(&mut uart);
+        driver.init().unwrap();
+        
+        let result = driver.join();
+        assert!(result.is_ok());
+        assert_eq!(driver.status(), crate::hal::LorawanStatus::Joined);
+    }
+
+    #[test]
+    fn test_asr6601_join_failure() {
+        let mut uart = MockUart::new();
+        uart.push_response("OK\r\n");
+        uart.push_response("+JOIN: Join failed\r\n");
+        uart.push_response("OK\r\n");
+        
+        let mut driver = Asr6601::new(&mut uart);
+        driver.init().unwrap();
+        
+        let result = driver.join();
+        assert!(result.is_err());
+        assert_eq!(driver.status(), crate::hal::LorawanStatus::Error);
+    }
+
+    #[test]
+    fn test_asr6601_send_unconfirmed() {
+        let mut uart = MockUart::new();
+        uart.push_response("OK\r\n");
+        uart.push_response("OK\r\n");
+        uart.push_response("+MSG: Done\r\n");
+        uart.push_response("OK\r\n");
+        
+        let mut driver = Asr6601::new(&mut uart);
+        driver.init().unwrap();
+        driver.join().unwrap();
+        
+        let data = [0x01, 0x02, 0x03];
+        let result = driver.send(1, &data, false);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_asr6601_send_confirmed() {
+        let mut uart = MockUart::new();
+        uart.push_response("OK\r\n");
+        uart.push_response("OK\r\n");
+        uart.push_response("+CMSG: Done\r\n");
+        uart.push_response("OK\r\n");
+        
+        let mut driver = Asr6601::new(&mut uart);
+        driver.init().unwrap();
+        driver.join().unwrap();
+        
+        let data = [0xAA, 0xBB, 0xCC];
+        let result = driver.send(2, &data, true);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_asr6601_rssi_query() {
+        let mut uart = MockUart::new();
+        uart.push_response("OK\r\n");
+        uart.push_response("+RSSI: -65\r\n");
+        uart.push_response("OK\r\n");
+        
+        let mut driver = Asr6601::new(&mut uart);
+        driver.init().unwrap();
+        
+        let result = driver.rssi();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), -65);
+    }
+
+    #[test]
+    fn test_asr6601_not_joined_send() {
+        let mut uart = MockUart::new();
+        uart.push_response("OK\r\n");
+        
+        let mut driver = Asr6601::new(&mut uart);
+        driver.init().unwrap();
+        // Don't join
+        
+        let data = [0x01];
+        let result = driver.send(1, &data, false);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), crate::hal::LorawanError::NotJoined));
+    }
+
+    #[test]
+    fn test_asr6601_set_data_rate() {
+        let mut uart = MockUart::new();
+        uart.push_response("OK\r\n");
+        uart.push_response("OK\r\n");
+        
+        let mut driver = Asr6601::new(&mut uart);
+        driver.init().unwrap();
+        
+        let result = driver.set_data_rate(3);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_asr6601_set_tx_power() {
+        let mut uart = MockUart::new();
+        uart.push_response("OK\r\n");
+        uart.push_response("OK\r\n");
+        
+        let mut driver = Asr6601::new(&mut uart);
+        driver.init().unwrap();
+        
+        let result = driver.set_tx_power(10);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_asr6601_query_link_state() {
+        let mut uart = MockUart::new();
+        uart.push_response("OK\r\n");
+        uart.push_response("+STATE: Joined\r\n");
+        uart.push_response("OK\r\n");
+        
+        let mut driver = Asr6601::new(&mut uart);
+        driver.init().unwrap();
+        
+        let result = driver.query_link_state();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), LinkState::Joined);
+    }
+
+    #[test]
+    fn test_asr6601_enter_sleep() {
+        let mut uart = MockUart::new();
+        uart.push_response("OK\r\n");
+        uart.push_response("OK\r\n");
+        
+        let mut driver = Asr6601::new(&mut uart);
+        driver.init().unwrap();
+        
+        let result = driver.enter_sleep();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_asr6601_bytes_to_hex() {
+        let input = [0x01, 0xAB, 0xCD, 0xEF];
+        let mut buf = [0u8; 32];
+        let hex = Asr6601::bytes_to_hex(&input, &mut buf);
+        
+        assert_eq!(hex, b"01ABCDEF");
+    }
+
+    #[test]
+    fn test_asr6601_configure_abp() {
+        let mut uart = MockUart::new();
+        // Multiple OK responses for ABP setup
+        for _ in 0..4 {
+            uart.push_response("OK\r\n");
+        }
+        
+        let mut driver = Asr6601::new(&mut uart);
+        driver.init().unwrap();
+        
+        let config = LorawanConfig {
+            join_mode: crate::hal::LorawanJoinMode::Abp,
+            dev_eui: [0u8; 8],
+            app_eui: [0u8; 8],
+            app_key: [0u8; 16],
+        };
+        
+        let result = driver.configure(&config);
+        assert!(result.is_ok());
+    }
 }
+

@@ -1,0 +1,11 @@
+[package]
+name = "lorawan-test"
+version.workspace = true
+edition.workspace = true
+description = "LoRaWAN AT command and communication tests"
+
+[lib]
+doctest = false
+
+[dependencies]
+heapless = "0.8"

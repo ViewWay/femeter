@@ -1231,3 +1231,531 @@ where
         None
     }
 }
+
+// ============================================================
+// Tests
+// ============================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use heapless::Vec as HeaplessVec;
+    use std::cell::RefCell;
+    use std::collections::VecDeque;
+
+    /// Mock UART transport for testing
+    struct MockUart {
+        rx_queue: RefCell<VecDeque<u8>>,
+        tx_buffer: RefCell<Vec<u8>>,
+    }
+
+    impl MockUart {
+        fn new() -> Self {
+            Self {
+                rx_queue: RefCell::new(VecDeque::new()),
+                tx_buffer: RefCell::new(Vec::new()),
+            }
+        }
+
+        fn push_response(&self, response: &str) {
+            let mut queue = self.rx_queue.borrow_mut();
+            for byte in response.bytes() {
+                queue.push_back(byte);
+            }
+        }
+
+        fn push_bytes(&self, bytes: &[u8]) {
+            let mut queue = self.rx_queue.borrow_mut();
+            for byte in bytes {
+                queue.push_back(*byte);
+            }
+        }
+
+        fn get_sent_data(&self) -> Vec<u8> {
+            self.tx_buffer.borrow().clone()
+        }
+
+        fn clear_sent_data(&self) {
+            self.tx_buffer.borrow_mut().clear();
+        }
+    }
+
+    impl UartTransport for MockUart {
+        fn read_byte(&mut self) -> Option<u8> {
+            self.rx_queue.borrow_mut().pop_front()
+        }
+
+        fn write_bytes(&mut self, data: &[u8]) -> Result<(), AtError> {
+            self.tx_buffer.borrow_mut().extend_from_slice(data);
+            Ok(())
+        }
+
+        fn flush_rx(&mut self) {
+            self.rx_queue.borrow_mut().clear();
+        }
+
+        fn is_available(&self) -> bool {
+            true
+        }
+    }
+
+    // ============================================================
+    // Test 1-4: AT Command Building
+    // ============================================================
+
+    #[test]
+    fn test_send_cmd_appends_crlf() {
+        let mock = MockUart::new();
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        parser.send_cmd("AT").unwrap();
+        let sent = parser.transport.get_sent_data();
+        
+        assert_eq!(&sent, b"AT\r\n");
+    }
+
+    #[test]
+    fn test_send_cmd_with_parameters() {
+        let mock = MockUart::new();
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        parser.send_cmd("AT+CSQ").unwrap();
+        let sent = parser.transport.get_sent_data();
+        
+        assert_eq!(&sent, b"AT+CSQ\r\n");
+    }
+
+    #[test]
+    fn test_send_cmd_hex() {
+        let mock = MockUart::new();
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        parser.send_cmd_hex("AT+SEND=", &[0x01, 0xAB, 0xCD]).unwrap();
+        let sent = parser.transport.get_sent_data();
+        
+        assert_eq!(&sent, b"AT+SEND=01ABCD\r\n");
+    }
+
+    #[test]
+    fn test_send_raw_bytes() {
+        let mock = MockUart::new();
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        parser.send_raw(&[0xAA, 0xBB, 0xCC]).unwrap();
+        let sent = parser.transport.get_sent_data();
+        
+        assert_eq!(&sent, &[0xAA, 0xBB, 0xCC]);
+    }
+
+    // ============================================================
+    // Test 5-8: AT Response Parsing - OK/ERROR
+    // ============================================================
+
+    #[test]
+    fn test_wait_ok_simple() {
+        let mock = MockUart::new();
+        mock.push_response("OK\r\n");
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        let response = parser.wait_ok(1000, || 0);
+        
+        assert!(matches!(response, AtResponse::Ok));
+    }
+
+    #[test]
+    fn test_wait_ok_with_data() {
+        let mock = MockUart::new();
+        mock.push_response("+CSQ: 20,0\r\n");
+        mock.push_response("OK\r\n");
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        let response = parser.wait_ok(1000, || 0);
+        
+        if let AtResponse::OkWithLines(lines) = response {
+            assert_eq!(lines.len(), 1);
+            assert!(lines[0].starts_with("+CSQ:"));
+        } else {
+            panic!("Expected OkWithLines");
+        }
+    }
+
+    #[test]
+    fn test_wait_error_response() {
+        let mock = MockUart::new();
+        mock.push_response("ERROR\r\n");
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        let response = parser.wait_ok(1000, || 0);
+        
+        assert!(matches!(response, AtResponse::Error(0)));
+    }
+
+    #[test]
+    fn test_wait_cme_error() {
+        let mock = MockUart::new();
+        mock.push_response("+CME ERROR: 10\r\n");
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        let response = parser.wait_ok(1000, || 0);
+        
+        assert!(matches!(response, AtResponse::Error(10)));
+    }
+
+    // ============================================================
+    // Test 9-12: AT Response Parsing - Prefix Matching
+    // ============================================================
+
+    #[test]
+    fn test_wait_prefix_success() {
+        let mock = MockUart::new();
+        mock.push_response("+CSQ: 25,0\r\n");
+        mock.push_response("OK\r\n");
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        let result = parser.wait_prefix("+CSQ:", 1000, || 0);
+        
+        assert!(result.is_some());
+        let line = result.unwrap();
+        assert!(line.starts_with("+CSQ:"));
+    }
+
+    #[test]
+    fn test_wait_prefix_not_found() {
+        let mock = MockUart::new();
+        mock.push_response("OK\r\n");
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        let result = parser.wait_prefix("+CSQ:", 1000, || 0);
+        
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_wait_exact_string() {
+        let mock = MockUart::new();
+        mock.push_response("RDY\r\n");
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        let result = parser.wait_exact("RDY", 1000, || 0);
+        
+        assert!(result);
+    }
+
+    #[test]
+    fn test_wait_prompt_char() {
+        let mock = MockUart::new();
+        mock.push_bytes(&[b'>', b' ']);
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        let result = parser.wait_prompt(1000, || 0);
+        
+        assert!(result);
+    }
+
+    // ============================================================
+    // Test 13-16: Error Handling
+    // ============================================================
+
+    #[test]
+    fn test_timeout_no_response() {
+        let mock = MockUart::new();
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        let mut time = 0u32;
+        let get_ms = || {
+            time += 100;
+            time
+        };
+        
+        let response = parser.wait_ok(500, get_ms);
+        
+        assert!(matches!(response, AtResponse::NoResponse));
+    }
+
+    #[test]
+    fn test_multiline_response() {
+        let mock = MockUart::new();
+        mock.push_response("Line1\r\n");
+        mock.push_response("Line2\r\n");
+        mock.push_response("Line3\r\n");
+        mock.push_response("OK\r\n");
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        let response = parser.wait_ok(1000, || 0);
+        
+        if let AtResponse::OkWithLines(lines) = response {
+            assert_eq!(lines.len(), 3);
+        } else {
+            panic!("Expected OkWithLines");
+        }
+    }
+
+    #[test]
+    fn test_buffer_overflow_handling() {
+        let mock = MockUart::new();
+        // Push more data than buffer can hold
+        let long_line: String = (0..300).map(|_| 'A').collect();
+        mock.push_response(&format!("{}\r\n", long_line));
+        mock.push_response("OK\r\n");
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        let response = parser.wait_ok(1000, || 0);
+        
+        // Should still get OK even with overflow
+        assert!(matches!(response, AtResponse::Ok));
+    }
+
+    #[test]
+    fn test_line_truncation_on_overflow() {
+        let mock = MockUart::new();
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        // Push exactly 260 bytes (more than LINE_BUF=256)
+        let long_line: String = (0..260).map(|_| 'X').collect();
+        mock.push_response(&format!("{}\r\n", long_line));
+        
+        // Should not crash, just truncate
+        let line = parser.poll_line();
+        
+        // Line should be truncated or None
+        if let Some(l) = line {
+            assert!(l.len() <= 256);
+        }
+    }
+
+    // ============================================================
+    // Test 17-20: URC (Unsolicited Result Code) Parsing
+    // ============================================================
+
+    #[test]
+    fn test_detect_urc_ready() {
+        let result = AtParser::<MockUart, 256, 16>::detect_urc("RDY");
+        assert!(matches!(result, Some(UrcEvent::Ready)));
+    }
+
+    #[test]
+    fn test_detect_urc_power_down() {
+        let result = AtParser::<MockUart, 256, 16>::detect_urc("POWER DOWN");
+        assert!(matches!(result, Some(UrcEvent::PowerDown)));
+    }
+
+    #[test]
+    fn test_detect_urc_network_reg() {
+        let result = AtParser::<MockUart, 256, 16>::detect_urc("+CREG: 1");
+        
+        if let Some(UrcEvent::NetworkRegChanged { stat }) = result {
+            assert_eq!(stat, 1);
+        } else {
+            panic!("Expected NetworkRegChanged");
+        }
+    }
+
+    #[test]
+    fn test_detect_urc_signal() {
+        let result = AtParser::<MockUart, 256, 16>::detect_urc("+CSQ: 20,5");
+        
+        if let Some(UrcEvent::SignalChanged { rssi, ber }) = result {
+            assert_eq!(rssi, 20);
+            assert_eq!(ber, 5);
+        } else {
+            panic!("Expected SignalChanged");
+        }
+    }
+
+    // ============================================================
+    // Test 21-24: More URC Types
+    // ============================================================
+
+    #[test]
+    fn test_detect_urc_data_received() {
+        let result = AtParser::<MockUart, 256, 16>::detect_urc("+QIURC: \"recv\",0,128");
+        
+        if let Some(UrcEvent::DataReceived { conn_id, size }) = result {
+            assert_eq!(conn_id, 0);
+            assert_eq!(size, 128);
+        } else {
+            panic!("Expected DataReceived");
+        }
+    }
+
+    #[test]
+    fn test_detect_urc_connection_closed() {
+        let result = AtParser::<MockUart, 256, 16>::detect_urc("+QIURC: \"closed\",0");
+        
+        if let Some(UrcEvent::ConnectionClosed { conn_id }) = result {
+            assert_eq!(conn_id, 0);
+        } else {
+            panic!("Expected ConnectionClosed");
+        }
+    }
+
+    #[test]
+    fn test_detect_urc_lorawan_joined() {
+        let result = AtParser::<MockUart, 256, 16>::detect_urc("+JOIN: OK");
+        assert!(matches!(result, Some(UrcEvent::LorawanJoined)));
+    }
+
+    #[test]
+    fn test_detect_urc_ring() {
+        let result = AtParser::<MockUart, 256, 16>::detect_urc("RING");
+        assert!(matches!(result, Some(UrcEvent::Ring)));
+    }
+
+    // ============================================================
+    // Test 25-28: Poll Line Functionality
+    // ============================================================
+
+    #[test]
+    fn test_poll_line_single() {
+        let mock = MockUart::new();
+        mock.push_response("Test\r\n");
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        let line = parser.poll_line();
+        
+        assert!(line.is_some());
+        assert_eq!(line.unwrap().as_str(), "Test");
+    }
+
+    #[test]
+    fn test_poll_line_multiple() {
+        let mock = MockUart::new();
+        mock.push_response("Line1\r\nLine2\r\n");
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        let line1 = parser.poll_line();
+        let line2 = parser.poll_line();
+        
+        assert_eq!(line1.unwrap().as_str(), "Line1");
+        assert_eq!(line2.unwrap().as_str(), "Line2");
+    }
+
+    #[test]
+    fn test_poll_line_empty_lines_skipped() {
+        let mock = MockUart::new();
+        mock.push_response("\r\n\r\nTest\r\n");
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        let line = parser.poll_line();
+        
+        assert_eq!(line.unwrap().as_str(), "Test");
+    }
+
+    #[test]
+    fn test_poll_line_no_data() {
+        let mock = MockUart::new();
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        let line = parser.poll_line();
+        
+        assert!(line.is_none());
+    }
+
+    // ============================================================
+    // Test 29-32: Helper Functions
+    // ============================================================
+
+    #[test]
+    fn test_parse_csq_valid() {
+        let (rssi, ber) = parse_csq("+CSQ: 25,0");
+        assert_eq!(rssi, 25);
+        assert_eq!(ber, 0);
+    }
+
+    #[test]
+    fn test_parse_csq_missing_ber() {
+        let (rssi, ber) = parse_csq("+CSQ: 25");
+        assert_eq!(rssi, 99);
+        assert_eq!(ber, 99);
+    }
+
+    #[test]
+    fn test_parse_last_number() {
+        assert_eq!(parse_last_number("+CREG: 1,5"), Some(5));
+        assert_eq!(parse_last_number("+CME ERROR: 10"), Some(10));
+        assert_eq!(parse_last_number("No number here"), None);
+    }
+
+    #[test]
+    fn test_poll_urc() {
+        let mock = MockUart::new();
+        mock.push_response("RDY\r\n");
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        let urc = parser.poll_urc();
+        
+        assert!(matches!(urc, Some(UrcEvent::Ready)));
+    }
+
+    // ============================================================
+    // Test 33-36: Complex Scenarios
+    // ============================================================
+
+    #[test]
+    fn test_full_at_transaction() {
+        let mock = MockUart::new();
+        mock.push_response("+CGMM: EC800N\r\n");
+        mock.push_response("OK\r\n");
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        parser.send_cmd("AT+CGMM").unwrap();
+        let response = parser.wait_ok(1000, || 0);
+        
+        if let AtResponse::OkWithLines(lines) = response {
+            assert!(lines[0].contains("EC800N"));
+        } else {
+            panic!("Expected OkWithLines");
+        }
+    }
+
+    #[test]
+    fn test_consecutive_commands() {
+        let mock = MockUart::new();
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        // First command
+        mock.push_response("OK\r\n");
+        parser.send_cmd("AT").unwrap();
+        let r1 = parser.wait_ok(1000, || 0);
+        assert!(matches!(r1, AtResponse::Ok));
+        
+        // Second command
+        parser.transport.clear_sent_data();
+        parser.transport.push_response("+CSQ: 20,0\r\nOK\r\n");
+        parser.send_cmd("AT+CSQ").unwrap();
+        let r2 = parser.wait_ok(1000, || 0);
+        assert!(matches!(r2, AtResponse::OkWithLines(_)));
+    }
+
+    #[test]
+    fn test_urc_interleaved_with_response() {
+        let mock = MockUart::new();
+        mock.push_response("+CREG: 1\r\n");
+        mock.push_response("+CSQ: 20,0\r\n");
+        mock.push_response("OK\r\n");
+        let mut parser = AtParser::<_, 256, 16>::new(mock);
+        
+        // Poll URC first
+        let urc = parser.poll_urc();
+        assert!(matches!(urc, Some(UrcEvent::NetworkRegChanged { stat: 1 })));
+        
+        // Then get response
+        let response = parser.wait_ok(1000, || 0);
+        if let AtResponse::OkWithLines(lines) = response {
+            assert!(lines[0].starts_with("+CSQ:"));
+        } else {
+            panic!("Expected OkWithLines");
+        }
+    }
+
+    #[test]
+    fn test_custom_urc() {
+        let result = AtParser::<MockUart, 256, 16>::detect_urc("+CUSTOM: data");
+        
+        if let Some(UrcEvent::Custom(s)) = result {
+            assert!(s.starts_with("+CUSTOM"));
+        } else {
+            panic!("Expected Custom URC");
+        }
+    }
+}
