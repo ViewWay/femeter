@@ -8,6 +8,7 @@
 /* ================================================================== */
 
 use crate::{CalibrationParams, EnergyData, PhaseData};
+use crate::error::FemeterError;
 
 /// 计量数据采样器
 #[derive(Debug, Clone)]
@@ -80,7 +81,7 @@ impl MeteringSampler {
         };
 
         // 累计能量
-        if self.last_sample_time > 0 {
+        if self.sample_count > 1 {
             let dt_ms = timestamp_ms.saturating_sub(self.last_sample_time);
             self.accumulate_energy(&calibrated, dt_ms);
         }
@@ -272,16 +273,16 @@ impl MeteringProcessor {
 /// 计量数据存储接口
 pub trait MeteringStorage {
     /// 存储瞬时数据
-    fn store_instantaneous(&mut self, data: &PhaseData, timestamp: u32) -> Result<(), crate::error::Error>;
+    fn store_instantaneous(&mut self, data: &PhaseData, timestamp: u32) -> Result<(), FemeterError>;
     
     /// 存储能量数据
-    fn store_energy(&mut self, energy: &EnergyData, timestamp: u32) -> Result<(), crate::error::Error>;
+    fn store_energy(&mut self, energy: &EnergyData, timestamp: u32) -> Result<(), FemeterError>;
     
     /// 读取历史能量数据
     fn read_energy(&self, timestamp: u32) -> Option<EnergyData>;
     
     /// 存储需量数据
-    fn store_demand(&mut self, demand: i32, timestamp: u32) -> Result<(), crate::error::Error>;
+    fn store_demand(&mut self, demand: i32, timestamp: u32) -> Result<(), FemeterError>;
 }
 
 /// 内存存储实现（用于测试）
@@ -323,7 +324,7 @@ impl Default for MemoryStorage {
 }
 
 impl MeteringStorage for MemoryStorage {
-    fn store_instantaneous(&mut self, data: &PhaseData, timestamp: u32) -> Result<(), crate::error::Error> {
+    fn store_instantaneous(&mut self, data: &PhaseData, timestamp: u32) -> Result<(), FemeterError> {
         if self.instantaneous_records.len() >= self.max_records {
             self.instantaneous_records.remove(0);
         }
@@ -331,7 +332,7 @@ impl MeteringStorage for MemoryStorage {
         Ok(())
     }
 
-    fn store_energy(&mut self, energy: &EnergyData, timestamp: u32) -> Result<(), crate::error::Error> {
+    fn store_energy(&mut self, energy: &EnergyData, timestamp: u32) -> Result<(), FemeterError> {
         if self.energy_records.len() >= self.max_records {
             self.energy_records.remove(0);
         }
@@ -347,7 +348,7 @@ impl MeteringStorage for MemoryStorage {
             .map(|(_, e)| *e)
     }
 
-    fn store_demand(&mut self, demand: i32, timestamp: u32) -> Result<(), crate::error::Error> {
+    fn store_demand(&mut self, demand: i32, timestamp: u32) -> Result<(), FemeterError> {
         if self.demand_records.len() >= self.max_records {
             self.demand_records.remove(0);
         }

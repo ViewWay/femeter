@@ -67,11 +67,14 @@ pub struct CalibrationParams {
 
 pub mod error;
 pub mod event_detect;
+pub mod event_notification;
 pub mod load_forecast;
 pub mod memory_checks;
+pub mod metering;
 pub mod ota;
 pub mod power_quality;
 pub mod tamper_detection;
+pub mod tou;
 
 /* ================================================================== */
 /*  单元测试                                                           */

@@ -111,6 +111,28 @@ struct PhaseTracker {
     over_current_active: bool,
 }
 
+/* ── 辅助函数 ── */
+
+fn event_from_bit(bit: u8) -> Option<MeterEvent> {
+    Some(match bit {
+        0x01 => MeterEvent::OverVoltageA,
+        0x02 => MeterEvent::OverVoltageB,
+        0x03 => MeterEvent::OverVoltageC,
+        0x04 => MeterEvent::UnderVoltageA,
+        0x05 => MeterEvent::UnderVoltageB,
+        0x06 => MeterEvent::UnderVoltageC,
+        0x07 => MeterEvent::PhaseLossA,
+        0x08 => MeterEvent::PhaseLossB,
+        0x09 => MeterEvent::PhaseLossC,
+        0x0A => MeterEvent::OverCurrentA,
+        0x0B => MeterEvent::OverCurrentB,
+        0x0C => MeterEvent::OverCurrentC,
+        0x0D => MeterEvent::CurrentUnbalance,
+        0x0E => MeterEvent::VoltageUnbalance,
+        _ => return None,
+    })
+}
+
 /* ── 单相检查, 返回新事件位图 ── */
 
 #[allow(clippy::too_many_arguments)]
@@ -286,6 +308,50 @@ impl EventDetector {
             MeterEvent::PhaseLossC,
             MeterEvent::OverCurrentC,
         );
+        
+        // Log voltage and current events
+        for i in 0u8..24 {
+            if new_events & (1 << i) != 0 {
+                if let Some(event) = event_from_bit(i) {
+                    let value = match event {
+                        MeterEvent::OverVoltageA | MeterEvent::OverVoltageB | MeterEvent::OverVoltageC => {
+                            match event {
+                                MeterEvent::OverVoltageA => data.voltage_a,
+                                MeterEvent::OverVoltageB => data.voltage_b,
+                                MeterEvent::OverVoltageC => data.voltage_c,
+                                _ => 0,
+                            }
+                        }
+                        MeterEvent::UnderVoltageA | MeterEvent::UnderVoltageB | MeterEvent::UnderVoltageC => {
+                            match event {
+                                MeterEvent::UnderVoltageA => data.voltage_a,
+                                MeterEvent::UnderVoltageB => data.voltage_b,
+                                MeterEvent::UnderVoltageC => data.voltage_c,
+                                _ => 0,
+                            }
+                        }
+                        MeterEvent::PhaseLossA | MeterEvent::PhaseLossB | MeterEvent::PhaseLossC => {
+                            match event {
+                                MeterEvent::PhaseLossA => data.voltage_a,
+                                MeterEvent::PhaseLossB => data.voltage_b,
+                                MeterEvent::PhaseLossC => data.voltage_c,
+                                _ => 0,
+                            }
+                        }
+                        MeterEvent::OverCurrentA | MeterEvent::OverCurrentB | MeterEvent::OverCurrentC => {
+                            match event {
+                                MeterEvent::OverCurrentA => data.current_a,
+                                MeterEvent::OverCurrentB => data.current_b,
+                                MeterEvent::OverCurrentC => data.current_c,
+                                _ => 0,
+                            }
+                        }
+                        _ => 0,
+                    };
+                    self.log_event(event, value as u32, 1);
+                }
+            }
+        }
 
         // 频率越限 (50Hz ± 2Hz → 4800~5200, 0.01Hz)
         if data.frequency < 4800 || data.frequency > 5200 {

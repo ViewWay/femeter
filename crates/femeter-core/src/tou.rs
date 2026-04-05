@@ -234,7 +234,7 @@ impl SeasonProfile {
     }
 
     /// 全年统一
-    pub fn全年统一(id: u8, week_profile_id: u8) -> Self {
+    pub fn full_year(id: u8, week_profile_id: u8) -> Self {
         Self {
             id,
             start_month: 1,
@@ -450,7 +450,7 @@ impl TouEngine {
             TouPreset::SingleRate => {
                 let dp = DayProfile::single_rate(1, TariffRate::T1);
                 let wp = WeekProfile::uniform(1, 1);
-                let season = SeasonProfile::全年统一(1, 1);
+                let season = SeasonProfile::full_year(1, 1);
                 
                 self.calendar = ActivityCalendar {
                     seasons: vec![season],
@@ -472,7 +472,7 @@ impl TouEngine {
                     ],
                 );
                 let wp = WeekProfile::uniform(1, 1);
-                let season = SeasonProfile::全年统一(1, 1);
+                let season = SeasonProfile::full_year(1, 1);
                 
                 self.calendar = ActivityCalendar {
                     seasons: vec![season],
@@ -496,7 +496,7 @@ impl TouEngine {
                     ],
                 );
                 let wp = WeekProfile::uniform(1, 1);
-                let season = SeasonProfile::全年统一(1, 1);
+                let season = SeasonProfile::full_year(1, 1);
                 
                 self.calendar = ActivityCalendar {
                     seasons: vec![season],
@@ -525,7 +525,7 @@ impl TouEngine {
                     ],
                 );
                 let wp = WeekProfile::uniform(1, 1);
-                let season = SeasonProfile::全年统一(1, 1);
+                let season = SeasonProfile::full_year(1, 1);
                 
                 self.calendar = ActivityCalendar {
                     seasons: vec![season],
