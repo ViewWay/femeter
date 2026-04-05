@@ -179,7 +179,7 @@
 ### 5.2 中优先级
 
 4. **计量芯片驱动缺校准**: att7022e/rn8302b/rn8615v2 的校准参数写入未实现
-5. **storage 时间戳寻址**: 负荷曲线等需要基于时间的高效寻址
+5. ~~storage 时间戳寻址~~: ✅ 已实现 (TimestampAddressingConfig, TimestampAddressedWriter, TimestampAddressedReader)
 6. **main.rs 中 12 处 TODO**: 核心任务循环中多个关键步骤未实现
 
 ### 5.3 低优先级
@@ -230,7 +230,36 @@
 
 | 类型 | 数量 | 状态 |
 |------|------|------|
-| Rust 单元测试 | 1,024 | ✅ 全部通过 |
+| Rust 单元测试 | 1,193 | ✅ 全部通过 |
 | Python E2E 测试 | 12 | ✅ 全部通过 |
 | HDLC E2E (Python↔Rust) | 4/4 | ✅ SNRM+AARQ+Get+Release |
 | Clippy 警告 | 0 | ✅ |
+
+---
+
+## Phase G: 存储系统增强 ✅
+
+### 完成内容
+
+| 任务 | 状态 | 说明 |
+|------|------|------|
+| LoadProfileHeader 更新 | ✅ | 与 firmware 结构保持一致 (timestamp/interval/channels/crc16) |
+| 时间戳寻址配置 | ✅ | TimestampAddressingConfig 支持时间戳到偏移转换 |
+| 循环缓冲区管理 | ✅ | 自动回绕，最大记录数计算 |
+| 写入器实现 | ✅ | TimestampAddressedWriter 支持扇区擦除检测 |
+| 读取器实现 | ✅ | TimestampAddressedReader 支持时间范围查询 |
+| 测试覆盖 | ✅ | 24 个新测试，总计 1,193 个测试 |
+
+### 新增功能
+
+- **时间戳到偏移映射**: 根据记录间隔自动计算 Flash 偏移
+- **循环缓冲区**: 支持自动回绕，最大存储天数计算
+- **扇区管理**: 检测何时需要擦除新扇区
+- **范围查询**: 高效检索时间范围内的历史数据
+- **CRC 验证**: 完整的数据完整性校验
+
+### 性能特性
+
+- 负荷曲线 (15分钟间隔，64字节/记录): 可存储 ~170 天
+- 事件日志: 支持时间戳索引
+- 电能冻结: 每日结算记录
