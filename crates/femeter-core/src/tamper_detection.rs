@@ -802,4 +802,400 @@ mod tests {
             core::mem::size_of::<TamperEvent>()
         );
     }
+
+    // ── Additional comprehensive tests ──
+
+    #[test]
+    fn test_ct_short_all_phases() {
+        let v = [22000, 22000, 22000];
+        let i = [0, 0, 0]; // all phases shorted
+        let result = detect_ct_short(v, i, 22000, 10000, 0.7, 0.005);
+        assert!(result[0] && result[1] && result[2]);
+    }
+
+    #[test]
+    fn test_ct_short_threshold_custom() {
+        let v = [22000, 22000, 22000];
+        let i = [0, 50, 5000]; // A=0%, B=0.5%, C=50%
+        let result = detect_ct_short(v, i, 22000, 10000, 0.7, 0.01); // higher threshold 1%
+        assert!(result[0]); // A is 0% < 1%, should detect
+        assert!(result[1]); // B is 0.5% < 1%, should also detect
+        assert!(!result[2]); // C is 50% > 1%, should not detect
+    }
+
+    #[test]
+    fn test_pt_disconnect_edge_case() {
+        // Just at threshold: 5% of 22000 = 1100
+        let (a, b, c) = detect_pt_disconnect([1100, 22000, 22000], 22000, 0.05);
+        // 1100 < 1100.0 is false, so not disconnected
+        assert!(!a);
+        
+        let (a2, _, _) = detect_pt_disconnect([1099, 22000, 22000], 22000, 0.05);
+        // 1099 < 1100.0 is true
+        assert!(a2);
+    }
+
+    #[test]
+    fn test_pt_disconnect_with_different_rated() {
+        let (a, b, c) = detect_pt_disconnect([0, 38000, 38000], 38000, 0.05);
+        assert!(a);
+        assert!(!b);
+        assert!(!c);
+    }
+
+    #[test]
+    fn test_phase_sequence_tolerance() {
+        // Test with slightly off angles: 0°, 100°, 200° (0.1° units: 0, 1000, 2000)
+        // Differences: B-A = 100°, C-B = 100°, A-C (normalized) = 160°
+        // With 30° tolerance: 100° is outside 120°±30° (90-150), should detect error
+        let result_loose = detect_phase_sequence_error(0, 1000, 2000, 30.0);
+        assert!(result_loose, "should detect error with loose tolerance");
+        
+        // With very loose tolerance 50°: all differences within 120°±50°, should pass
+        let result_looser = detect_phase_sequence_error(0, 1000, 2000, 50.0);
+        assert!(!result_looser, "should pass with very loose tolerance");
+    }
+
+    #[test]
+    fn test_phase_sequence_angle_normalization() {
+        // Test angle wrapping: -180 to 180
+        // 350° - 10° = 340°, normalize to -20°
+        let diff = normalize_angle_diff(350.0 - 10.0);
+        assert!((diff - (-20.0)).abs() < 0.1);
+        
+        // -350° should normalize to 10°
+        let diff2 = normalize_angle_diff(-350.0);
+        assert!((diff2 - 10.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_phase_sequence_all_same_angle() {
+        // All angles equal - clearly wrong
+        let result = detect_phase_sequence_error(1000, 1000, 1000, 30.0);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_neutral_broken_tolerance_custom() {
+        // With tight tolerance
+        // i_sum = 7000, neutral = 7000, ratio = 1.0, tolerance = 0.05
+        // 1.0 is within ±5% (0.95 to 1.05)
+        let result1 = detect_neutral_broken([5000, 1000, 1000], 7000, 0.05);
+        assert!(!result1);
+        
+        // With loose tolerance - test different scenario
+        // When neutral = 0, check if unbalance is significant
+        let result2 = detect_neutral_broken([5000, 0, 0], 0, 0.2);
+        // i_sum_abs = 5000, max_i = 5000, ratio = 1.0
+        // threshold * 5 = 1.0, need > to trigger, 1.0 > 1.0 is false
+        assert!(!result2);
+        
+        // More unbalanced scenario
+        let result3 = detect_neutral_broken([5000, 100, 100], 0, 0.2);
+        // i_sum_abs = 5200, max_i = 5000, ratio = 1.04
+        // 1.04 > 1.0, so should trigger
+        assert!(result3);
+    }
+
+    #[test]
+    fn test_neutral_broken_zero_currents() {
+        // All currents zero - shouldn't trigger
+        let result = detect_neutral_broken([0, 0, 0], 0, 0.2);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_tilt_threshold_custom() {
+        let data = AccelerometerData {
+            x: 4000,
+            y: 0,
+            z: 15700,
+        };
+        // With 10° threshold
+        assert!(detect_tilt(&data, 10.0));
+        // With 20° threshold
+        assert!(!detect_tilt(&data, 20.0));
+    }
+
+    #[test]
+    fn test_tilt_vertical_axis() {
+        let data = AccelerometerData {
+            x: 16000,
+            y: 0,
+            z: 0,
+        }; // 90° tilt
+        assert!(detect_tilt(&data, 5.0));
+    }
+
+    #[test]
+    fn test_vibration_threshold_levels() {
+        let curr = AccelerometerData {
+            x: 100,
+            y: 100,
+            z: 16000,
+        };
+        let prev = AccelerometerData {
+            x: 0,
+            y: 0,
+            z: 16000,
+        };
+        // Low threshold - should detect
+        assert!(detect_vibration(&curr, &prev, 100.0));
+        // High threshold - should not detect
+        assert!(!detect_vibration(&curr, &prev, 1000.0));
+    }
+
+    #[test]
+    fn test_vibration_magnitude_calculation() {
+        let curr = AccelerometerData {
+            x: 300,
+            y: 400,
+            z: 0,
+        };
+        let prev = AccelerometerData {
+            x: 0,
+            y: 0,
+            z: 0,
+        };
+        // delta = sqrt(300^2 + 400^2 + 0^2) = 500
+        let result = detect_vibration(&curr, &prev, 450.0);
+        assert!(result);
+        let result2 = detect_vibration(&curr, &prev, 550.0);
+        assert!(!result2);
+    }
+
+    #[test]
+    fn test_tamper_probability_weighted_sum() {
+        let scores = TamperScores {
+            ct_short: 50.0,
+            pt_disconnect: 50.0,
+            bypass: 50.0,
+            ..Default::default()
+        };
+        let result = calculate_tamper_probability(&scores);
+        // Weighted: 50*0.2 + 50*0.2 + 50*0.1 = 10 + 10 + 5 = 25
+        // Normalized: 25/100 = 0.25
+        assert!((result.probability - 0.25).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_tamper_probability_saturation() {
+        let scores = TamperScores {
+            ct_short: 100.0,
+            pt_disconnect: 100.0,
+            phase_error: 100.0,
+            neutral_broken: 100.0,
+            tilt: 100.0,
+            vibration: 100.0,
+            magnetic: 100.0,
+            cover_open: 100.0,
+            bypass: 100.0,
+        };
+        let result = calculate_tamper_probability(&scores);
+        // Should saturate at 1.0
+        assert!((result.probability - 1.0).abs() < 0.01);
+        assert_eq!(result.risk_level, RiskLevel::Critical);
+    }
+
+    #[test]
+    fn test_tamper_probability_partial_scores() {
+        let scores = TamperScores {
+            ct_short: 80.0,
+            pt_disconnect: 0.0,
+            bypass: 0.0,
+            ..Default::default()
+        };
+        let result = calculate_tamper_probability(&scores);
+        // Weighted: 80*0.2 = 16
+        assert!((result.probability - 0.16).abs() < 0.01);
+        assert_eq!(result.risk_level, RiskLevel::Low);
+    }
+
+    #[test]
+    fn test_risk_level_boundary_values() {
+        assert_eq!(RiskLevel::from_probability(0.09), RiskLevel::Normal);
+        assert_eq!(RiskLevel::from_probability(0.10), RiskLevel::Low);
+        assert_eq!(RiskLevel::from_probability(0.29), RiskLevel::Low);
+        assert_eq!(RiskLevel::from_probability(0.30), RiskLevel::Medium);
+        assert_eq!(RiskLevel::from_probability(0.59), RiskLevel::Medium);
+        assert_eq!(RiskLevel::from_probability(0.60), RiskLevel::High);
+        assert_eq!(RiskLevel::from_probability(0.79), RiskLevel::High);
+        assert_eq!(RiskLevel::from_probability(0.80), RiskLevel::Critical);
+    }
+
+    #[test]
+    fn test_tamper_detector_ct_short_debounce() {
+        let mut det = TamperDetector::new(22000, 10000);
+        let accel = AccelerometerData::default();
+        
+        // CT short on A phase - need voltage > 0.7*Un and current < 0.5%*In
+        let v = [22000, 22000, 22000]; // 1.0 * Un
+        let i_low = [0, 50, 50]; // A=0%, B and C very low
+        
+        // First check - counter increments
+        det.check(v, i_low, [0, 1200, 2400], &accel, false, false, 1000);
+        assert_eq!(det.ct_short_count[0], 1);
+        // Check 4 more times (total 5 to reach threshold)
+        for t in 1001..1005 {
+            det.check(v, i_low, [0, 1200, 2400], &accel, false, false, t);
+        }
+        assert_eq!(det.ct_short_count[0], 5);
+        // Now should trigger event (at least one event)
+        assert!(det.event_count > 0);
+    }
+
+    #[test]
+    fn test_tamper_detector_ct_short_reset_on_recovery() {
+        let mut det = TamperDetector::new(22000, 10000);
+        let accel = AccelerometerData::default();
+        
+        // Trigger CT short counter
+        let v_bad = [22000, 22000, 22000];
+        let i_bad = [0, 5000, 5000];
+        for t in 0..3 {
+            det.check(v_bad, i_bad, [0, 1200, 2400], &accel, false, false, t);
+        }
+        assert_eq!(det.ct_short_count[0], 3);
+        
+        // Current recovers
+        let i_good = [5000, 5000, 5000];
+        det.check(v_bad, i_good, [0, 1200, 2400], &accel, false, false, 10);
+        assert_eq!(det.ct_short_count[0], 0); // counter reset
+    }
+
+    #[test]
+    fn test_tamper_detector_multiple_event_types() {
+        let mut det = TamperDetector::new(22000, 10000);
+        let accel = AccelerometerData::default();
+        
+        // Trigger PT disconnect + cover open + magnetic
+        let result = det.check(
+            [0, 22000, 22000],
+            [5000, 5000, 5000],
+            [0, 1200, 2400],
+            &accel,
+            true,
+            true,
+            1000,
+        );
+        
+        // Should record at least 3 events (PT disconnect, cover open, magnetic)
+        assert!(det.event_count >= 3);
+        // Probability should be significant
+        assert!(result.probability > 0.2);
+    }
+
+    #[test]
+    fn test_tamper_detector_cover_open_alone() {
+        let mut det = TamperDetector::new(22000, 10000);
+        let accel = AccelerometerData::default();
+        
+        let result = det.check(
+            [22000, 22000, 22000],
+            [5000, 5000, 5000],
+            [0, 1200, 2400],
+            &accel,
+            true,
+            false,
+            1000,
+        );
+        
+        assert!(det.event_count > 0);
+        assert_eq!(result.scores.cover_open, 55.0);
+    }
+
+    #[test]
+    fn test_tamper_detector_vibration_requires_prev() {
+        let mut det = TamperDetector::new(22000, 10000);
+        let accel1 = AccelerometerData {
+            x: 500,
+            y: 500,
+            z: 16000,
+        };
+        
+        // First check - no previous data
+        let result = det.check(
+            [22000, 22000, 22000],
+            [5000, 5000, 5000],
+            [0, 1200, 2400],
+            &accel1,
+            false,
+            false,
+            1000,
+        );
+        // Vibration detection requires previous data
+        let vib_score1 = result.scores.vibration;
+        // Neutral broken might trigger, but vibration should be 0
+        
+        // Second check - has previous, same accel data
+        let result2 = det.check(
+            [22000, 22000, 22000],
+            [5000, 5000, 5000],
+            [0, 1200, 2400],
+            &accel1,
+            false,
+            false,
+            1001,
+        );
+        // Vibration should be 0 since accel didn't change
+        assert_eq!(result2.scores.vibration, 0.0);
+        
+        // Third check - different accel data but still below threshold
+        let accel2 = AccelerometerData {
+            x: 600,
+            y: 600,
+            z: 16000,
+        };
+        let result3 = det.check(
+            [22000, 22000, 22000],
+            [5000, 5000, 5000],
+            [0, 1200, 2400],
+            &accel2,
+            false,
+            false,
+            1002,
+        );
+        // Delta is sqrt(100^2 + 100^2 + 0^2) = ~141, < 500 threshold
+        assert_eq!(result3.scores.vibration, 0.0);
+        
+        // Fourth check - accel change above threshold
+        let accel3 = AccelerometerData {
+            x: 1000,
+            y: -1000,
+            z: 16000,
+        };
+        let result4 = det.check(
+            [22000, 22000, 22000],
+            [5000, 5000, 5000],
+            [0, 1200, 2400],
+            &accel3,
+            false,
+            false,
+            1003,
+        );
+        // Delta is sqrt(400^2 + 1600^2 + 0^2) = ~1649 > 500, should trigger
+        assert!(result4.scores.vibration > 0.0);
+    }
+
+    #[test]
+    fn test_tamper_detector_event_overflow() {
+        let mut det = TamperDetector::new(22000, 10000);
+        let accel = AccelerometerData::default();
+        
+        // Generate events by toggling cover open
+        for i in 0..40 {
+            let cover_open = i % 2 == 0;
+            det.check(
+                [22000, 22000, 22000],
+                [5000, 5000, 5000],
+                [0, 1200, 2400],
+                &accel,
+                cover_open,
+                false,
+                i as u32,
+            );
+        }
+        
+        assert_eq!(det.event_count, 32); // buffer full
+    }
 }

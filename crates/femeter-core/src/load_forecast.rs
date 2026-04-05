@@ -560,4 +560,236 @@ mod tests {
             core::mem::size_of::<LoadForecaster>()
         );
     }
+
+    // ── Additional comprehensive tests ──
+
+    #[test]
+    fn test_linear_forecast_constant_series() {
+        let mut lf = LinearForecast::new();
+        for _ in 0..10 {
+            lf.push(100.0);
+        }
+        lf.fit();
+        assert!((lf.regression.slope - 0.0).abs() < 1e-6, "slope should be 0");
+        assert!((lf.regression.intercept - 100.0).abs() < 1e-6, "intercept should be 100");
+    }
+
+    #[test]
+    fn test_linear_forecast_negative_slope() {
+        let mut lf = LinearForecast::new();
+        for i in 0..10 {
+            lf.push(200.0 - i as f32 * 5.0); // decreasing series
+        }
+        lf.fit();
+        assert!(lf.regression.slope < 0.0, "slope should be negative");
+        assert!(lf.regression.slope > -6.0, "slope magnitude too large");
+    }
+
+    #[test]
+    fn test_linear_forecast_fit_minimum_points() {
+        let mut lf = LinearForecast::new();
+        lf.push(100.0);
+        lf.push(105.0);
+        lf.fit();
+        assert!(lf.regression.slope != 0.0, "should fit with 2 points");
+        let pred = lf.predict_next();
+        assert!(pred > 100.0, "prediction should be higher");
+    }
+
+    #[test]
+    fn test_linear_forecast_window_overflow() {
+        let mut lf = LinearForecast::new();
+        // Add more than WINDOW_SIZE points
+        for i in 0..(WINDOW_SIZE + 10) {
+            lf.push(100.0 + i as f32 * 0.1);
+        }
+        assert_eq!(lf.depth, WINDOW_SIZE, "depth should be capped");
+        // Window should contain the last WINDOW_SIZE values
+        // Values 11..58 (48 values) will be in the window after adding 59 total
+        let first_in_window = lf.window[0];
+        // After 59 pushes, window contains values from index 11 to 58
+        // Value at index 11: 100.0 + 11 * 0.1 = 101.1
+        assert!((first_in_window - 101.1).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_linear_forecast_predict_multiple_steps() {
+        let mut lf = LinearForecast::new();
+        for i in 0..20 {
+            lf.push(100.0 + i as f32 * 2.0);
+        }
+        lf.fit();
+        let pred_5 = lf.predict(5);
+        let pred_10 = lf.predict(10);
+        assert!(pred_10 > pred_5, "10-step prediction should be higher than 5-step");
+        let diff = pred_10 - pred_5;
+        assert!((diff - 10.0).abs() < 0.2, "difference should be ~10");
+    }
+
+    #[test]
+    fn test_linear_forecast_mean_calculation() {
+        let mut lf = LinearForecast::new();
+        lf.push(100.0);
+        lf.push(200.0);
+        lf.push(300.0);
+        assert!((lf.mean() - 200.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_linear_forecast_horizontal_line() {
+        let mut lf = LinearForecast::new();
+        for i in 0..5 {
+            lf.push(50.0);
+        }
+        lf.fit();
+        let pred = lf.predict_next();
+        assert!((pred - 50.0).abs() < 1.0, "should predict ~50 for constant series");
+    }
+
+    #[test]
+    fn test_ewma_convergence_to_mean() {
+        let mut ewma = EwmaForecast::new(0.1);
+        for _ in 0..100 {
+            ewma.update(100.0);
+        }
+        assert!((ewma.predict() - 100.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_ewma_alpha_sensitivity() {
+        let mut ewma_low = EwmaForecast::new(0.1);
+        let mut ewma_high = EwmaForecast::new(0.9);
+        ewma_low.update(100.0);
+        ewma_low.update(200.0);
+        ewma_high.update(100.0);
+        ewma_high.update(200.0);
+        // High alpha should be closer to new value
+        assert!(ewma_high.predict() > ewma_low.predict());
+    }
+
+    #[test]
+    fn test_ewma_pattern_following() {
+        let mut ewma = EwmaForecast::new(0.3);
+        let pattern = [100.0, 150.0, 120.0, 180.0, 140.0, 200.0];
+        for &val in &pattern {
+            ewma.update(val);
+            // Should track but smooth
+            assert!(ewma.predict() > 80.0 && ewma.predict() < 220.0);
+        }
+    }
+
+    #[test]
+    fn test_evaluate_forecast_single_error() {
+        let actual = [100.0];
+        let predicted = [110.0];
+        let acc = evaluate_forecast(&actual, &predicted);
+        assert!(acc.mape > 0.0);
+        assert!((acc.rmse - 10.0).abs() < 0.1);
+        assert_eq!(acc.sample_count, 1);
+    }
+
+    #[test]
+    fn test_evaluate_forecast_mape_calculation() {
+        let actual = [100.0, 200.0, 300.0];
+        let predicted = [90.0, 190.0, 290.0]; // 10% error each
+        let acc = evaluate_forecast(&actual, &predicted);
+        // MAPE = (10% + 5% + 3.33%) / 3 = ~6.11%
+        assert!(acc.mape > 0.0);
+        assert!(acc.mape < 20.0);
+    }
+
+    #[test]
+    fn test_evaluate_forecast_max_error_tracking() {
+        let actual = [100.0, 200.0, 300.0];
+        let predicted = [95.0, 220.0, 280.0]; // errors: 5, 20, 20
+        let acc = evaluate_forecast(&actual, &predicted);
+        assert!((acc.max_error - 20.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_load_forecaster_weight_adjustment() {
+        let mut fc = LoadForecaster::new();
+        // Low depth: low weight for linear
+        for _ in 0..5 {
+            let r = fc.update(100.0);
+            // Should be ~0.2 weight at low depth
+            let expected_combined = 0.2 * r.linear_value + 0.8 * r.ewma_value;
+            assert!((r.combined - expected_combined).abs() < 0.1);
+        }
+    }
+
+    #[test]
+    fn test_load_forecaster_high_depth_bias() {
+        let mut fc = LoadForecaster::new();
+        // Fill window
+        for i in 0..WINDOW_SIZE {
+            fc.update(100.0 + i as f32 * 0.5);
+        }
+        let r = fc.update(100.0 + WINDOW_SIZE as f32 * 0.5);
+        // At high depth, weight should be ~0.7 for linear
+        let expected_combined = 0.7 * r.linear_value + 0.3 * r.ewma_value;
+        assert!((r.combined - expected_combined).abs() < 1.0);
+    }
+
+    #[test]
+    fn test_load_forecaster_pattern_integration() {
+        let mut fc = LoadForecaster::new();
+        let ctx_peak = TimeContext::new(10, 0, 3); // Wed 10am Mar
+        let ctx_valley = TimeContext::new(3, 0, 3); // Wed 3am Mar
+        
+        let r1 = fc.update_with_context(500.0, &ctx_peak);
+        assert_eq!(r1.pattern, LoadPattern::Peak);
+        
+        let r2 = fc.update_with_context(200.0, &ctx_valley);
+        assert_eq!(r2.pattern, LoadPattern::Valley);
+    }
+
+    #[test]
+    fn test_load_forecaster_confidence_saturates() {
+        let mut fc = LoadForecaster::new();
+        let mut last_confidence = 0.0;
+        for _ in 0..(WINDOW_SIZE + 10) {
+            last_confidence = fc.update(100.0).confidence;
+        }
+        assert!((last_confidence - 1.0).abs() < 0.01, "confidence should saturate at 1.0");
+    }
+
+    #[test]
+    fn test_load_forecaster_reset_clears_state() {
+        let mut fc = LoadForecaster::new();
+        for i in 0..20 {
+            fc.update(100.0 + i as f32);
+        }
+        assert!(fc.linear.depth > 0);
+        assert!(fc.ewma.initialized);
+        
+        fc.reset();
+        assert_eq!(fc.linear.depth, 0);
+        assert!(!fc.ewma.initialized);
+        assert!((fc.ewma.predict() - 0.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_time_context_holiday_flag() {
+        let mut ctx = TimeContext::new(14, 2, 7); // Wed 2pm Jul
+        ctx.is_holiday = true;
+        // Currently pattern() doesn't check is_holiday, but tests structure
+        assert_eq!(ctx.hour, 14);
+        assert_eq!(ctx.is_holiday, true);
+    }
+
+    #[test]
+    fn test_time_context_pattern_boundary_cases() {
+        // Test exact hour boundaries
+        let ctx1 = TimeContext::new(8, 0, 3); // 8am - not peak, Weekday
+        let ctx2 = TimeContext::new(9, 0, 3); // 9am - peak starts
+        let ctx3 = TimeContext::new(22, 0, 3); // 10pm - peak ends (22 >= 17 and 22 <= 21)
+        let ctx4 = TimeContext::new(23, 0, 3); // 11pm - valley starts
+        
+        assert_eq!(ctx1.pattern(), LoadPattern::Weekday);
+        assert_eq!(ctx2.pattern(), LoadPattern::Peak);
+        // 22:00 is peak (17-21 peak hours includes 22), actually 22 > 21 so not peak
+        assert_eq!(ctx3.pattern(), LoadPattern::Weekday);
+        assert_eq!(ctx4.pattern(), LoadPattern::Valley);
+    }
 }
