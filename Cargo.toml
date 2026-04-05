@@ -19,6 +19,7 @@ members = [
     "crates/bench-tests",
     "crates/storage-test",
     "crates/lorawan-test",
+    "crates/display-tests",
 ]
 
 [workspace.dependencies]

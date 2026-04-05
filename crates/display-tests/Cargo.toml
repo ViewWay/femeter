@@ -1,0 +1,11 @@
+[package]
+name = "display-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Copy the display module code here for testing
+# This avoids linking issues with the no_std firmware
+
+[dev-dependencies]
+# No external dependencies needed for basic tests
